@@ -16,8 +16,6 @@ AI coding tools are most useful when they can work where the real context lives:
 - Register worker capabilities and paths so tasks are sent only where they can run.
 - Run Codex or Claude through local CLI providers instead of building a new agent runtime.
 - Keep worker execution close to source code, credentials, and build environments you already manage.
-- Store users, API keys, repositories, worker records, and command history in Postgres.
-- Track live worker state with Redis and persist command output as NDJSON, optionally in S3-compatible storage.
 - Integrate repository workflows and Jira intake so operational requests can become worker tasks.
 
 ## What You Get
