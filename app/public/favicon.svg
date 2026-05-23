@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="FirstDraft Console">
+  <rect width="64" height="64" rx="14" fill="#172026"/>
+  <path d="M18 12h22l8 8v32H18z" fill="#f7fbfd"/>
+  <path d="M40 12v8h8z" fill="#dbe7ed"/>
+  <path d="M24 28h16" fill="none" stroke="#95a8b3" stroke-width="3" stroke-linecap="round"/>
+  <path d="M24 36h10" fill="none" stroke="#95a8b3" stroke-width="3" stroke-linecap="round"/>
+  <path d="m22 47 6-6-6-6" fill="none" stroke="#2364aa" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 47h9" fill="none" stroke="#2364aa" stroke-width="4" stroke-linecap="round"/>
+</svg>

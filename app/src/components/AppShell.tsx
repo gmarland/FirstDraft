@@ -1,0 +1,162 @@
+import {
+  AppBar,
+  Box,
+  Button,
+  Divider,
+  Drawer,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Stack,
+  Toolbar,
+  Typography,
+} from "@mui/material";
+import AppsIcon from "@mui/icons-material/Apps";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import HubIcon from "@mui/icons-material/Hub";
+import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
+import KeyIcon from "@mui/icons-material/VpnKey";
+import LogoutIcon from "@mui/icons-material/Logout";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../lib/auth";
+
+export function AppShell() {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const workersActive = location.pathname === "/workers" || location.pathname.startsWith("/workers/");
+  const repositoriesActive = location.pathname === "/repositories";
+  const integrationsActive = location.pathname === "/integrations";
+  const apiKeysActive = location.pathname === "/settings/api-keys";
+  const drawerWidth = 260;
+
+  return (
+    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+      <Drawer
+        variant="permanent"
+        sx={{
+          width: drawerWidth,
+          flexShrink: 0,
+          "& .MuiDrawer-paper": {
+            width: drawerWidth,
+            bgcolor: "#142126",
+            color: "#ecf2f4",
+            borderRight: 0,
+            p: 2,
+          },
+        }}
+      >
+        <Button
+          onClick={() => navigate("/workers")}
+          startIcon={<HubIcon />}
+          sx={{
+            justifyContent: "flex-start",
+            color: "inherit",
+            fontSize: 20,
+            fontWeight: 800,
+            mb: 2,
+          }}
+        >
+          FirstDraft
+        </Button>
+
+        <List dense>
+          <ListItemButton
+            selected={workersActive}
+            onClick={() => navigate("/workers")}
+            sx={navSx}
+          >
+            <ListItemIcon sx={iconSx}>
+              <AppsIcon />
+            </ListItemIcon>
+            <ListItemText primary="Workers" />
+          </ListItemButton>
+          <ListItemButton
+            selected={repositoriesActive}
+            onClick={() => navigate("/repositories")}
+            sx={navSx}
+          >
+            <ListItemIcon sx={iconSx}>
+              <AccountTreeIcon />
+            </ListItemIcon>
+            <ListItemText primary="Repositories" />
+          </ListItemButton>
+          <ListItemButton
+            selected={integrationsActive}
+            onClick={() => navigate("/integrations")}
+            sx={navSx}
+          >
+            <ListItemIcon sx={iconSx}>
+              <IntegrationInstructionsIcon />
+            </ListItemIcon>
+            <ListItemText primary="Integrations" />
+          </ListItemButton>
+          <ListItemButton
+            selected={apiKeysActive}
+            onClick={() => navigate("/settings/api-keys")}
+            sx={navSx}
+          >
+            <ListItemIcon sx={iconSx}>
+              <KeyIcon />
+            </ListItemIcon>
+            <ListItemText primary="API Keys" />
+          </ListItemButton>
+        </List>
+
+        <Box sx={{ flexGrow: 1 }} />
+        <Stack spacing={1.5}>
+          <Box
+            sx={{
+              border: "1px solid #2b4148",
+              bgcolor: "#192a30",
+              borderRadius: 1,
+              p: 1.5,
+            }}
+          >
+            <Typography sx={{ fontWeight: 800 }}>
+              {user?.name || user?.email}
+            </Typography>
+            <Typography variant="body2" sx={{ color: "#9fb0b7" }}>
+              {user?.role}
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<LogoutIcon />}
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+          >
+            Sign out
+          </Button>
+        </Stack>
+      </Drawer>
+
+      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+        <Box component="main" sx={{ p: { xs: 2, md: 3.5 } }}>
+          <Outlet />
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+const navSx = {
+  borderRadius: 1,
+  color: "#b8c5ca",
+  mb: 0.5,
+  "&.Mui-selected, &.Mui-selected:hover, &:hover": {
+    bgcolor: "#213238",
+    color: "#ffffff",
+  },
+};
+
+const iconSx = {
+  color: "inherit",
+  minWidth: 34,
+};

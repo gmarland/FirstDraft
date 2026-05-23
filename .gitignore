@@ -1,0 +1,91 @@
+# Build Results
+bin/
+obj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio Cache/Options
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.sln.iml
+
+# Visual Studio Code
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.vscode/extensions.json
+*.code-workspace
+
+# NuGet
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+.nuget/
+
+# Node / TypeScript
+node_modules/
+dist/
+coverage/
+.nyc_output/
+.npm/
+.pnpm-store/
+.yarn/
+*.tsbuildinfo
+
+# Project files
+*.csproj.user
+*.csproj.DotSettings
+launchSettings.json
+
+# ReSharper
+.idea/
+*.resharper
+*.resharper.user
+*.DotSettings.user
+
+# Local environment
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Build Folders
+/packages/
+/.vs/
+
+# Test Results
+TestResults/
+*.trx
+
+# JetBrains
+.idea/
+.ideaIgnore
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+config.json

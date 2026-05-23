@@ -1,0 +1,17 @@
+import { TableCell, TableHead, TableRow } from "@mui/material";
+
+export function WorkersTableHead() {
+  return (
+    <TableHead>
+      <TableRow>
+        <TableCell>Worker</TableCell>
+        <TableCell>State</TableCell>
+        <TableCell>Task slots</TableCell>
+        <TableCell>Skills</TableCell>
+        <TableCell>Paths</TableCell>
+        <TableCell>Last seen</TableCell>
+        <TableCell align="right" />
+      </TableRow>
+    </TableHead>
+  );
+}

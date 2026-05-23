@@ -1,0 +1,75 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using FirstDraft.Cli;
+using FirstDraft.Commands;
+using FirstDraft.Commands.Handlers;
+using FirstDraft.Configuration;
+
+namespace FirstDraft
+{
+    public class Program
+    {
+        public static async Task<int> Main(string[] args)
+        {
+            string command = args.Length > 0 ? args[0].ToLowerInvariant() : "run";
+
+            switch (command)
+            {
+                case "init":
+                    ApplicationDataService applicationDataService = new ApplicationDataService();
+                    ConfigurationWizardService configurationWizardService = new ConfigurationWizardService(applicationDataService);
+                    return await configurationWizardService.Init();
+
+                case "skills":
+                    ApplicationDataService skillsApplicationDataService = new ApplicationDataService();
+                    ConfigurationWizardService skillsConfigurationWizardService = new ConfigurationWizardService(skillsApplicationDataService);
+                    return await skillsConfigurationWizardService.Skills();
+
+                case "capacity":
+                    ApplicationDataService capacityApplicationDataService = new ApplicationDataService();
+                    ConfigurationWizardService capacityConfigurationWizardService = new ConfigurationWizardService(capacityApplicationDataService);
+                    return await capacityConfigurationWizardService.Capacity();
+
+                case "run":
+                    await CreateHostBuilder(args.Skip(1).ToArray()).Build().RunAsync();
+                    return 0;
+
+                case "help":
+                case "--help":
+                case "-h":
+                    PrintHelp();
+                    return 0;
+
+                default:
+                    Console.Error.WriteLine($"Unknown command: {args[0]}");
+                    PrintHelp();
+                    return 1;
+            }
+        }
+
+        public static IHostBuilder CreateHostBuilder(string[] args)
+        {
+            return Host.CreateDefaultBuilder(args).ConfigureServices((hostContext, services) =>
+            {
+                services.AddSingleton<ApplicationDataService>();
+                services.AddSingleton<ICommandHandler, ShellCommandHandler>();
+                services.AddSingleton<ICommandHandler, AICommandHandler>();
+                services.AddSingleton<ICommandHandler, GitflowCommandHandler>();
+                services.AddSingleton<CommandDispatcher>();
+                services.AddHostedService<Worker>();
+            });
+        }
+
+        private static void PrintHelp()
+        {
+            Console.WriteLine("firstdraft");
+            Console.WriteLine();
+            Console.WriteLine("Usage:");
+            Console.WriteLine("  firstdraft init    Create or update config.json interactively");
+            Console.WriteLine("  firstdraft skills  Update worker skills interactively");
+            Console.WriteLine("  firstdraft capacity  Update max concurrent gitflow tasks interactively");
+            Console.WriteLine("  firstdraft run     Start the FirstDraft client worker");
+            Console.WriteLine("  firstdraft help    Show this help");
+        }
+    }
+}
