@@ -221,10 +221,6 @@ firstdraft skills
 firstdraft capacity
 ```
 
-## Development Status
-
-FirstDraft is early software. It is useful as a self-hosted remote worker orchestration system, but public operators should still review the authentication, command execution, network exposure, Jira permissions, and storage settings before putting it on shared infrastructure.
-
 ## Contributing
 
 Issues and pull requests are welcome. The most useful contributions are focused and reproducible: bug reports with command output, small feature slices, tests around worker dispatch and persistence, and documentation that helps people run the stack safely.
