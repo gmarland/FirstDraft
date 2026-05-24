@@ -178,6 +178,8 @@ cd client
 dotnet run -- init
 dotnet run -- skills
 dotnet run -- capacity
+dotnet run -- taskTypes
+dotnet run -- enablePlanning
 dotnet run -- run
 ```
 
@@ -221,6 +223,8 @@ Worker configuration is stored locally by the .NET client and can be edited thro
 firstdraft init
 firstdraft skills
 firstdraft capacity
+firstdraft taskTypes
+firstdraft enablePlanning
 ```
 
 ## Contributing
