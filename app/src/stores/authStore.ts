@@ -19,6 +19,7 @@ type AuthStore = {
   login(input: LoginInput): Promise<void>;
   signup(input: SignupInput): Promise<void>;
   updateProfile(input: UpdateProfileInput): Promise<void>;
+  deleteProfile(): Promise<void>;
   logout(): void;
 };
 
@@ -57,6 +58,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     const { user } = await api.updateMe(token, input);
     set({ user });
     writeStoredAuth({ token, user });
+  },
+
+  async deleteProfile() {
+    const { token } = get();
+    if (!token) {
+      throw new Error("authentication required");
+    }
+
+    await api.deleteMe(token);
+    clearStoredAuth();
+    set({ token: null, user: null });
   },
 
   logout() {

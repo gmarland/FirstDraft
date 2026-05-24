@@ -11,7 +11,7 @@ export class UserStore {
   private readonly users: Repository<UserEntity>;
 
   public constructor(
-    db: TypeOrmStoreContext,
+    private readonly db: TypeOrmStoreContext,
     private readonly passwords: UserPasswordHasher
   ) {
     this.users = db.repository(UserSchema);
@@ -76,6 +76,51 @@ export class UserStore {
     user.disabledAt ??= new Date();
 
     return mapUserEntity(await this.users.save(user));
+  }
+
+  public async listCommandOutputObjectKeys(userId: string): Promise<string[]> {
+    const result = await this.db.query<{ output_object_key: string }>(
+      `
+        select output_object_key
+        from client_commands
+        where user_id = $1
+          and output_object_key is not null
+      `,
+      [userId]
+    );
+
+    return result.rows.map((row) => String(row.output_object_key));
+  }
+
+  public async deleteUser(userId: string): Promise<boolean> {
+    const result = await this.db.query<{ deleted: boolean }>(
+      `
+        with user_api_keys as (
+          select id
+          from api_keys
+          where user_id = $1
+        ),
+        deleted_workers as (
+          delete from client_workers
+          where api_key_id in (select id from user_api_keys)
+          returning worker_id
+        ),
+        deleted_commands as (
+          delete from client_commands
+          where user_id = $1
+          returning transaction_id
+        ),
+        deleted_user as (
+          delete from users
+          where id = $1
+          returning id
+        )
+        select exists(select 1 from deleted_user) as deleted
+      `,
+      [userId]
+    );
+
+    return result.rows[0]?.deleted === true;
   }
 
   private findByEmail(email: string): Promise<UserEntity | null> {

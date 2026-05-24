@@ -82,6 +82,8 @@ export abstract class BufferedCommandOutputStorage
 
   public abstract getOutput(objectKey: string): Promise<StoredCommandOutput>;
 
+  public abstract deleteOutput(objectKey: string): Promise<void>;
+
   protected abstract uploadFile(
     objectKey: string,
     filePath: string,

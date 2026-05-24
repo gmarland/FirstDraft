@@ -71,6 +71,16 @@ export const openApiDocument = {
           "200": jsonResponse("Current user", object({ user: ref("User") }, ["user"])),
           "401": errorResponse()
         }
+      },
+      delete: {
+        tags: ["Auth"],
+        summary: "Delete the current authenticated user and their data",
+        security: bearerSecurity(),
+        responses: {
+          "204": { description: "Profile deleted" },
+          "401": errorResponse(),
+          "404": errorResponse()
+        }
       }
     },
     "/api/worker-auth/token": {

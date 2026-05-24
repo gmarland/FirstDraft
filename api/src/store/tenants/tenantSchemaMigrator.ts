@@ -248,7 +248,7 @@ export class SchemaMigrator {
 
       create table if not exists client_commands (
         transaction_id text primary key,
-        user_id uuid not null references users(id),
+        user_id uuid not null references users(id) on delete cascade,
         worker_id text,
         command text not null,
         execution_command text,
@@ -270,6 +270,38 @@ export class SchemaMigrator {
 
       alter table client_commands
         alter column worker_id drop not null;
+
+      do $$
+      declare
+        constraint_name text;
+      begin
+        for constraint_name in
+          select c.conname
+          from pg_constraint c
+          join pg_attribute a
+            on a.attrelid = c.conrelid
+           and a.attnum = any(c.conkey)
+          where c.conrelid = 'client_commands'::regclass
+            and c.contype = 'f'
+            and a.attname = 'user_id'
+            and c.confdeltype <> 'c'
+        loop
+          execute format('alter table client_commands drop constraint %I', constraint_name);
+        end loop;
+      end $$;
+
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'client_commands_user_id_fkey'
+        ) then
+          alter table client_commands
+            add constraint client_commands_user_id_fkey
+            foreign key (user_id) references users(id) on delete cascade;
+        end if;
+      end $$;
 
       alter table client_commands
         add column if not exists result text;

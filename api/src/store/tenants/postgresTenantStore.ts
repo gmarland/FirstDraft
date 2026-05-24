@@ -37,6 +37,14 @@ export class PostgresAppStore implements AppStore {
     return this.users.updateUser(userId, input);
   }
 
+  public listCommandOutputObjectKeys(userId: string): Promise<string[]> {
+    return this.users.listCommandOutputObjectKeys(userId);
+  }
+
+  public deleteUser(userId: string): Promise<boolean> {
+    return this.users.deleteUser(userId);
+  }
+
   public authenticateUser(email: string, password: string): Promise<User | undefined> {
     return this.users.authenticateUser(email, password);
   }

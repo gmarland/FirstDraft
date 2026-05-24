@@ -44,4 +44,8 @@ export class GcsCommandOutputStorage extends BufferedCommandOutputStorage {
           : undefined,
     };
   }
+
+  public async deleteOutput(objectKey: string): Promise<void> {
+    await this.bucket.file(objectKey).delete({ ignoreNotFound: true });
+  }
 }

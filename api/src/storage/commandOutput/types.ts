@@ -28,6 +28,7 @@ export type CommandOutputStorage = {
     transactionId: string,
   ): Promise<CommandOutputMetadata | undefined>;
   getOutput(objectKey: string): Promise<StoredCommandOutput>;
+  deleteOutput(objectKey: string): Promise<void>;
 };
 
 export type CommandOutputStorageProvider = "s3" | "gcs" | "azure";

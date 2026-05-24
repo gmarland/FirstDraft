@@ -129,7 +129,7 @@ create index if not exists tenant_jira_integration_user_enabled_idx
 
 create table if not exists client_commands (
   transaction_id text primary key,
-  user_id uuid not null references users(id),
+  user_id uuid not null references users(id) on delete cascade,
   worker_id text,
   command text not null,
   execution_command text,

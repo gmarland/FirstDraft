@@ -55,6 +55,10 @@ export class AzureCommandOutputStorage extends BufferedCommandOutputStorage {
     };
   }
 
+  public async deleteOutput(objectKey: string): Promise<void> {
+    await this.containerClient.getBlockBlobClient(objectKey).deleteIfExists();
+  }
+
   private getServiceClient(): BlobServiceClient {
     if (this.serviceClient) return this.serviceClient;
 

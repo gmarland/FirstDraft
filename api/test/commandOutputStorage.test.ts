@@ -34,6 +34,13 @@ class FakeBufferedCommandOutputStorage extends BufferedCommandOutputStorage {
     };
   }
 
+  public async deleteOutput(objectKey: string): Promise<void> {
+    const index = this.uploads.findIndex((candidate) => candidate.objectKey === objectKey);
+    if (index >= 0) {
+      this.uploads.splice(index, 1);
+    }
+  }
+
   protected async uploadFile(objectKey: string, filePath: string): Promise<void> {
     this.uploads.push({
       objectKey,
@@ -178,6 +185,8 @@ async function testBufferedStorageUploadsNdjsonAndIgnoresDuplicates(): Promise<v
         }
       ]
     );
+    await storage.deleteOutput("prefix/workers/worker_one/commands/command_one/output.ndjson");
+    assert.equal(storage.uploads.length, 0);
     assert.equal(await storage.completeCommand("worker/one", "command:one"), undefined);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });

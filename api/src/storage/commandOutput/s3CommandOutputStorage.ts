@@ -1,6 +1,11 @@
 import { createReadStream } from "fs";
 import { Readable } from "stream";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { BufferedCommandOutputStorage } from "./bufferedCommandOutputStorage.js";
 import type { StoredCommandOutput } from "./types.js";
 
@@ -54,5 +59,14 @@ export class S3CommandOutputStorage extends BufferedCommandOutputStorage {
       body: result.Body,
       contentType: result.ContentType,
     };
+  }
+
+  public async deleteOutput(objectKey: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.options.bucket,
+        Key: objectKey,
+      }),
+    );
   }
 }

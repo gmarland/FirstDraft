@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "tsx test/signalRHub.dispatch.test.ts && tsx test/controllerHelpers.test.ts && tsx test/typeOrmStoreMapping.test.ts && tsx test/jiraIntakeService.test.ts && tsx test/commandOutputStorage.test.ts && tsx test/commandStore.test.ts",
+    "test": "tsx test/signalRHub.dispatch.test.ts && tsx test/controllerHelpers.test.ts && tsx test/typeOrmStoreMapping.test.ts && tsx test/jiraIntakeService.test.ts && tsx test/commandOutputStorage.test.ts && tsx test/authProfileDeletion.test.ts && tsx test/commandStore.test.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {

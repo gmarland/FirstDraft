@@ -1,26 +1,39 @@
 import { FormEvent, SyntheticEvent, useEffect, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
   Card,
   CardContent,
+  Divider,
   Snackbar,
   Stack,
+  Tab,
+  Tabs,
   TextField,
+  Typography,
 } from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
+import { useNavigate } from "react-router-dom";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../lib/auth";
 import type { UpdateProfileInput } from "../types/api";
 
 export function ProfilePage() {
-  const { user, updateProfile } = useAuth();
+  const navigate = useNavigate();
+  const { user, updateProfile, deleteProfile } = useAuth();
+  const [tab, setTab] = useState(0);
   const [email, setEmail] = useState(user?.email ?? "");
   const [name, setName] = useState(user?.name ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [notice, setNotice] = useState(false);
 
   useEffect(() => {
@@ -78,62 +91,125 @@ export function ProfilePage() {
     }
   };
 
+  const confirmDeleteProfile = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await deleteProfile();
+      setDeleteDialogOpen(false);
+      navigate("/login", { replace: true });
+    } catch (caught) {
+      setDeleteError(caught instanceof Error ? caught.message : "Unable to delete profile");
+      setDeleting(false);
+    }
+  };
+
   return (
     <Stack spacing={2.75}>
       <PageHeader title="Profile" />
 
-      <Card sx={{ maxWidth: 640 }}>
-        <CardContent>
-          <Stack component="form" spacing={2} onSubmit={submit}>
-            <TextField
-              label="Email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              type="email"
-              autoComplete="email"
-              required
-              disabled={saving}
-              fullWidth
-            />
-            <TextField
-              label="Name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              autoComplete="name"
-              disabled={saving}
-              fullWidth
-            />
-            <TextField
-              label="New password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              type="password"
-              autoComplete="new-password"
-              disabled={saving}
-              fullWidth
-            />
-            <TextField
-              label="Confirm new password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              type="password"
-              autoComplete="new-password"
-              disabled={saving}
-              fullWidth
-            />
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-              variant="contained"
-              type="submit"
-              startIcon={<SaveIcon />}
-              disabled={saving || !email.trim()}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              {saving ? "Saving" : "Save profile"}
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
+      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Tabs value={tab} onChange={(_event, value: number) => setTab(value)}>
+          <Tab label="Profile" />
+          <Tab label="Delete profile" />
+        </Tabs>
+      </Box>
+
+      {tab === 0 && (
+        <Card sx={{ maxWidth: 640 }}>
+          <CardContent>
+            <Stack component="form" spacing={2} onSubmit={submit}>
+              <TextField
+                label="Email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
+                autoComplete="email"
+                required
+                disabled={saving}
+                fullWidth
+              />
+              <TextField
+                label="Name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                autoComplete="name"
+                disabled={saving}
+                fullWidth
+              />
+              <TextField
+                label="New password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                disabled={saving}
+                fullWidth
+              />
+              <TextField
+                label="Confirm new password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                disabled={saving}
+                fullWidth
+              />
+              {error && <Alert severity="error">{error}</Alert>}
+              <Button
+                variant="contained"
+                type="submit"
+                startIcon={<SaveIcon />}
+                disabled={saving || !email.trim()}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                {saving ? "Saving" : "Save profile"}
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 1 && (
+        <Card sx={{ maxWidth: 640 }}>
+          <CardContent>
+            <Stack spacing={2}>
+              <Stack spacing={0.75}>
+                <Typography variant="h6">Delete profile</Typography>
+                <Typography color="text.secondary">
+                  Permanently delete your profile and all associated data, including API keys,
+                  workers, repositories, integrations, command history, and command output.
+                </Typography>
+              </Stack>
+              <Divider />
+              {deleteError && <Alert severity="error">{deleteError}</Alert>}
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<DeleteIcon />}
+                disabled={deleting}
+                onClick={() => setDeleteDialogOpen(true)}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                {deleting ? "Deleting" : "Delete profile"}
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
+      <DeleteConfirmationDialog
+        open={deleteDialogOpen}
+        title="Delete profile?"
+        description="This cannot be undone. Deleting your profile will permanently delete your profile and all of your data."
+        confirmLabel="Delete profile"
+        submitting={deleting}
+        onClose={() => {
+          if (!deleting) setDeleteDialogOpen(false);
+        }}
+        onConfirm={confirmDeleteProfile}
+      />
 
       <Snackbar
         open={notice}
