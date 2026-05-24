@@ -24,10 +24,10 @@ export function createDataSource(databaseUrl: string): DataSource {
       GeneralizeIntakeEvents1710000000004,
       AllowRepeatedIntegrationIntakeEvents1710000000005,
       WorkerRuntimeState1710000000006,
-      WorkerTaskTypes1710000000007
-      CentralCommandQueue1710000000007
+      WorkerTaskTypes1710000000007,
+      CentralCommandQueue1710000000007,
     ],
     synchronize: false,
-    migrationsRun: false
+    migrationsRun: false,
   });
 }
