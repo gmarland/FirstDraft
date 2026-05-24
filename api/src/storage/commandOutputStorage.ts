@@ -3,7 +3,9 @@ import { appendFile, mkdir, rm, stat } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { Storage } from "@google-cloud/storage";
 
 export type CommandOutputChunkInput = {
   workerId: string;
@@ -41,30 +43,52 @@ type CommandOutputState = {
   pendingWrite: Promise<void>;
 };
 
+export type CommandOutputStorageProvider = "s3" | "gcs";
+
 export function createCommandOutputStorageFromEnv(): CommandOutputStorage | undefined {
   const bucket = process.env.COMMAND_OUTPUT_BUCKET;
   if (!bucket) return undefined;
 
-  return new S3CommandOutputStorage({
-    bucket,
-    region: process.env.AWS_REGION,
-    prefix: process.env.COMMAND_OUTPUT_PREFIX,
-    endpoint: process.env.S3_ENDPOINT_URL,
-    forcePathStyle: parseBoolean(process.env.S3_FORCE_PATH_STYLE)
-  });
+  const provider = getCommandOutputStorageProviderFromEnv();
+  
+  if (provider === "gcs") {
+    return new GcsCommandOutputStorage({
+      bucket,
+      prefix: process.env.COMMAND_OUTPUT_PREFIX,
+      projectId: process.env.GCP_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT
+    });
+  }
+
+  if (provider === "s3") {
+    return new S3CommandOutputStorage({
+      bucket,
+      region: process.env.AWS_REGION,
+      prefix: process.env.COMMAND_OUTPUT_PREFIX,
+      endpoint: process.env.S3_ENDPOINT_URL,
+      forcePathStyle: parseBoolean(process.env.S3_FORCE_PATH_STYLE)
+    });
+  }
+
+  throw new Error(`Unsupported command output storage provider: ${provider}`);
 }
 
-export class S3CommandOutputStorage implements CommandOutputStorage {
-  private readonly client: S3Client;
-  private readonly states = new Map<string, CommandOutputState>();
-  private readonly tempRoot = path.join(tmpdir(), "firstdraft-command-output");
+export function getCommandOutputStorageProviderFromEnv(): CommandOutputStorageProvider {
+  return parseStorageProvider(process.env.COMMAND_OUTPUT_STORAGE_PROVIDER);
+}
 
-  public constructor(private readonly options: { bucket: string; region?: string; prefix?: string; endpoint?: string; forcePathStyle?: boolean }) {
-    this.client = new S3Client({
-      region: options.region,
-      endpoint: options.endpoint,
-      forcePathStyle: options.forcePathStyle
-    });
+export function parseStorageProvider(value: string | undefined): CommandOutputStorageProvider {
+  const normalized = (value ?? "s3").trim().toLowerCase();
+  if (normalized === "s3" || normalized === "aws") return "s3";
+  if (normalized === "gcs" || normalized === "google") return "gcs";
+  throw new Error("Unsupported COMMAND_OUTPUT_STORAGE_PROVIDER. Expected one of: s3, aws, gcs, google");
+}
+
+export abstract class BufferedCommandOutputStorage implements CommandOutputStorage {
+  private readonly states = new Map<string, CommandOutputState>();
+  private readonly tempRoot: string;
+
+  public constructor(private readonly bufferOptions: { prefix?: string; tempRoot?: string } = {}) {
+    this.tempRoot = bufferOptions.tempRoot ?? path.join(tmpdir(), "firstdraft-command-output");
   }
 
   public async appendChunk(input: CommandOutputChunkInput): Promise<void> {
@@ -94,14 +118,7 @@ export class S3CommandOutputStorage implements CommandOutputStorage {
     await state.pendingWrite;
 
     const fileStats = await stat(state.filePath);
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.options.bucket,
-        Key: state.objectKey,
-        Body: createReadStream(state.filePath),
-        ContentType: "application/x-ndjson"
-      })
-    );
+    await this.uploadFile(state.objectKey, state.filePath);
 
     await rm(state.filePath, { force: true });
     this.states.delete(stateKey(workerId, transactionId));
@@ -114,23 +131,9 @@ export class S3CommandOutputStorage implements CommandOutputStorage {
     };
   }
 
-  public async getOutput(objectKey: string): Promise<StoredCommandOutput> {
-    const result = await this.client.send(
-      new GetObjectCommand({
-        Bucket: this.options.bucket,
-        Key: objectKey
-      })
-    );
+  public abstract getOutput(objectKey: string): Promise<StoredCommandOutput>;
 
-    if (!result.Body || !(result.Body instanceof Readable)) {
-      throw new Error("S3 object body is not readable");
-    }
-
-    return {
-      body: result.Body,
-      contentType: result.ContentType
-    };
-  }
+  protected abstract uploadFile(objectKey: string, filePath: string): Promise<void>;
 
   private async getOrCreateState(workerId: string, transactionId: string): Promise<CommandOutputState> {
     const key = stateKey(workerId, transactionId);
@@ -152,8 +155,82 @@ export class S3CommandOutputStorage implements CommandOutputStorage {
   }
 
   private buildObjectKey(workerId: string, transactionId: string): string {
-    const prefix = normalizePrefix(this.options.prefix);
+    const prefix = normalizePrefix(this.bufferOptions.prefix);
     return `${prefix}workers/${sanitize(workerId)}/commands/${sanitize(transactionId)}/output.ndjson`;
+  }
+}
+
+export class S3CommandOutputStorage extends BufferedCommandOutputStorage {
+  private readonly client: S3Client;
+
+  public constructor(private readonly options: { bucket: string; region?: string; prefix?: string; endpoint?: string; forcePathStyle?: boolean; client?: S3Client }) {
+    super({ prefix: options.prefix });
+    this.client = options.client ?? new S3Client({
+      region: options.region,
+      endpoint: options.endpoint,
+      forcePathStyle: options.forcePathStyle
+    });
+  }
+
+  protected async uploadFile(objectKey: string, filePath: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.options.bucket,
+        Key: objectKey,
+        Body: createReadStream(filePath),
+        ContentType: "application/x-ndjson"
+      })
+    );
+  }
+
+  public async getOutput(objectKey: string): Promise<StoredCommandOutput> {
+    const result = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.options.bucket,
+        Key: objectKey
+      })
+    );
+
+    if (!result.Body || !(result.Body instanceof Readable)) {
+      throw new Error("S3 object body is not readable");
+    }
+
+    return {
+      body: result.Body,
+      contentType: result.ContentType
+    };
+  }
+}
+
+export class GcsCommandOutputStorage extends BufferedCommandOutputStorage {
+  private readonly bucket: ReturnType<Storage["bucket"]>;
+
+  public constructor(private readonly options: { bucket: string; prefix?: string; projectId?: string; storage?: Storage }) {
+    super({ prefix: options.prefix });
+    const storage = options.storage ?? new Storage({ projectId: options.projectId });
+    this.bucket = storage.bucket(options.bucket);
+  }
+
+  protected async uploadFile(objectKey: string, filePath: string): Promise<void> {
+    const file = this.bucket.file(objectKey);
+    await pipeline(
+      createReadStream(filePath),
+      file.createWriteStream({
+        metadata: {
+          contentType: "application/x-ndjson"
+        }
+      })
+    );
+  }
+
+  public async getOutput(objectKey: string): Promise<StoredCommandOutput> {
+    const file = this.bucket.file(objectKey);
+    const [metadata] = await file.getMetadata();
+
+    return {
+      body: file.createReadStream(),
+      contentType: typeof metadata.contentType === "string" ? metadata.contentType : undefined
+    };
   }
 }
 

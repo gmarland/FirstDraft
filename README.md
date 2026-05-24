@@ -108,6 +108,7 @@ DATABASE_URL=postgres://firstdraft:firstdraft@localhost:5432/firstdraft
 JWT_SECRET=replace-with-a-local-development-secret
 PORT=5080
 COMMAND_OUTPUT_BUCKET=firstdraft-command-output
+COMMAND_OUTPUT_STORAGE_PROVIDER=s3
 COMMAND_OUTPUT_PREFIX=dev/
 S3_ENDPOINT_URL=http://localhost:9000
 S3_FORCE_PATH_STYLE=true
@@ -206,8 +207,11 @@ Important API environment variables:
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `JWT_SECRET` | Yes | Secret used to sign user JWTs |
 | `PORT` | No | API port, defaults to `5080` |
-| `COMMAND_OUTPUT_BUCKET` | No | S3-compatible bucket for command output |
+| `COMMAND_OUTPUT_BUCKET` | No | Bucket for command output |
+| `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws` or `gcs`/`google`; defaults to `s3` |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |
+
+For Google Cloud Storage, set `COMMAND_OUTPUT_STORAGE_PROVIDER=gcs` and `COMMAND_OUTPUT_BUCKET` to the GCS bucket name. Authentication uses Google Application Default Credentials, including `GOOGLE_APPLICATION_CREDENTIALS`; optionally set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
 
 Worker configuration is stored locally by the .NET client and can be edited through:
 
