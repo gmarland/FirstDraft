@@ -155,8 +155,10 @@ export function RepositoriesPage() {
     }
   };
 
-  const deleteRepository = async () => {
-    if (!token || !editingRepository) return;
+  const deleteRepository = async (repository: GitRepository) => {
+    if (!token) return;
+    if (!window.confirm("Delete this repository? This cannot be undone."))
+      return;
 
     setDeleting(true);
     setError(null);
@@ -164,16 +166,15 @@ export function RepositoriesPage() {
     try {
       await api.deleteRepository(
         token,
-        editingRepository.normalizedRepositoryUrl,
+        repository.normalizedRepositoryUrl,
       );
       setRepositories((current) =>
         current.filter(
-          (repository) =>
-            repository.normalizedRepositoryUrl !==
-            editingRepository.normalizedRepositoryUrl,
+          (currentRepository) =>
+            currentRepository.normalizedRepositoryUrl !==
+            repository.normalizedRepositoryUrl,
         ),
       );
-      setDialogOpen(false);
       setNotice("Repository deleted.");
     } catch (caught) {
       handleAuthError(caught, logout);
@@ -265,6 +266,18 @@ export function RepositoriesPage() {
                       <EditIcon />
                     </IconButton>
                   </Tooltip>
+                  <Tooltip title="Delete repository">
+                    <span>
+                      <IconButton
+                        aria-label="Delete repository"
+                        color="error"
+                        onClick={() => void deleteRepository(repository)}
+                        disabled={deleting}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
@@ -348,19 +361,7 @@ export function RepositoriesPage() {
               </Stack>
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ justifyContent: "space-between", px: 3, pb: 2 }}>
-            <Box>
-              {editingRepository && (
-                <Button
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={deleteRepository}
-                  disabled={saving || deleting}
-                >
-                  Delete
-                </Button>
-              )}
-            </Box>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
             <Stack direction="row" spacing={1}>
               <Button onClick={closeDialog} disabled={saving || deleting}>
                 Cancel
