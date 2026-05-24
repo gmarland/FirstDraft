@@ -40,6 +40,23 @@ namespace FirstDraft.AI
 
       if (applicationData.AIProvider == AIProvider.Codex)
       {
+        if (!applicationData.PlanningEnabled)
+        {
+          string directExecutionPrompt = BuildDirectExecutionPrompt(message);
+          IReadOnlyList<string> directExecutionArguments = BuildCodexArguments(fullWorkingDirectory, grantedFolders, "workspace-write");
+
+          log.Info("Starting Codex non-interactive execution without planning pass");
+          string directResult = ExecuteOneShot(
+              log,
+              executablePath,
+              new List<string>(directExecutionArguments) { directExecutionPrompt },
+              fullWorkingDirectory,
+              timeoutMinutes,
+              sequencedOutputChunkHandler);
+          log.Info($"Codex execution completed in {stopwatch.ElapsedMilliseconds}ms with {directResult.Length} output characters");
+          return directResult;
+        }
+
         IReadOnlyList<string> planningArguments = BuildCodexArguments(fullWorkingDirectory, grantedFolders, "read-only");
 
         log.Info("Starting Codex planning pass");
@@ -67,6 +84,25 @@ namespace FirstDraft.AI
 
         string result = CombinePhaseOutputs(plan, executionResult);
         log.Info($"Codex planning and execution completed in {stopwatch.ElapsedMilliseconds}ms with {result.Length} output characters");
+        return result;
+      }
+
+      if (!applicationData.PlanningEnabled)
+      {
+        string directExecutionMessage = BuildDirectExecutionPrompt(message);
+        string directExecutionSessionKey = $"ai:{applicationData.AIProvider}:execution:{fullWorkingDirectory}";
+        log.Info($"Starting AI session execution without planning pass. SessionKey={directExecutionSessionKey}");
+        string result = GenericCommandLineService.Execute(
+            log,
+            directExecutionSessionKey,
+            executablePath,
+            Array.Empty<string>(),
+            fullWorkingDirectory,
+            directExecutionMessage,
+            timeoutMinutes,
+            sequencedOutputChunkHandler,
+            forceNewSession: true);
+        log.Info($"{applicationData.AIProvider} execution completed in {stopwatch.ElapsedMilliseconds}ms with {result.Length} output characters");
         return result;
       }
 
@@ -128,6 +164,18 @@ namespace FirstDraft.AI
 
       Approved plan:
       {plan}
+      """;
+    }
+
+    private static string BuildDirectExecutionPrompt(string message)
+    {
+      return $"""
+      Implement the requested command.
+
+      Keep the final response concise and include what changed and any tests run.
+
+      Command:
+      {message}
       """;
     }
 

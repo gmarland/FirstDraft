@@ -63,6 +63,8 @@ namespace FirstDraft.Configuration
 
         public AIProvider AIProvider { get; set; } = AIProvider.None;
 
+        public bool PlanningEnabled { get; set; } = true;
+
         public string? AIWorkingDirectory { get; set; }
 
         public string? GitWorkspaceDirectory { get; set; }
