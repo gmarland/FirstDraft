@@ -37,6 +37,54 @@ export class PostgresAppStore implements AppStore {
     return this.users.updateUser(userId, input);
   }
 
+  public async listCommandOutputObjectKeysForUser(userId: string): Promise<string[]> {
+    const result = await this.db.query<{ output_object_key: string }>(
+      `
+        select output_object_key
+        from client_commands
+        where user_id = $1
+          and output_object_key is not null
+      `,
+      [userId]
+    );
+
+    return result.rows.map((row) => row.output_object_key);
+  }
+
+  public async deleteUser(userId: string): Promise<boolean> {
+    const result = await this.db.query<{ deleted_user_id: string }>(
+      `
+        with user_api_keys as (
+          select id
+          from api_keys
+          where user_id = $1
+        ),
+        deleted_workers as (
+          delete from client_workers
+          where api_key_id in (select id from user_api_keys)
+          returning worker_id
+        ),
+        deleted_commands as (
+          delete from client_commands
+          where user_id = $1
+          returning transaction_id
+        ),
+        deleted_user as (
+          delete from users
+          where id = $1
+            and (select count(*) from deleted_workers) >= 0
+            and (select count(*) from deleted_commands) >= 0
+          returning id
+        )
+        select id as deleted_user_id
+        from deleted_user
+      `,
+      [userId]
+    );
+
+    return result.rowCount === 1;
+  }
+
   public authenticateUser(email: string, password: string): Promise<User | undefined> {
     return this.users.authenticateUser(email, password);
   }

@@ -19,6 +19,7 @@ type Upload = {
 
 class FakeBufferedCommandOutputStorage extends BufferedCommandOutputStorage {
   public readonly uploads: Upload[] = [];
+  public readonly deletedObjectKeys: string[] = [];
 
   public constructor(tempRoot: string, prefix?: string) {
     super({ prefix, tempRoot });
@@ -39,6 +40,10 @@ class FakeBufferedCommandOutputStorage extends BufferedCommandOutputStorage {
       objectKey,
       body: await readFile(filePath, "utf8")
     });
+  }
+
+  protected async deleteStoredOutput(objectKey: string): Promise<void> {
+    this.deletedObjectKeys.push(objectKey);
   }
 }
 
@@ -179,6 +184,8 @@ async function testBufferedStorageUploadsNdjsonAndIgnoresDuplicates(): Promise<v
       ]
     );
     assert.equal(await storage.completeCommand("worker/one", "command:one"), undefined);
+    await storage.deleteOutput("prefix/workers/worker_one/commands/command_one/output.ndjson");
+    assert.deepEqual(storage.deletedObjectKeys, ["prefix/workers/worker_one/commands/command_one/output.ndjson"]);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }

@@ -58,7 +58,7 @@ const integrationLifecycle = new IntegrationLifecycleService(integrationIntakeEv
 const signalRHub = new SignalRHub(store, workerTokenService, apiToWorkerTokens, outputStorage, integrationLifecycle);
 const jiraIntake = new JiraIntakeService(jiraIntegrations, integrationIntakeEvents, store, gitRepositories, signalRHub);
 const app = createApp({
-  authRoutes: createAuthRoutes(jwtConfig, tenants),
+  authRoutes: createAuthRoutes(jwtConfig, tenants, outputStorage),
   workerAuthRoutes: createWorkerAuthRoutes(
     tenants,
     workerTokenService,

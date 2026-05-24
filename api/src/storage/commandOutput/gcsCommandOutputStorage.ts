@@ -41,7 +41,11 @@ export class GcsCommandOutputStorage extends BufferedCommandOutputStorage {
       contentType:
         typeof metadata.contentType === "string"
           ? metadata.contentType
-          : undefined,
+        : undefined,
     };
+  }
+
+  protected async deleteStoredOutput(objectKey: string): Promise<void> {
+    await this.bucket.file(objectKey).delete({ ignoreNotFound: true });
   }
 }
