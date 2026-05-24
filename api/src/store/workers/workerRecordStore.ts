@@ -175,6 +175,23 @@ export class WorkerRecordStore {
     return result.rows[0] ? mapWorkerRecord(result.rows[0]) : undefined;
   }
 
+  public async disableWorkersForUser(userId: string): Promise<WorkerRecord[]> {
+    const result = await this.pool.query(
+      `
+        update client_workers
+        set enabled = false
+        from api_keys
+        where api_keys.id = client_workers.api_key_id
+          and api_keys.user_id = $1
+          and client_workers.enabled = true
+        returning ${workerRecordColumns}
+      `,
+      [userId]
+    );
+
+    return result.rows.map(mapWorkerRecord);
+  }
+
   public async refreshWorkerActivity(workerId: string, state: Exclude<ClientState, "stopped">): Promise<void> {
     await this.pool.query(
       `

@@ -9,6 +9,11 @@ import { CommandLifecycleObserver, HubConnectionRegistry, SignalRConnection } fr
 
 const stuckCommandTimeoutMinutes = 30;
 
+type DispatchOptions = {
+  allowDisabledWorker?: boolean;
+  transactionId?: string;
+};
+
 export class WorkerCommandDispatcher {
   private readonly workerDispatchLocks = new Map<string, Promise<unknown>>();
 
@@ -19,7 +24,7 @@ export class WorkerCommandDispatcher {
     private readonly lifecycle?: CommandLifecycleObserver
   ) {}
 
-  public async dispatchCommand(workerId: string, transactionId: string): Promise<void> {
+  public async dispatchCommand(workerId: string, transactionId: string, options: DispatchOptions = {}): Promise<void> {
     await this.failStuckCommands(false);
 
     const command = await this.store.getWorkerCommand(transactionId);
@@ -27,10 +32,13 @@ export class WorkerCommandDispatcher {
     if (command.workerId !== workerId) return;
     if (command.status !== "queued") return;
 
-    await this.dispatchQueuedCommands(workerId);
+    await this.dispatchQueuedCommands(workerId, {
+      ...options,
+      transactionId: options.allowDisabledWorker ? transactionId : options.transactionId
+    });
   }
 
-  public async dispatchQueuedCommands(workerId?: string): Promise<void> {
+  public async dispatchQueuedCommands(workerId?: string, options: DispatchOptions = {}): Promise<void> {
     if (!workerId) {
       const workers = await this.store.listWorkers();
       await Promise.all(workers.map((worker) => this.dispatchQueuedCommands(worker.workerId)));
@@ -40,18 +48,20 @@ export class WorkerCommandDispatcher {
     await this.withWorkerDispatchLock(workerId, async () => {
       while (true) {
         const client = await this.store.getWorker(workerId);
-        if (!client || !client.enabled || !canDispatchMoreCommands(client)) return;
+        if (!client || (!client.enabled && !options.allowDisabledWorker) || !canDispatchMoreCommands(client)) return;
 
         const connection = this.connections.get(client.connectionId);
         if (!connection || connection.socket.readyState !== WebSocket.OPEN) return;
 
-        const queuedCommands = await this.store.getDispatchableQueuedCommands(workerId, client.skills);
+        const queuedCommands = (await this.store.getDispatchableQueuedCommands(workerId, client.skills)).filter(
+          (command) => !options.transactionId || command.transactionId === options.transactionId
+        );
         if (queuedCommands.length === 0) return;
 
         let claimedCommand = false;
         for (const nextCommand of queuedCommands) {
           const latestClient = await this.store.getWorker(workerId);
-          if (!latestClient || !latestClient.enabled || !canDispatchMoreCommands(latestClient)) return;
+          if (!latestClient || (!latestClient.enabled && !options.allowDisabledWorker) || !canDispatchMoreCommands(latestClient)) return;
 
           if (!isTaskTypeEnabled(latestClient.enabledTaskTypes, nextCommand.commandMode)) {
             await this.store.cancelWorkerCommand({

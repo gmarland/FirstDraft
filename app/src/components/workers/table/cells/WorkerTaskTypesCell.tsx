@@ -1,5 +1,5 @@
 import { Chip, Stack, TableCell } from "@mui/material";
-import type { CommandMode } from "../../types/api";
+import type { CommandMode } from "../../../../types/api";
 
 type Props = {
   taskTypes: CommandMode[];

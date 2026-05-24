@@ -6,7 +6,7 @@ import {
 } from "@mui/material";
 import { WorkerTableRow } from "./WorkerTableRow";
 import { WorkersTableHead } from "./WorkersTableHead";
-import type { WorkerRegistration } from "../../types/api";
+import type { WorkerRegistration } from "../../../types/api";
 
 type Props = {
   workers: WorkerRegistration[];

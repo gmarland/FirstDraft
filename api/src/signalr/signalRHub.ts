@@ -74,8 +74,8 @@ export class SignalRHub {
     this.transport.attach(server);
   }
 
-  public dispatchCommand(workerId: string, transactionId: string): Promise<void> {
-    return this.commands.dispatchCommand(workerId, transactionId);
+  public dispatchCommand(workerId: string, transactionId: string, options?: { allowDisabledWorker?: boolean }): Promise<void> {
+    return this.commands.dispatchCommand(workerId, transactionId, options);
   }
 
   public dispatchQueuedCommands(workerId?: string): Promise<void> {

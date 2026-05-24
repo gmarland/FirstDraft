@@ -151,6 +151,17 @@ export const openApiDocument = {
         }
       }
     },
+    "/api/workers/disable-all": {
+      post: {
+        tags: ["Workers"],
+        summary: "Disable all enabled workers for the current user",
+        security: bearerSecurity(),
+        responses: {
+          "200": jsonResponse("Disabled workers", array(ref("WorkerRegistration"))),
+          "401": errorResponse()
+        }
+      }
+    },
     "/api/workers/{workerId}": {
       patch: {
         tags: ["Workers"],

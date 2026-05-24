@@ -1,4 +1,4 @@
-import type { WorkerRegistration } from "../../types/api";
+import type { WorkerRegistration } from "../../../types/api";
 
 export function getWorkerTaskSlots(worker: WorkerRegistration) {
   const activeTaskCount =

@@ -2,7 +2,7 @@ import { Box, Chip, Stack, Typography } from "@mui/material";
 import { StatusBadge } from "../StatusBadge";
 import { SummaryCard } from "../SummaryCard";
 import { formatDate, relativeTime } from "../../lib/dates";
-import { formatTaskType } from "../workers/WorkerTaskTypesCell";
+import { formatTaskType } from "../workers/table/cells/WorkerTaskTypesCell";
 import type { WorkerRegistration } from "../../types/api";
 
 type Props = {
@@ -17,28 +17,40 @@ export function WorkerSummaryGrid({ state }: Props) {
     state?.activeTransactionIds?.length ??
     (state?.currentTransactionId ? 1 : 0);
   const maxConcurrentTasks = state?.maxConcurrentTasks ?? 1;
-  const activeTransactions =
-    state?.activeTransactionIds ??
-    (state?.currentTransactionId ? [state.currentTransactionId] : []);
 
   return (
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", md: "repeat(6, minmax(0, 1fr))" },
+        gridTemplateColumns: { xs: "1fr", md: "repeat(5, minmax(0, 1fr))" },
         gap: 1.5,
       }}
     >
-      <SummaryCard label="State">
-        {state ? <StatusBadge value={state.state} /> : <strong>Loading</strong>}
-      </SummaryCard>
-      <SummaryCard label="Enabled">
-        <Chip
-          size="small"
-          label={state?.enabled === false ? "Disabled" : state ? "Enabled" : "Loading"}
-          color={state?.enabled === false ? "default" : "success"}
-          sx={{ fontWeight: 800 }}
-        />
+      <SummaryCard label="Status">
+        <Stack
+          direction="row"
+          spacing={0.75}
+          useFlexGap
+          sx={{ flexWrap: "wrap" }}
+        >
+          <Chip
+            size="small"
+            label={
+              state?.enabled === false
+                ? "Disabled"
+                : state
+                  ? "Enabled"
+                  : "Loading"
+            }
+            color={state?.enabled === false ? "default" : "success"}
+            sx={{ fontWeight: 800 }}
+          />
+          {state ? (
+            <StatusBadge value={state.state} />
+          ) : (
+            <Chip size="small" label="Loading" sx={{ fontWeight: 800 }} />
+          )}
+        </Stack>
       </SummaryCard>
       <SummaryCard label="Task slots">
         <Typography sx={{ fontWeight: 800 }}>
@@ -53,7 +65,11 @@ export function WorkerSummaryGrid({ state }: Props) {
           sx={{ flexWrap: "wrap" }}
         >
           {enabledTaskTypes.map((taskType) => (
-            <Chip key={taskType} size="small" label={formatTaskType(taskType)} />
+            <Chip
+              key={taskType}
+              size="small"
+              label={formatTaskType(taskType)}
+            />
           ))}
         </Stack>
       </SummaryCard>

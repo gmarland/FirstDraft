@@ -1,16 +1,12 @@
 import {
-  AppBar,
   Box,
   Button,
-  Divider,
   Drawer,
-  IconButton,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
   Stack,
-  Toolbar,
   Typography,
 } from "@mui/material";
 import AppsIcon from "@mui/icons-material/Apps";
@@ -27,7 +23,9 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const workersActive = location.pathname === "/workers" || location.pathname.startsWith("/workers/");
+  const workersActive =
+    location.pathname === "/workers" ||
+    location.pathname.startsWith("/workers/");
   const repositoriesActive = location.pathname === "/repositories";
   const integrationsActive = location.pathname === "/integrations";
   const apiKeysActive = location.pathname === "/settings/api-keys";
