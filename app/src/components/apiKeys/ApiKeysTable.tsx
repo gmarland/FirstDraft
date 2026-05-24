@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   IconButton,
   Paper,
@@ -12,6 +13,7 @@ import {
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { DeleteConfirmationDialog } from "../DeleteConfirmationDialog";
 import { EmptyState } from "../EmptyState";
 import { formatDate, relativeTime } from "../../lib/dates";
 import { useApiKeysStore } from "../../stores/apiKeysStore";
@@ -24,15 +26,24 @@ type Props = {
 
 export function ApiKeysTable({ activeKeys, loading }: Props) {
   const revokeKey = useApiKeysStore((state) => state.revokeKey);
+  const [keyToRevoke, setKeyToRevoke] = useState<ApiKey | null>(null);
+  const [revoking, setRevoking] = useState(false);
 
-  const revoke = async (keyId: string) => {
-    if (
-      !window.confirm(
-        "Revoke this API key? Connected clients using it will no longer authenticate.",
-      )
-    )
-      return;
-    await revokeKey(keyId);
+  const closeRevokeDialog = () => {
+    if (revoking) return;
+    setKeyToRevoke(null);
+  };
+
+  const revoke = async () => {
+    if (!keyToRevoke) return;
+
+    setRevoking(true);
+    try {
+      await revokeKey(keyToRevoke.keyId);
+      setKeyToRevoke(null);
+    } finally {
+      setRevoking(false);
+    }
   };
 
   return (
@@ -82,7 +93,8 @@ export function ApiKeysTable({ activeKeys, loading }: Props) {
                       <IconButton
                         color="error"
                         title="Revoke key"
-                        onClick={() => void revoke(key.keyId)}
+                        onClick={() => setKeyToRevoke(key)}
+                        disabled={revoking}
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -94,6 +106,15 @@ export function ApiKeysTable({ activeKeys, loading }: Props) {
           </TableContainer>
         )}
       </Stack>
+      <DeleteConfirmationDialog
+        open={Boolean(keyToRevoke)}
+        title="Revoke API key?"
+        description="Connected clients using this key will no longer authenticate."
+        confirmLabel="Revoke key"
+        submitting={revoking}
+        onClose={closeRevokeDialog}
+        onConfirm={() => void revoke()}
+      />
     </Paper>
   );
 }

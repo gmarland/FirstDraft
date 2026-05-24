@@ -4,21 +4,15 @@ import {
   Box,
   Button,
   Card,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   IconButton,
   Snackbar,
   Stack,
-  Switch,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -26,18 +20,16 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { PageHeader } from "../components/PageHeader";
+import {
+  RepositoryDialog,
+  type RepositoryForm,
+} from "../components/repositories/RepositoryDialog";
 import { api, ApiError } from "../lib/api";
 import { relativeTime } from "../lib/dates";
 import { useAuthStore } from "../stores/authStore";
 import type { GitRepository, SaveGitRepositoryInput } from "../types/api";
-
-type RepositoryForm = {
-  repositoryUrl: string;
-  defaultSourceBranch: string;
-  defaultTargetBranch: string;
-  enabled: boolean;
-};
 
 const emptyForm: RepositoryForm = {
   repositoryUrl: "",
@@ -54,6 +46,8 @@ export function RepositoriesPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [repositoryToDelete, setRepositoryToDelete] =
+    useState<GitRepository | null>(null);
   const [editingRepository, setEditingRepository] =
     useState<GitRepository | null>(null);
   const [form, setForm] = useState<RepositoryForm>(emptyForm);
@@ -122,6 +116,11 @@ export function RepositoriesPage() {
     setDialogOpen(false);
   };
 
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setRepositoryToDelete(null);
+  };
+
   const saveRepository = async (event: FormEvent) => {
     event.preventDefault();
     if (!token) return;
@@ -155,26 +154,23 @@ export function RepositoriesPage() {
     }
   };
 
-  const deleteRepository = async () => {
-    if (!token || !editingRepository) return;
+  const deleteRepository = async (repository: GitRepository) => {
+    if (!token) return;
 
     setDeleting(true);
     setError(null);
     setNotice(null);
     try {
-      await api.deleteRepository(
-        token,
-        editingRepository.normalizedRepositoryUrl,
-      );
+      await api.deleteRepository(token, repository.normalizedRepositoryUrl);
       setRepositories((current) =>
         current.filter(
-          (repository) =>
-            repository.normalizedRepositoryUrl !==
-            editingRepository.normalizedRepositoryUrl,
+          (currentRepository) =>
+            currentRepository.normalizedRepositoryUrl !==
+            repository.normalizedRepositoryUrl,
         ),
       );
-      setDialogOpen(false);
       setNotice("Repository deleted.");
+      setRepositoryToDelete(null);
     } catch (caught) {
       handleAuthError(caught, logout);
       setError(
@@ -257,6 +253,18 @@ export function RepositoriesPage() {
                 </TableCell>
                 <TableCell>{relativeTime(repository.lastUsedAt)}</TableCell>
                 <TableCell align="right">
+                  <Tooltip title="Delete repository">
+                    <span>
+                      <IconButton
+                        aria-label="Delete repository"
+                        color="error"
+                        onClick={() => setRepositoryToDelete(repository)}
+                        disabled={deleting}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                   <Tooltip title="Edit repository">
                     <IconButton
                       aria-label="Edit repository"
@@ -281,101 +289,28 @@ export function RepositoriesPage() {
         </Table>
       </TableContainer>
 
-      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="md">
-        <Box component="form" onSubmit={saveRepository}>
-          <DialogTitle>
-            {editingRepository ? "Edit repository" : "Add repository"}
-          </DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <TextField
-                label="Repository URL"
-                value={form.repositoryUrl}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    repositoryUrl: event.target.value,
-                  }))
-                }
-                disabled={saving || Boolean(editingRepository)}
-                required
-                fullWidth
-              />
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                <TextField
-                  label="Default source branch"
-                  value={form.defaultSourceBranch}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      defaultSourceBranch: event.target.value,
-                    }))
-                  }
-                  disabled={saving}
-                  required
-                  fullWidth
-                />
-                <TextField
-                  label="Default target branch for PRs"
-                  value={form.defaultTargetBranch}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      defaultTargetBranch: event.target.value,
-                    }))
-                  }
-                  disabled={saving}
-                  required
-                  fullWidth
-                />
-              </Stack>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <Switch
-                  checked={form.enabled}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      enabled: event.target.checked,
-                    }))
-                  }
-                  disabled={saving}
-                />
-                <Typography>
-                  {form.enabled
-                    ? "Enabled for gitflow suggestions"
-                    : "Hidden from gitflow suggestions"}
-                </Typography>
-              </Stack>
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ justifyContent: "space-between", px: 3, pb: 2 }}>
-            <Box>
-              {editingRepository && (
-                <Button
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={deleteRepository}
-                  disabled={saving || deleting}
-                >
-                  Delete
-                </Button>
-              )}
-            </Box>
-            <Stack direction="row" spacing={1}>
-              <Button onClick={closeDialog} disabled={saving || deleting}>
-                Cancel
-              </Button>
-              <Button
-                variant="contained"
-                type="submit"
-                disabled={saving || deleting || !form.repositoryUrl.trim()}
-              >
-                {saving ? "Saving" : "Save"}
-              </Button>
-            </Stack>
-          </DialogActions>
-        </Box>
-      </Dialog>
+      <RepositoryDialog
+        open={dialogOpen}
+        form={form}
+        editingRepository={editingRepository}
+        saving={saving}
+        deleting={deleting}
+        onClose={closeDialog}
+        onSubmit={saveRepository}
+        onFormChange={setForm}
+      />
+
+      <DeleteConfirmationDialog
+        open={Boolean(repositoryToDelete)}
+        title="Delete repository?"
+        description="This repository will be removed. This cannot be undone."
+        confirmLabel="Delete repository"
+        submitting={deleting}
+        onClose={closeDeleteDialog}
+        onConfirm={() => {
+          if (repositoryToDelete) void deleteRepository(repositoryToDelete);
+        }}
+      />
 
       <Snackbar
         open={Boolean(notice)}

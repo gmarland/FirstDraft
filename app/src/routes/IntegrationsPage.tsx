@@ -20,6 +20,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import CableIcon from "@mui/icons-material/Cable";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { JiraIntegrationCard } from "../components/integrations/JiraIntegrationCard";
 import type { JiraFormState } from "../components/integrations/types";
 import { api, ApiError } from "../lib/api";
@@ -66,6 +67,7 @@ export function IntegrationsPage() {
   const [testing, setTesting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [workflowSaved, setWorkflowSaved] = useState(false);
   const [connectionTestPassed, setConnectionTestPassed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -401,6 +403,7 @@ export function IntegrationsPage() {
       setConnectionTestPassed(false);
       setBoards([]);
       setStatuses([]);
+      setDeleteDialogOpen(false);
       setDialogOpen(false);
       setNotice("Jira integration deleted.");
     } catch (caught) {
@@ -578,7 +581,7 @@ export function IntegrationsPage() {
                   <IconButton
                     aria-label="Delete Jira integration"
                     color="error"
-                    onClick={deleteIntegration}
+                    onClick={() => setDeleteDialogOpen(true)}
                     disabled={loading || deleting}
                     size="small"
                   >
@@ -593,6 +596,17 @@ export function IntegrationsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      <DeleteConfirmationDialog
+        open={deleteDialogOpen}
+        title="Delete Jira integration?"
+        description="This Jira integration and its workflow settings will be deleted. This cannot be undone."
+        confirmLabel="Delete integration"
+        submitting={deleting}
+        onClose={() => {
+          if (!deleting) setDeleteDialogOpen(false);
+        }}
+        onConfirm={() => void deleteIntegration()}
+      />
       <Snackbar
         open={Boolean(notice)}
         autoHideDuration={4000}
