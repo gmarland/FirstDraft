@@ -1,3 +1,4 @@
+import { ClientState } from "../../types.js";
 import { DbClient } from "../../db/dbClient.js";
 import { toIsoString } from "../tenants/tenantRowMappers.js";
 
@@ -13,6 +14,9 @@ export type WorkerRecord = {
   paths: string[];
   skills: string[];
   maxConcurrentTasks: number;
+  state: ClientState;
+  stateUpdatedAt: string;
+  stoppedAt?: string;
 };
 
 export type UpsertWorkerRegistrationInput = {
@@ -30,9 +34,9 @@ export class WorkerRecordStore {
   public async listWorkers(): Promise<WorkerRecord[]> {
     const result = await this.pool.query(
       `
-        select worker_id, api_key_id, first_registered_at, last_registered_at, last_seen_at, last_connection_id, paths, skills, max_concurrent_tasks
+        select ${workerRecordColumns}
         from client_workers
-        order by coalesce(last_seen_at, last_registered_at, first_registered_at) desc
+        order by coalesce(state_updated_at, last_seen_at, last_registered_at, first_registered_at) desc
       `
     );
 
@@ -42,11 +46,11 @@ export class WorkerRecordStore {
   public async listWorkersForUser(userId: string): Promise<WorkerRecord[]> {
     const result = await this.pool.query(
       `
-        select client_workers.worker_id, client_workers.api_key_id, client_workers.first_registered_at, client_workers.last_registered_at, client_workers.last_seen_at, client_workers.last_connection_id, client_workers.paths, client_workers.skills, client_workers.max_concurrent_tasks
+        select ${prefixedWorkerRecordColumns}
         from client_workers
         inner join api_keys on api_keys.id = client_workers.api_key_id
         where api_keys.user_id = $1
-        order by coalesce(client_workers.last_seen_at, client_workers.last_registered_at, client_workers.first_registered_at) desc
+        order by coalesce(client_workers.state_updated_at, client_workers.last_seen_at, client_workers.last_registered_at, client_workers.first_registered_at) desc
       `,
       [userId]
     );
@@ -57,7 +61,7 @@ export class WorkerRecordStore {
   public async getWorker(workerId: string): Promise<WorkerRecord | undefined> {
     const result = await this.pool.query(
       `
-        select worker_id, api_key_id, first_registered_at, last_registered_at, last_seen_at, last_connection_id, paths, skills, max_concurrent_tasks
+        select ${workerRecordColumns}
         from client_workers
         where worker_id = $1
       `,
@@ -70,7 +74,7 @@ export class WorkerRecordStore {
   public async getWorkerForUser(userId: string, workerId: string): Promise<WorkerRecord | undefined> {
     const result = await this.pool.query(
       `
-        select client_workers.worker_id, client_workers.api_key_id, client_workers.first_registered_at, client_workers.last_registered_at, client_workers.last_seen_at, client_workers.last_connection_id, client_workers.paths, client_workers.skills, client_workers.max_concurrent_tasks
+        select ${prefixedWorkerRecordColumns}
         from client_workers
         inner join api_keys on api_keys.id = client_workers.api_key_id
         where api_keys.user_id = $1 and client_workers.worker_id = $2
@@ -84,8 +88,11 @@ export class WorkerRecordStore {
   public async upsertWorkerRegistration(input: UpsertWorkerRegistrationInput): Promise<WorkerRecord> {
     const result = await this.pool.query(
       `
-        insert into client_workers (worker_id, api_key_id, first_registered_at, last_registered_at, last_seen_at, last_connection_id, paths, skills, max_concurrent_tasks)
-        values ($1, $2, now(), now(), now(), $3, $4, $5, $6)
+        insert into client_workers (
+          worker_id, api_key_id, first_registered_at, last_registered_at, last_seen_at,
+          last_connection_id, paths, skills, max_concurrent_tasks, state, state_updated_at, stopped_at
+        )
+        values ($1, $2, now(), now(), now(), $3, $4, $5, $6, 'started', now(), null)
         on conflict (worker_id)
         do update set
           api_key_id = excluded.api_key_id,
@@ -94,17 +101,90 @@ export class WorkerRecordStore {
           last_connection_id = excluded.last_connection_id,
           paths = excluded.paths,
           skills = excluded.skills,
-          max_concurrent_tasks = excluded.max_concurrent_tasks
-        returning worker_id, api_key_id, first_registered_at, last_registered_at, last_seen_at, last_connection_id, paths, skills, max_concurrent_tasks
+          max_concurrent_tasks = excluded.max_concurrent_tasks,
+          state = 'started',
+          state_updated_at = now(),
+          stopped_at = null
+        where client_workers.state = 'stopped'
+          or client_workers.last_connection_id = excluded.last_connection_id
+        returning ${workerRecordColumns}
       `,
       [input.workerId, input.apiKeyId, input.connectionId, input.paths, input.skills, normalizeMaxConcurrentTasks(input.maxConcurrentTasks)]
     );
 
+    if (!result.rows[0]) {
+      throw new Error("worker id is already registered");
+    }
+
     return mapWorkerRecord(result.rows[0]);
+  }
+
+  public async markWorkerStopped(workerId: string, connectionId: string): Promise<void> {
+    await this.pool.query(
+      `
+        update client_workers
+        set state = 'stopped',
+          state_updated_at = now(),
+          stopped_at = now()
+        where worker_id = $1
+          and last_connection_id = $2
+      `,
+      [workerId, connectionId]
+    );
+  }
+
+  public async markAllWorkersStopped(): Promise<void> {
+    await this.pool.query(
+      `
+        update client_workers
+        set state = 'stopped',
+          state_updated_at = now(),
+          stopped_at = now()
+        where state <> 'stopped'
+      `
+    );
+  }
+
+  public async refreshWorkerActivity(workerId: string, state: Exclude<ClientState, "stopped">): Promise<void> {
+    await this.pool.query(
+      `
+        update client_workers
+        set state = $2,
+          last_seen_at = now(),
+          state_updated_at = now(),
+          stopped_at = null
+        where worker_id = $1
+          and state <> 'stopped'
+      `,
+      [workerId, state]
+    );
   }
 }
 
-function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
+const workerRecordColumnNames = [
+  "worker_id",
+  "api_key_id",
+  "first_registered_at",
+  "last_registered_at",
+  "last_seen_at",
+  "last_connection_id",
+  "paths",
+  "skills",
+  "max_concurrent_tasks",
+  "state",
+  "state_updated_at",
+  "stopped_at"
+];
+
+const workerRecordColumns = workerRecordColumnNames.join(", ");
+const prefixedWorkerRecordColumns = workerRecordColumnNames
+  .map((column) => `client_workers.${column}`)
+  .join(", ");
+
+export function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
+  const stateUpdatedAt = row.state_updated_at ?? row.last_seen_at ?? row.last_registered_at ?? row.first_registered_at;
+  const state = mapWorkerState(row.state);
+
   return {
     workerId: String(row.worker_id),
     apiKeyId: row.api_key_id ? String(row.api_key_id) : undefined,
@@ -114,8 +194,16 @@ function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
     lastConnectionId: row.last_connection_id ? String(row.last_connection_id) : undefined,
     paths: Array.isArray(row.paths) ? row.paths.map(String) : [],
     skills: Array.isArray(row.skills) ? row.skills.map(String) : [],
-    maxConcurrentTasks: normalizeMaxConcurrentTasks(Number(row.max_concurrent_tasks))
+    maxConcurrentTasks: normalizeMaxConcurrentTasks(Number(row.max_concurrent_tasks)),
+    state,
+    stateUpdatedAt: toIsoString(stateUpdatedAt),
+    stoppedAt: row.stopped_at ? toIsoString(row.stopped_at) : undefined
   };
+}
+
+function mapWorkerState(value: unknown): ClientState {
+  if (value === "started" || value === "running_command" || value === "stopped") return value;
+  return "stopped";
 }
 
 function normalizeMaxConcurrentTasks(value: unknown): number {

@@ -75,6 +75,32 @@ export class CommandStore {
     return result.rows.map(mapCommand);
   }
 
+  public async getInProgressWorkerCommandsByWorkerIds(workerIds: string[]): Promise<Map<string, Command[]>> {
+    const commandsByWorkerId = new Map<string, Command[]>();
+    if (workerIds.length === 0) return commandsByWorkerId;
+
+    const result = await this.pool.query(
+      `
+        select transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
+          output_object_key, output_bytes, output_started_at, output_updated_at,
+          created_at, claimed_at, completed_at
+        from client_commands
+        where worker_id = any($1::text[])
+          and status = 'in_progress'
+        order by worker_id, claimed_at, created_at
+      `,
+      [workerIds]
+    );
+
+    for (const command of result.rows.map(mapCommand)) {
+      const workerCommands = commandsByWorkerId.get(command.workerId) ?? [];
+      workerCommands.push(command);
+      commandsByWorkerId.set(command.workerId, workerCommands);
+    }
+
+    return commandsByWorkerId;
+  }
+
   public async listWorkerCommands(workerId: string): Promise<Command[]> {
     const result = await this.pool.query(
       `
