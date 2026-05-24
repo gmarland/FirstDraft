@@ -1,8 +1,8 @@
 # FirstDraft
 
-FirstDraft is a self-hosted control plane for running AI-assisted engineering work on remote machines you control.
+FirstDraft is a control plane for running AI-assisted engineering work on remote machines you control.
 
-Put workers next to the repositories, credentials, build tools, and internal networks they need, then turn those workers on from a browser or from Jira. FirstDraft is built for teams who want more than a single local coding agent: a fleet of addressable workers can sit on remote machines, advertise what they can do, and pick up operational work as soon as the UI or an enabled Jira workflow sends it their way.
+Put workers next to the repositories, credentials, build tools, and internal networks they need, then turn those sandboxed workers on from a browser or from Jira. FirstDraft is built for teams who want more than a single local coding agent: a fleet of addressable workers can sit on remote machines, advertise what they can do, and pick up operational work as soon as the UI or an enabled Jira workflow sends it their way.
 
 ## Why FirstDraft
 
