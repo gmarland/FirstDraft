@@ -17,7 +17,7 @@ import { WorkerRegistration } from "../../types.js";
 import { isTaskTypeEnabled } from "../../commandModes.js";
 
 type CommandDispatcher = {
-  dispatchCommand(workerId: string, transactionId: string): Promise<void>;
+  dispatchQueuedCommands(workerId?: string): Promise<void>;
 };
 
 export type RunJiraIntakeInput = {
@@ -196,26 +196,6 @@ export class JiraIntakeService {
       repositoryUrl,
       normalizedRepositoryUrl,
     });
-    const worker = await this.selectWorker(normalizedRepositoryUrl);
-    if (!worker) {
-      console.warn("[jira-intake] skipping issue without available worker", {
-        userId,
-        integrationId: integration.id,
-        issueKey: issue.key,
-        repositoryUrl,
-        normalizedRepositoryUrl,
-      });
-      return {
-        integrationId: integration.id,
-        issueKey: issue.key,
-        issueId: issue.id,
-        repositoryUrl,
-        normalizedRepositoryUrl,
-        status: "skipped",
-        reason: "no available git-capable worker",
-      };
-    }
-
     if (dryRun) {
       logJiraIntake("dry-run issue would queue", {
         userId,
@@ -223,7 +203,6 @@ export class JiraIntakeService {
         issueKey: issue.key,
         repositoryUrl,
         normalizedRepositoryUrl,
-        workerId: worker.workerId,
       });
       return {
         integrationId: integration.id,
@@ -231,7 +210,6 @@ export class JiraIntakeService {
         issueId: issue.id,
         repositoryUrl,
         normalizedRepositoryUrl,
-        workerId: worker.workerId,
         status: "dry_run",
       };
     }
@@ -302,17 +280,20 @@ export class JiraIntakeService {
         integrationId: integration.id,
         issueKey: issue.key,
         intakeEventId: intake.event.id,
-        workerId: worker.workerId,
         repositoryUrl,
         normalizedRepositoryUrl,
         repositoryConfigured: Boolean(repository),
         sourceBranch,
         targetBranch,
       });
-      const command = await this.workers.createWorkerCommand(
+      await this.gitRepositories.recordUserGitflowUsage({
         userId,
-        worker.workerId,
-        JSON.stringify({
+        repositoryUrl,
+        sourceBranch,
+      });
+      const command = await this.workers.createQueuedCommand({
+        userId,
+        command: JSON.stringify({
           repositoryUrl,
           sourceBranch,
           targetBranch,
@@ -322,26 +303,19 @@ export class JiraIntakeService {
           description: readJiraText(issue.fields?.description),
           attachments: buildGitflowAttachments(integration.id, issue),
         }),
-        "gitflow",
-      );
-
-      await this.gitRepositories.recordGitflowUsage({
-        userId,
-        workerId: worker.workerId,
         repositoryUrl,
-        sourceBranch,
+        normalizedRepositoryUrl,
+        commandMode: "gitflow",
       });
-      logJiraIntake("gitflow usage recorded", {
+      logJiraIntake("queued gitflow command", {
         userId,
         integrationId: integration.id,
         issueKey: issue.key,
-        workerId: worker.workerId,
         repositoryUrl,
         sourceBranch,
       });
       await this.intakeEvents.markQueued(
         intake.event.id,
-        worker.workerId,
         command.transactionId,
       );
       logJiraIntake("intake event marked queued", {
@@ -349,18 +323,13 @@ export class JiraIntakeService {
         integrationId: integration.id,
         issueKey: issue.key,
         intakeEventId: intake.event.id,
-        workerId: worker.workerId,
         transactionId: command.transactionId,
       });
-      await this.dispatcher.dispatchCommand(
-        worker.workerId,
-        command.transactionId,
-      );
-      logJiraIntake("worker command dispatched", {
+      await this.dispatcher.dispatchQueuedCommands();
+      logJiraIntake("queued commands dispatched", {
         userId,
         integrationId: integration.id,
         issueKey: issue.key,
-        workerId: worker.workerId,
         transactionId: command.transactionId,
       });
 
@@ -370,7 +339,6 @@ export class JiraIntakeService {
         issueId: issue.id,
         repositoryUrl,
         normalizedRepositoryUrl,
-        workerId: worker.workerId,
         transactionId: command.transactionId,
         status: "queued",
       };
@@ -381,7 +349,6 @@ export class JiraIntakeService {
         integrationId: integration.id,
         issueKey: issue.key,
         intakeEventId: intake.event.id,
-        workerId: worker.workerId,
         reason,
       });
       await this.intakeEvents.markFailed(intake.event.id, reason);
@@ -391,57 +358,10 @@ export class JiraIntakeService {
         issueId: issue.id,
         repositoryUrl,
         normalizedRepositoryUrl,
-        workerId: worker.workerId,
         status: "failed",
         reason,
       };
     }
-  }
-
-  private async selectWorker(
-    normalizedRepositoryUrl: string,
-  ): Promise<WorkerRegistration | undefined> {
-    const [workers, usages] = await Promise.all([
-      this.workers.listWorkers(),
-      this.gitRepositories.listWorkerRepositoryUsage(normalizedRepositoryUrl),
-    ]);
-    const usageByWorker = new Map(
-      usages.map((usage) => [usage.workerId, usage]),
-    );
-    const candidates = workers.filter(isAvailableGitWorker);
-    logJiraIntake("selecting worker", {
-      normalizedRepositoryUrl,
-      workerCount: workers.length,
-      candidateCount: candidates.length,
-      usageCount: usages.length,
-      candidates: candidates.map((worker) => ({
-        workerId: worker.workerId,
-        state: worker.state,
-        activeTaskCount: activeTaskCount(worker),
-        maxConcurrentTasks: maxConcurrentTasks(worker),
-        lastSeenAt: worker.lastSeenAt,
-        hasRepositoryUsage: usageByWorker.has(worker.workerId),
-      })),
-    });
-
-    const selected = candidates.sort((left, right) => {
-      const leftUsage = usageByWorker.get(left.workerId);
-      const rightUsage = usageByWorker.get(right.workerId);
-      if (Boolean(leftUsage) !== Boolean(rightUsage)) return leftUsage ? -1 : 1;
-      const activeTaskDelta = activeTaskCount(left) - activeTaskCount(right);
-      if (activeTaskDelta !== 0) return activeTaskDelta;
-      const leftUsageTime = leftUsage ? Date.parse(leftUsage.lastUsedAt) : 0;
-      const rightUsageTime = rightUsage ? Date.parse(rightUsage.lastUsedAt) : 0;
-      if (leftUsageTime !== rightUsageTime)
-        return rightUsageTime - leftUsageTime;
-      return Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt);
-    })[0];
-    logJiraIntake("worker selected", {
-      normalizedRepositoryUrl,
-      workerId: selected?.workerId,
-      candidateCount: candidates.length,
-    });
-    return selected;
   }
 }
 

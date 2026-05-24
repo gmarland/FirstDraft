@@ -9,6 +9,7 @@ import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from
 
 type CommandDispatcher = {
   dispatchCommand(workerId: string, transactionId: string): Promise<void>;
+  dispatchQueuedCommands?(workerId?: string): Promise<void>;
 };
 
 export class WorkerController {
@@ -123,7 +124,7 @@ export class WorkerController {
       }
 
       const queued = await this.store.createWorkerCommand(user.userId, client.workerId, command, parsedCommandMode);
-      await this.dispatcher.dispatchCommand(queued.workerId, queued.transactionId);
+      await this.dispatcher.dispatchCommand(client.workerId, queued.transactionId);
 
       res.status(202).json(queued);
     } catch (error) {
@@ -152,10 +153,7 @@ export class WorkerController {
         reason: readCancelReason(req.body)
       });
 
-      const [nextCommand] = await this.store.getQueuedWorkerCommands(cancelled.workerId);
-      if (nextCommand) {
-        await this.dispatcher.dispatchCommand(nextCommand.workerId, nextCommand.transactionId);
-      }
+      await (this.dispatcher.dispatchQueuedCommands?.(req.params.workerId) ?? Promise.resolve());
       res.json(cancelled);
     } catch (error) {
       next(error);

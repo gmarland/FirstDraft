@@ -27,10 +27,12 @@ export type CommandMode = "ai" | "shell" | "gitflow";
 export type Command = {
   transactionId: string;
   userId: string;
-  workerId: string;
+  workerId?: string;
   command: string;
   executionCommand?: string | null;
   commandMode: CommandMode;
+  repositoryUrl?: string;
+  normalizedRepositoryUrl?: string;
   status: CommandStatus;
   createdAt: string;
   claimedAt?: string;

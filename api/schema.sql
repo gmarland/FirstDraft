@@ -129,10 +129,12 @@ create index if not exists tenant_jira_integration_user_enabled_idx
 create table if not exists client_commands (
   transaction_id text primary key,
   user_id uuid not null references users(id),
-  worker_id text not null,
+  worker_id text,
   command text not null,
   execution_command text,
   command_mode text not null default 'ai',
+  repository_url text,
+  normalized_repository_url text,
   status text not null,
   result text,
   agent_response text,
@@ -151,6 +153,12 @@ create index if not exists client_commands_worker_created_idx
 
 create index if not exists client_commands_status_idx
   on client_commands(status);
+
+create index if not exists client_commands_queue_idx
+  on client_commands(status, worker_id, command_mode, created_at);
+
+create index if not exists client_commands_repository_idx
+  on client_commands(normalized_repository_url);
 
 create table if not exists integration_intake_events (
   id uuid primary key default gen_random_uuid(),
