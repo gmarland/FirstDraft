@@ -173,3 +173,8 @@ export type LoginResponse = {
   expiresIn: string | number;
   user: User;
 };
+
+export type GoogleAuthConfig = {
+  enabled: boolean;
+  clientId?: string;
+};

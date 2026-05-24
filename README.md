@@ -115,6 +115,9 @@ S3_FORCE_PATH_STYLE=true
 AWS_ACCESS_KEY_ID=minioadmin
 AWS_SECRET_ACCESS_KEY=minioadmin
 AWS_REGION=us-east-1
+# Optional Google sign-in:
+# GOOGLE_AUTH_ENABLED=true
+# GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
 EOF
 
 npm run dev
@@ -210,8 +213,12 @@ Important API environment variables:
 | `COMMAND_OUTPUT_BUCKET` | No | Bucket for command output |
 | `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws` or `gcs`/`google`; defaults to `s3` |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |
+| `GOOGLE_AUTH_ENABLED` | No | Set to `true` to enable Google login/signup endpoints; disabled by default |
+| `GOOGLE_CLIENT_ID` | Only when Google auth is enabled | Google OAuth web client ID used to verify Google Identity Services credentials |
 
 For Google Cloud Storage, set `COMMAND_OUTPUT_STORAGE_PROVIDER=gcs` and `COMMAND_OUTPUT_BUCKET` to the GCS bucket name. Authentication uses Google Application Default Credentials, including `GOOGLE_APPLICATION_CREDENTIALS`; optionally set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
+
+For the web console, also set `VITE_GOOGLE_AUTH_ENABLED=true` and `VITE_GOOGLE_CLIENT_ID` to the same Google OAuth web client ID before running `npm run dev` or building the app.
 
 Worker configuration is stored locally by the .NET client and can be edited through:
 

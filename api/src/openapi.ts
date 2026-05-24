@@ -62,6 +62,40 @@ export const openApiDocument = {
         }
       }
     },
+    "/api/auth/google/config": {
+      get: {
+        tags: ["Auth"],
+        summary: "Get Google auth client configuration",
+        responses: {
+          "200": jsonResponse("Google auth configuration", ref("GoogleAuthConfig"))
+        }
+      }
+    },
+    "/api/auth/google/login": {
+      post: {
+        tags: ["Auth"],
+        summary: "Log in with a Google credential",
+        requestBody: jsonBody(ref("GoogleCredentialRequest"), true),
+        responses: {
+          "200": jsonResponse("JWT and current user", ref("AuthResponse")),
+          "401": errorResponse(),
+          "404": errorResponse()
+        }
+      }
+    },
+    "/api/auth/google/signup": {
+      post: {
+        tags: ["Auth"],
+        summary: "Create a user account with a Google credential",
+        requestBody: jsonBody(ref("GoogleCredentialRequest"), true),
+        responses: {
+          "201": jsonResponse("Created user and JWT", ref("AuthResponse")),
+          "401": errorResponse(),
+          "404": errorResponse(),
+          "409": errorResponse()
+        }
+      }
+    },
     "/api/auth/me": {
       get: {
         tags: ["Auth"],
@@ -355,6 +389,8 @@ export const openApiDocument = {
       ErrorResponse: object({ error: { type: "string" } }, ["error"]),
       SignupRequest: object({ email: { type: "string", format: "email" }, password: { type: "string", minLength: 8 }, name: { type: "string" } }, ["email", "password"]),
       LoginRequest: object({ email: { type: "string", format: "email" }, password: { type: "string" } }, ["email", "password"]),
+      GoogleAuthConfig: object({ enabled: { type: "boolean" }, clientId: { type: "string" } }, ["enabled"]),
+      GoogleCredentialRequest: object({ credential: { type: "string" } }, ["credential"]),
       AuthResponse: object({
         token: { type: "string" },
         tokenType: { type: "string", example: "Bearer" },

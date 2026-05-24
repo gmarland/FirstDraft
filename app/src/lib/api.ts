@@ -3,6 +3,7 @@ import type {
   Command,
   CommandMode,
   CreatedApiKey,
+  GoogleAuthConfig,
   LoginResponse,
   ApiKey,
   GitflowSuggestions,
@@ -107,6 +108,17 @@ export const api = {
     });
   },
 
+  googleAuthConfig() {
+    return request<GoogleAuthConfig>("/api/auth/google/config");
+  },
+
+  googleLogin(input: { credential: string }) {
+    return request<LoginResponse>("/api/auth/google/login", {
+      method: "POST",
+      body: input,
+    });
+  },
+
   me(token: string) {
     return request<{ user: LoginResponse["user"] }>("/api/auth/me", { token });
   },
@@ -117,6 +129,13 @@ export const api = {
     name?: string;
   }) {
     return request<LoginResponse>("/api/auth/signup", {
+      method: "POST",
+      body: input,
+    });
+  },
+
+  googleSignup(input: { credential: string }) {
+    return request<LoginResponse>("/api/auth/google/signup", {
       method: "POST",
       body: input,
     });

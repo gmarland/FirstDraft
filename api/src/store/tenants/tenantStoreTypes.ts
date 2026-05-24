@@ -4,7 +4,7 @@ import {
   CreateApiKeyInput,
   CreateApiKeyResult,
 } from "../tenantApiKeys/tenantApiKeyTypes.js";
-import { CreateUserInput } from "../tenantUsers/tenantUserTypes.js";
+import { CreateGoogleUserInput, CreateUserInput } from "../tenantUsers/tenantUserTypes.js";
 
 export type {
   AuthenticatedApiKey,
@@ -12,13 +12,17 @@ export type {
   CreateApiKeyResult,
 } from "../tenantApiKeys/tenantApiKeyTypes.js";
 export type { CreateUserInput } from "../tenantUsers/tenantUserTypes.js";
+export type { CreateGoogleUserInput } from "../tenantUsers/tenantUserTypes.js";
 
 export type AppStore = {
   migrate(): Promise<void>;
   createUser(input: CreateUserInput): Promise<User>;
+  createGoogleUser(input: CreateGoogleUserInput): Promise<User>;
   listUsers(): Promise<User[]>;
   getUser(userId: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  findByGoogleSubject(googleSub: string): Promise<User | undefined>;
+  linkGoogleSubjectToUser(userId: string, googleSub: string): Promise<User | undefined>;
   authenticateUser(
     email: string,
     password: string,

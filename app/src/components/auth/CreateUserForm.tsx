@@ -2,13 +2,14 @@ import { FormEvent, useState } from "react";
 import { Alert, Button, Stack, TextField } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { useAuth } from "../../lib/auth";
+import { GoogleAuthButton } from "./GoogleAuthButton";
 
 type Props = {
   onCreated(): void;
 };
 
 export function CreateUserForm({ onCreated }: Props) {
-  const { signup } = useAuth();
+  const { googleSignup, signup } = useAuth();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -45,8 +46,23 @@ export function CreateUserForm({ onCreated }: Props) {
     }
   };
 
+  const submitGoogle = async (credential: string) => {
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await googleSignup(credential);
+      onCreated();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to create user with Google");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Stack component="form" spacing={1.75} onSubmit={submit}>
+      <GoogleAuthButton onCredential={submitGoogle} onError={setError} disabled={submitting} />
       <TextField label="Email" value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" required fullWidth />
       <TextField label="Name" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" fullWidth />
       <TextField

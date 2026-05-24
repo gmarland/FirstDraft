@@ -4,6 +4,7 @@ import { createApp } from "./server/app.js";
 import { createWorkerStore } from "./store/clientStore.js";
 import { createAppStore } from "./store/tenantStore.js";
 import { configurePassport, createJwtConfigFromEnv } from "./auth/passport.js";
+import { createGoogleAuthConfigFromEnv, createGoogleCredentialVerifier } from "./auth/googleAuth.js";
 import { createAuthRoutes } from "./routes/auth.js";
 import { createWorkerAuthRoutes } from "./routes/workerAuth.js";
 import { createWorkerRoutes } from "./routes/workers.js";
@@ -48,6 +49,8 @@ await workerRecords.markAllWorkersStopped();
 const store = createWorkerStore(commands, workerRecords);
 const tenants = createAppStore(db, tenantCrypto);
 const jwtConfig = createJwtConfigFromEnv();
+const googleAuth = createGoogleAuthConfigFromEnv();
+const googleVerifier = createGoogleCredentialVerifier(googleAuth);
 configurePassport(tenants, jwtConfig);
 const workerRefreshTokens = new WorkerRefreshTokenStore(db);
 const workerTokenService = new WorkerTokenService(createWorkerJwtConfigFromEnv(), workerRefreshTokens);
@@ -58,7 +61,7 @@ const integrationLifecycle = new IntegrationLifecycleService(integrationIntakeEv
 const signalRHub = new SignalRHub(store, workerTokenService, apiToWorkerTokens, outputStorage, integrationLifecycle);
 const jiraIntake = new JiraIntakeService(jiraIntegrations, integrationIntakeEvents, store, gitRepositories, signalRHub);
 const app = createApp({
-  authRoutes: createAuthRoutes(jwtConfig, tenants),
+  authRoutes: createAuthRoutes(jwtConfig, tenants, googleAuth, googleVerifier),
   workerAuthRoutes: createWorkerAuthRoutes(
     tenants,
     workerTokenService,

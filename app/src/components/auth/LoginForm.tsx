@@ -1,13 +1,14 @@
 import { FormEvent, useState } from "react";
 import { Alert, Button, Stack, TextField } from "@mui/material";
 import { useAuth } from "../../lib/auth";
+import { GoogleAuthButton } from "./GoogleAuthButton";
 
 type Props = {
   onLoggedIn(): void;
 };
 
 export function LoginForm({ onLoggedIn }: Props) {
-  const { login } = useAuth();
+  const { googleLogin, login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,8 +29,23 @@ export function LoginForm({ onLoggedIn }: Props) {
     }
   };
 
+  const submitGoogle = async (credential: string) => {
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await googleLogin(credential);
+      onLoggedIn();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to sign in with Google");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Stack component="form" spacing={1.75} onSubmit={submit}>
+      <GoogleAuthButton onCredential={submitGoogle} onError={setError} disabled={submitting} />
       <TextField label="Email" value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" required fullWidth />
       <TextField
         label="Password"

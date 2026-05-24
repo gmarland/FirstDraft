@@ -35,6 +35,13 @@ Set `VITE_API_BASE_URL` when the API is hosted somewhere else:
 VITE_API_BASE_URL=http://localhost:5080
 ```
 
+Google sign-in is optional and hidden by default. To show the Google login/signup controls, configure the API Google auth settings and set:
+
+```bash
+VITE_GOOGLE_AUTH_ENABLED=true
+VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
+```
+
 Important API areas used by the console include:
 
 - `/api/auth/*` for signup, login, and current-user lookup.

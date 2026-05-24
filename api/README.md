@@ -16,6 +16,9 @@ Authentication:
 
 - `POST /api/auth/signup`
 - `POST /api/auth/login`
+- `GET /api/auth/google/config`
+- `POST /api/auth/google/login`
+- `POST /api/auth/google/signup`
 - `GET /api/auth/me`
 
 Worker authentication:
@@ -109,6 +112,9 @@ S3_FORCE_PATH_STYLE=true
 AWS_ACCESS_KEY_ID=minioadmin
 AWS_SECRET_ACCESS_KEY=minioadmin
 AWS_REGION=us-east-1
+# Optional Google sign-in:
+# GOOGLE_AUTH_ENABLED=true
+# GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
 ```
 
 | Variable | Required | Description |
@@ -116,6 +122,8 @@ AWS_REGION=us-east-1
 | `COMMAND_OUTPUT_BUCKET` | No | Bucket for command output |
 | `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws` or `gcs`/`google`; defaults to `s3` |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |
+| `GOOGLE_AUTH_ENABLED` | No | Set to `true` to enable Google login/signup; disabled by default |
+| `GOOGLE_CLIENT_ID` | Only when Google auth is enabled | Google OAuth web client ID used to verify Google Identity Services credentials |
 
 For Google Cloud Storage, set `COMMAND_OUTPUT_STORAGE_PROVIDER=gcs` and `COMMAND_OUTPUT_BUCKET` to the GCS bucket name. Authentication uses Google Application Default Credentials, including `GOOGLE_APPLICATION_CREDENTIALS`; optionally set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
 

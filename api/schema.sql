@@ -1,7 +1,8 @@
 create table if not exists users (
   id uuid primary key,
   email text not null,
-  password_hash text not null,
+  password_hash text,
+  google_sub text,
   name text,
   role text not null default 'user',
   created_at timestamptz not null default now(),
@@ -10,6 +11,10 @@ create table if not exists users (
 
 create unique index if not exists users_lower_email_key
   on users (lower(email));
+
+create unique index if not exists users_google_sub_key
+  on users (google_sub)
+  where google_sub is not null;
 
 create table if not exists tenant_settings (
   key text primary key,

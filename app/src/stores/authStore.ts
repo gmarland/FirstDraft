@@ -17,7 +17,9 @@ type AuthStore = {
   ready: boolean;
   initialize(): Promise<void>;
   login(input: LoginInput): Promise<void>;
+  googleLogin(credential: string): Promise<void>;
   signup(input: SignupInput): Promise<void>;
+  googleSignup(credential: string): Promise<void>;
   logout(): void;
 };
 
@@ -42,8 +44,18 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     setAuthenticated(response, set);
   },
 
+  async googleLogin(credential) {
+    const response = await api.googleLogin({ credential });
+    setAuthenticated(response, set);
+  },
+
   async signup(input) {
     const response = await api.signup(input);
+    setAuthenticated(response, set);
+  },
+
+  async googleSignup(credential) {
+    const response = await api.googleSignup({ credential });
     setAuthenticated(response, set);
   },
 

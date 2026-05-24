@@ -8,7 +8,8 @@ export class SchemaMigrator {
       create table if not exists users (
         id uuid primary key,
         email text not null,
-        password_hash text not null,
+        password_hash text,
+        google_sub text,
         name text,
         role text not null default 'user',
         created_at timestamptz not null default now(),
@@ -17,6 +18,14 @@ export class SchemaMigrator {
 
       create unique index if not exists users_lower_email_key
         on users (lower(email));
+
+      alter table users
+        add column if not exists google_sub text,
+        alter column password_hash drop not null;
+
+      create unique index if not exists users_google_sub_key
+        on users (google_sub)
+        where google_sub is not null;
 
       create table if not exists tenant_settings (
         key text primary key,

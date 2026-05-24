@@ -7,12 +7,13 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "tsx test/signalRHub.dispatch.test.ts && tsx test/controllerHelpers.test.ts && tsx test/typeOrmStoreMapping.test.ts && tsx test/jiraIntakeService.test.ts && tsx test/commandOutputStorage.test.ts",
+    "test": "tsx test/signalRHub.dispatch.test.ts && tsx test/controllerHelpers.test.ts && tsx test/typeOrmStoreMapping.test.ts && tsx test/jiraIntakeService.test.ts && tsx test/commandOutputStorage.test.ts && tsx test/googleAuthController.test.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",
     "@google-cloud/storage": "^7.19.0",
+    "google-auth-library": "^9.15.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",

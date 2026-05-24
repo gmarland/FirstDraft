@@ -5,7 +5,7 @@ import { User } from "../../types.js";
 import { TypeOrmStoreContext } from "../../db/typeOrmStoreContext.js";
 import { UserPasswordHasher } from "./tenantUserPasswordHasher.js";
 import { mapUserEntity } from "./tenantUserRowMappers.js";
-import { CreateUserInput } from "./tenantUserTypes.js";
+import { CreateGoogleUserInput, CreateUserInput } from "./tenantUserTypes.js";
 
 export class UserStore {
   private readonly users: Repository<UserEntity>;
@@ -22,6 +22,20 @@ export class UserStore {
       id: randomUUID(),
       email: normalizeEmail(input.email),
       passwordHash: await this.passwords.hashPassword(input.password),
+      googleSub: null,
+      name: input.name ?? null,
+      role: input.role ?? "user"
+    }));
+
+    return mapUserEntity(saved);
+  }
+
+  public async createGoogleUser(input: CreateGoogleUserInput): Promise<User> {
+    const saved = await this.users.save(this.users.create({
+      id: randomUUID(),
+      email: normalizeEmail(input.email),
+      passwordHash: null,
+      googleSub: input.googleSub,
       name: input.name ?? null,
       role: input.role ?? "user"
     }));
@@ -43,9 +57,23 @@ export class UserStore {
     return user ? mapUserEntity(user) : undefined;
   }
 
+  public async findByGoogleSubject(googleSub: string): Promise<User | undefined> {
+    const user = await this.users.findOneBy({ googleSub });
+    return user ? mapUserEntity(user) : undefined;
+  }
+
+  public async linkGoogleSubjectToUser(userId: string, googleSub: string): Promise<User | undefined> {
+    const user = await this.users.findOneBy({ id: userId });
+    if (!user) return undefined;
+    if (user.googleSub && user.googleSub !== googleSub) return undefined;
+    user.googleSub ??= googleSub;
+
+    return mapUserEntity(await this.users.save(user));
+  }
+
   public async authenticateUser(email: string, password: string): Promise<User | undefined> {
     const user = await this.findByEmail(email);
-    if (!user || user.disabledAt) return undefined;
+    if (!user || user.disabledAt || !user.passwordHash) return undefined;
 
     const valid = await this.passwords.verifyPassword(password, user.passwordHash);
     return valid ? mapUserEntity(user) : undefined;
