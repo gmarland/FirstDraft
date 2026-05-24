@@ -13,6 +13,7 @@ namespace FirstDraft.Commands
 
     public Task<string> ExecuteAsync(string commandMode, string command, CommandExecutionContext context)
     {
+      WorkerTaskTypeRegistry.ValidateCommandTaskType(commandMode, context.ApplicationData.EnabledTaskTypes);
       WorkerSkillRegistry.ValidateCommandSkills(commandMode, context.ApplicationData.Skills);
 
       if (!_handlers.TryGetValue(commandMode, out ICommandHandler? handler))

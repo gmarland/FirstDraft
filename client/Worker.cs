@@ -10,20 +10,26 @@ namespace FirstDraft
     {
         private readonly ApplicationDataService _applicationDataService;
         private readonly CommandDispatcher _commandDispatcher;
+        private readonly WorkerRuntimeOptions _runtimeOptions;
 
         private Log? _logger;
         private ApplicationData? _applicationData;
         private ApplicationAPI? _applicationAPI;
 
-        public Worker(ApplicationDataService applicationDataService, CommandDispatcher commandDispatcher)
+        public Worker(ApplicationDataService applicationDataService, CommandDispatcher commandDispatcher, WorkerRuntimeOptions runtimeOptions)
         {
             _applicationDataService = applicationDataService;
             _commandDispatcher = commandDispatcher;
+            _runtimeOptions = runtimeOptions;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             if (_applicationData == null) _applicationData = await _applicationDataService.GetApplicationData();
+            if (_runtimeOptions.EnabledTaskTypesOverride != null)
+            {
+                _applicationData.EnabledTaskTypes = _runtimeOptions.EnabledTaskTypesOverride;
+            }
 
             if (_logger == null) _logger = new Log(_applicationData.GetLogsFolder(), 7);
 

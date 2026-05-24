@@ -14,6 +14,7 @@ import {
 } from "../../store/integrations/jiraIntegrationStore.js";
 import { IntegrationIntakeEventStore } from "../../store/integrations/integrationIntakeEventStore.js";
 import { WorkerRegistration } from "../../types.js";
+import { isTaskTypeEnabled } from "../../commandModes.js";
 
 type CommandDispatcher = {
   dispatchCommand(workerId: string, transactionId: string): Promise<void>;
@@ -577,6 +578,7 @@ function readJiraText(value: unknown): string {
 function isAvailableGitWorker(worker: WorkerRegistration): boolean {
   return (
     worker.state !== "stopped" &&
+    isTaskTypeEnabled(worker.enabledTaskTypes, "gitflow") &&
     worker.skills.map((skill) => skill.toLowerCase()).includes("git") &&
     activeTaskCount(worker) < maxConcurrentTasks(worker)
   );

@@ -1,4 +1,5 @@
-import { ClientState } from "../../types.js";
+import type { ClientState, CommandMode } from "../../types.js";
+import { normalizeEnabledTaskTypes } from "../../commandModes.js";
 import { DbClient } from "../../db/dbClient.js";
 import { toIsoString } from "../tenants/tenantRowMappers.js";
 
@@ -13,6 +14,7 @@ export type WorkerRecord = {
   lastConnectionId?: string;
   paths: string[];
   skills: string[];
+  enabledTaskTypes: CommandMode[];
   maxConcurrentTasks: number;
   state: ClientState;
   stateUpdatedAt: string;
@@ -25,6 +27,7 @@ export type UpsertWorkerRegistrationInput = {
   connectionId: string;
   paths: string[];
   skills: string[];
+  enabledTaskTypes?: CommandMode[];
   maxConcurrentTasks?: number;
 };
 
@@ -90,9 +93,9 @@ export class WorkerRecordStore {
       `
         insert into client_workers (
           worker_id, api_key_id, first_registered_at, last_registered_at, last_seen_at,
-          last_connection_id, paths, skills, max_concurrent_tasks, state, state_updated_at, stopped_at
+          last_connection_id, paths, skills, enabled_task_types, max_concurrent_tasks, state, state_updated_at, stopped_at
         )
-        values ($1, $2, now(), now(), now(), $3, $4, $5, $6, 'started', now(), null)
+        values ($1, $2, now(), now(), now(), $3, $4, $5, $6, $7, 'started', now(), null)
         on conflict (worker_id)
         do update set
           api_key_id = excluded.api_key_id,
@@ -101,6 +104,7 @@ export class WorkerRecordStore {
           last_connection_id = excluded.last_connection_id,
           paths = excluded.paths,
           skills = excluded.skills,
+          enabled_task_types = excluded.enabled_task_types,
           max_concurrent_tasks = excluded.max_concurrent_tasks,
           state = 'started',
           state_updated_at = now(),
@@ -109,7 +113,15 @@ export class WorkerRecordStore {
           or client_workers.last_connection_id = excluded.last_connection_id
         returning ${workerRecordColumns}
       `,
-      [input.workerId, input.apiKeyId, input.connectionId, input.paths, input.skills, normalizeMaxConcurrentTasks(input.maxConcurrentTasks)]
+      [
+        input.workerId,
+        input.apiKeyId,
+        input.connectionId,
+        input.paths,
+        input.skills,
+        normalizeEnabledTaskTypes(input.enabledTaskTypes),
+        normalizeMaxConcurrentTasks(input.maxConcurrentTasks)
+      ]
     );
 
     if (!result.rows[0]) {
@@ -170,6 +182,7 @@ const workerRecordColumnNames = [
   "last_connection_id",
   "paths",
   "skills",
+  "enabled_task_types",
   "max_concurrent_tasks",
   "state",
   "state_updated_at",
@@ -194,6 +207,7 @@ export function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
     lastConnectionId: row.last_connection_id ? String(row.last_connection_id) : undefined,
     paths: Array.isArray(row.paths) ? row.paths.map(String) : [],
     skills: Array.isArray(row.skills) ? row.skills.map(String) : [],
+    enabledTaskTypes: normalizeEnabledTaskTypes(row.enabled_task_types),
     maxConcurrentTasks: normalizeMaxConcurrentTasks(Number(row.max_concurrent_tasks)),
     state,
     stateUpdatedAt: toIsoString(stateUpdatedAt),

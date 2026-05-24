@@ -58,6 +58,7 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
     last_connection_id: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
+    enabled_task_types: ["ai", "gitflow"],
     max_concurrent_tasks: 2,
     state: "started",
     state_updated_at: new Date("2026-01-03T00:01:00.000Z"),
@@ -73,6 +74,7 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
     lastConnectionId: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
+    enabledTaskTypes: ["ai", "gitflow"],
     maxConcurrentTasks: 2,
     state: "started",
     stateUpdatedAt: "2026-01-03T00:01:00.000Z",
@@ -90,6 +92,7 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
     lastConnectionId: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
+    enabledTaskTypes: ["ai", "shell", "gitflow"],
     maxConcurrentTasks: 2,
     state: "started",
     stateUpdatedAt: "2026-01-03T00:01:00.000Z"
@@ -107,6 +110,7 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
   assert.deepEqual(worker.activeTransactionIds, ["command-1"]);
   assert.equal(worker.activeTaskCount, 1);
   assert.equal(worker.currentTransactionId, "command-1");
+  assert.deepEqual(worker.enabledTaskTypes, ["ai", "shell", "gitflow"]);
 }
 
 function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
@@ -119,6 +123,7 @@ function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
     lastConnectionId: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
+    enabledTaskTypes: ["gitflow"],
     maxConcurrentTasks: 2,
     state: "stopped",
     stateUpdatedAt: "2026-01-03T00:01:00.000Z",
@@ -137,6 +142,7 @@ function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
   assert.deepEqual(worker.activeTransactionIds, []);
   assert.equal(worker.activeTaskCount, 0);
   assert.equal(worker.currentTransactionId, undefined);
+  assert.deepEqual(worker.enabledTaskTypes, ["gitflow"]);
 }
 
 testUserEntityMapping();

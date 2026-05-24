@@ -61,6 +61,8 @@ namespace FirstDraft.Configuration
 
         public string[]? Skills { get; set; }
 
+        public string[]? EnabledTaskTypes { get; set; }
+
         public AIProvider AIProvider { get; set; } = AIProvider.None;
 
         public bool PlanningEnabled { get; set; } = true;

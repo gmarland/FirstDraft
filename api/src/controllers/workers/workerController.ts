@@ -3,6 +3,7 @@ import { CommandOutputStorage } from "../../storage/commandOutputStorage.js";
 import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { Command, User } from "../../types.js";
+import { isTaskTypeEnabled } from "../../commandModes.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason } from "./workerRequests.js";
 import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from "./workerResponses.js";
 
@@ -98,6 +99,10 @@ export class WorkerController {
       if (!parsedCommandMode) {
         return res.status(400).json({ error: "commandMode must be ai, shell, or gitflow" });
       }
+      if (!isTaskTypeEnabled(client.enabledTaskTypes, parsedCommandMode)) {
+        return res.status(400).json({ error: `worker is not enabled for commandMode ${parsedCommandMode}` });
+      }
+
       const missingSkills = getMissingSkills(client.skills, parsedCommandMode);
       if (missingSkills.length > 0) {
         return res.status(400).json({ error: `commandMode ${parsedCommandMode} requires worker skill(s): ${missingSkills.join(", ")}` });

@@ -5,6 +5,7 @@ import { formatDate, relativeTime } from "../../lib/dates";
 import { WorkerIdentityCell } from "./WorkerIdentityCell";
 import { WorkerSkillsCell } from "./WorkerSkillsCell";
 import { WorkerTaskSlotsCell } from "./WorkerTaskSlotsCell";
+import { WorkerTaskTypesCell } from "./WorkerTaskTypesCell";
 import type { WorkerRegistration } from "../../types/api";
 
 type Props = {
@@ -24,6 +25,7 @@ export function WorkerTableRow({ worker, onSelect }: Props) {
         <StatusBadge value={worker.state} />
       </TableCell>
       <WorkerTaskSlotsCell worker={worker} />
+      <WorkerTaskTypesCell taskTypes={worker.enabledTaskTypes} />
       <WorkerSkillsCell skills={worker.skills} />
       <TableCell>{worker.paths.length}</TableCell>
       <TableCell title={formatDate(worker.lastSeenAt)}>

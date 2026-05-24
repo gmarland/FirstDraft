@@ -1,5 +1,6 @@
 import { WebSocket } from "ws";
 import { ApiToWorkerTokenIssuer } from "../../auth/workerTokens.js";
+import { isTaskTypeEnabled } from "../../commandModes.js";
 import { WorkerStore } from "../../store/clientStore.js";
 import { Command } from "../../types.js";
 import { canDispatchMoreCommands } from "../../workers/workerState.js";
@@ -47,6 +48,16 @@ export class WorkerCommandDispatcher {
         for (const nextCommand of queuedCommands) {
           const latestClient = await this.store.getWorker(workerId);
           if (!latestClient || !canDispatchMoreCommands(latestClient)) return;
+
+          if (!isTaskTypeEnabled(latestClient.enabledTaskTypes, nextCommand.commandMode)) {
+            await this.store.cancelWorkerCommand({
+              transactionId: nextCommand.transactionId,
+              workerId,
+              reason: `worker is not enabled for commandMode ${nextCommand.commandMode}`
+            });
+            claimedCommand = true;
+            continue;
+          }
 
           const claimed = await this.store.markWorkerCommandInProgress(nextCommand);
           if (!claimed) continue;

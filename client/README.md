@@ -19,8 +19,10 @@ Run commands from the `client/` directory:
 dotnet run -- init
 dotnet run -- skills
 dotnet run -- capacity
+dotnet run -- taskTypes
 dotnet run -- enablePlanning
 dotnet run -- run
+dotnet run -- run --task-types ai,gitflow
 dotnet run -- help
 ```
 
@@ -29,8 +31,9 @@ Command details:
 - `init`: create or update the local worker configuration interactively.
 - `skills`: update advertised worker skills.
 - `capacity`: update the maximum number of concurrent gitflow tasks.
+- `taskTypes`: update which task types this worker accepts.
 - `enablePlanning`: configure whether AI commands use a planning pass.
-- `run`: start the worker and connect it to the API.
+- `run`: start the worker and connect it to the API. Use `--task-types ai,gitflow` to override enabled task types for this run only.
 - `help`: print command help.
 
 Running with no command defaults to `run`.
@@ -42,6 +45,7 @@ Running with no command defaults to `run`.
 - `gitflow`: executes repository-oriented implementation or follow-up work.
 
 `gitflow` requires the worker to advertise the `git` skill. Configured skills are validated against executables on `PATH` before registration.
+Workers accept all command modes by default. Configure `EnabledTaskTypes` to restrict a worker to specific modes.
 
 ## Configuration
 
@@ -56,6 +60,7 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `LogsFolder`: local log output folder.
 - `ApplicationPaths`: paths advertised to the API for worker selection.
 - `Skills`: configured skills such as `git` and `npm`.
+- `EnabledTaskTypes`: accepted task types. Missing or empty values default to `ai`, `shell`, and `gitflow`.
 - `AIProvider`: `Codex` or `Claude`.
 - `PlanningEnabled`: whether AI execution performs a planning pass before implementation.
 - `AIWorkingDirectory`: base working directory for AI commands.
@@ -72,7 +77,7 @@ Create or update configuration:
 dotnet run -- init
 ```
 
-During setup, provide the API key and secret, set the external API URL, choose the AI provider, and select the paths and skills this worker should advertise.
+During setup, provide the API key and secret, set the external API URL, choose the AI provider, and select the task types, paths, and skills this worker should advertise.
 
 Start the worker:
 

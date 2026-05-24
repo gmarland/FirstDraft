@@ -45,6 +45,7 @@ namespace FirstDraft.Cli
             applicationData.ApplicationFolder = PromptRequired("Application folder", applicationData.ApplicationFolder);
             applicationData.LogsFolder = PromptRequired("Logs folder", applicationData.LogsFolder);
             applicationData.ApplicationPaths = PromptApplicationPaths(applicationData.ApplicationPaths);
+            applicationData.EnabledTaskTypes = PromptTaskTypes(applicationData.EnabledTaskTypes);
             applicationData.Skills = PromptSkills(applicationData.Skills);
             applicationData.MaxConcurrentTasks = PromptInt("Max concurrent gitflow tasks", Math.Clamp(applicationData.MaxConcurrentTasks, 1, 8), 1, 8);
 
@@ -97,6 +98,23 @@ namespace FirstDraft.Cli
             Console.WriteLine("Configure this client's max concurrent gitflow tasks.");
 
             applicationData.MaxConcurrentTasks = PromptInt("Max concurrent gitflow tasks", Math.Clamp(applicationData.MaxConcurrentTasks, 1, 8), 1, 8);
+
+            await _applicationDataService.Save(applicationData);
+
+            Console.WriteLine();
+            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
+
+            return 0;
+        }
+
+        public async Task<int> TaskTypes()
+        {
+            ApplicationData applicationData = await _applicationDataService.GetApplicationData();
+
+            Console.WriteLine("firstdraft taskTypes");
+            Console.WriteLine("Configure this client's enabled task types.");
+
+            applicationData.EnabledTaskTypes = PromptTaskTypes(applicationData.EnabledTaskTypes);
 
             await _applicationDataService.Save(applicationData);
 
@@ -285,15 +303,48 @@ namespace FirstDraft.Cli
             }
         }
 
-        private static string[] PromptCheckboxes(string label, string[] options, string[] defaultSelected)
+        private static string[] PromptTaskTypes(string[]? defaultTaskTypes)
+        {
+            string[] knownTaskTypes = WorkerTaskTypeRegistry.KnownTaskTypes;
+            string[] selectedTaskTypes = WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(defaultTaskTypes);
+
+            while (true)
+            {
+                selectedTaskTypes = PromptCheckboxes(
+                    "Task types",
+                    knownTaskTypes,
+                    selectedTaskTypes,
+                    input => input.Length == 1 && string.Equals(input[0], "all", StringComparison.OrdinalIgnoreCase)
+                        ? WorkerTaskTypeRegistry.KnownTaskTypes
+                        : WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(input),
+                    "all for all task types");
+
+                try
+                {
+                    return WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(selectedTaskTypes);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine(ex.Message);
+                }
+            }
+        }
+
+        private static string[] PromptCheckboxes(
+            string label,
+            string[] options,
+            string[] defaultSelected,
+            Func<string[], string[]>? normalize = null,
+            string emptyLabel = "none for no skills")
         {
             if (options.Length == 0) return Array.Empty<string>();
+            normalize ??= WorkerSkillRegistry.NormalizeConfiguredSkills;
 
             if (Console.IsInputRedirected || Console.IsOutputRedirected)
             {
                 string defaultValue = defaultSelected.Length > 0 ? string.Join(",", defaultSelected) : "none";
-                string input = Prompt($"{label}, comma separated ({string.Join("/", options)}, none for no skills)", defaultValue);
-                return WorkerSkillRegistry.NormalizeConfiguredSkills(ParseCommaSeparated(input));
+                string input = Prompt($"{label}, comma separated ({string.Join("/", options)}, {emptyLabel})", defaultValue);
+                return normalize(ParseCommaSeparated(input));
             }
 
             HashSet<string> selected = new HashSet<string>(defaultSelected, StringComparer.OrdinalIgnoreCase);

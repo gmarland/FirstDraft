@@ -368,6 +368,7 @@ export const openApiDocument = {
         connectionId: { type: "string" },
         paths: array({ type: "string" }),
         skills: array({ type: "string" }),
+        enabledTaskTypes: array({ type: "string", enum: ["ai", "shell", "gitflow"] }),
         state: { type: "string", enum: ["started", "running_command", "stopped"] },
         currentTransactionId: { type: "string" },
         activeTransactionIds: array({ type: "string" }),
@@ -379,7 +380,7 @@ export const openApiDocument = {
         lastSeenAt: { type: "string", format: "date-time" },
         stateUpdatedAt: { type: "string", format: "date-time" },
         stoppedAt: { type: "string", format: "date-time" }
-      }, ["workerId", "connectionId", "paths", "skills", "state", "registeredAt", "firstRegisteredAt", "lastRegisteredAt", "lastSeenAt", "stateUpdatedAt"]),
+      }, ["workerId", "connectionId", "paths", "skills", "enabledTaskTypes", "state", "registeredAt", "firstRegisteredAt", "lastRegisteredAt", "lastSeenAt", "stateUpdatedAt"]),
       CreateCommandRequest: object({
         command: { type: "string" },
         commandMode: { type: "string", enum: ["ai", "shell", "gitflow"], default: "ai" }

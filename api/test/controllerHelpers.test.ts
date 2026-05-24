@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { normalizeEnabledTaskTypes } from "../src/commandModes.js";
 import { validateUserInput } from "../src/controllers/auth/authValidation.js";
 import { validateConnectionInput, validateWorkflowInput } from "../src/controllers/integrations/integrationRequests.js";
 import { parseRepositoryInput, validateRepositoryInput } from "../src/controllers/repositories/repositoryRequests.js";
@@ -39,6 +40,9 @@ function testWorkerRequests(): void {
   assert.equal(parseGitflowPayload("{"), undefined);
   assert.deepEqual(getMissingSkills(["Git"], "gitflow"), []);
   assert.deepEqual(getMissingSkills([], "gitflow"), ["git"]);
+  assert.deepEqual(normalizeEnabledTaskTypes(undefined), ["ai", "shell", "gitflow"]);
+  assert.deepEqual(normalizeEnabledTaskTypes("gitflow|ai|unknown|ai"), ["gitflow", "ai"]);
+  assert.deepEqual(normalizeEnabledTaskTypes(["shell", "AI"]), ["shell", "ai"]);
 }
 
 function testIntegrationRequests(): void {

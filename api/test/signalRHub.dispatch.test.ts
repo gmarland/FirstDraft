@@ -23,7 +23,7 @@ class FakeWorkerStore implements WorkerStore {
   public stoppedWorkers: Array<{ workerId: string; connectionId: string }> = [];
   public outputMetadataInput?: unknown;
 
-  public constructor(maxConcurrentTasks: number, commandModes: CommandMode[]) {
+  public constructor(maxConcurrentTasks: number, commandModes: CommandMode[], enabledTaskTypes: CommandMode[] = ["ai", "shell", "gitflow"]) {
     const now = new Date().toISOString();
     this.worker = {
       workerId: "worker-1",
@@ -31,6 +31,7 @@ class FakeWorkerStore implements WorkerStore {
       connectionId: "connection-1",
       paths: [],
       skills: ["git", "npm"],
+      enabledTaskTypes,
       state: "started",
       activeTransactionIds: [],
       activeTaskCount: 0,
@@ -300,7 +301,8 @@ async function testRegistrationRejectsMismatchedTokenAndRemapsConnection(): Prom
     "worker-1",
     "/repo| /other ",
     "git|npm|unknown|git",
-    "4"
+    "4",
+    "ai|gitflow|unknown|ai"
   ]);
 
   assert.equal(connection.connectionId, "connection-registered");
@@ -312,8 +314,45 @@ async function testRegistrationRejectsMismatchedTokenAndRemapsConnection(): Prom
     connectionId: "connection-registered",
     paths: ["/repo", "/other"],
     skills: ["git", "npm"],
+    enabledTaskTypes: ["ai", "gitflow"],
     maxConcurrentTasks: 4
   });
+}
+
+async function testRegistrationDefaultsTaskTypesForOlderClients(): Promise<void> {
+  const store = new FakeWorkerStore(1, []);
+  const connection = createConnection();
+  const registration = createWorkerRegistration(store);
+
+  await registration.registerWorker(connection, [
+    "access:worker-1",
+    "connection-registered",
+    "worker-1",
+    "",
+    "",
+    1
+  ]);
+
+  assert.deepEqual((store.registeredInput as { enabledTaskTypes: CommandMode[] }).enabledTaskTypes, ["ai", "shell", "gitflow"]);
+}
+
+async function testDispatcherFailsDisabledCommandModes(): Promise<void> {
+  const store = new FakeWorkerStore(2, ["gitflow", "ai"], ["ai"]);
+  const connection = createConnection();
+  const connections = new Map<string, SignalRConnection>([[connection.connectionId, connection]]);
+  const dispatcher = createCommandDispatcher(store, connections);
+  const sent = [] as SentInvocation[];
+  connection.socket.send = (payload: string) => {
+    sent.push(JSON.parse(payload.split("\x1e")[0]) as SentInvocation);
+  };
+
+  await dispatcher.dispatchCommand(store.worker.workerId, "command-1");
+
+  assert.equal(store.commands[0].status, "failed");
+  assert.equal(store.commands[0].errorMessage, "worker is not enabled for commandMode gitflow");
+  assert.equal(store.commands[1].status, "in_progress");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].arguments[3], "ai");
 }
 
 async function testCommandResultCompletesOutputStorageAndMetadata(): Promise<void> {
@@ -411,6 +450,8 @@ await testMixedCommandsFillWorkerCapacity();
 await testConcurrentDispatchDoesNotExceedCapacity();
 await testBackfillsAvailableSlotsAfterCompletionAndCancel();
 await testRegistrationRejectsMismatchedTokenAndRemapsConnection();
+await testRegistrationDefaultsTaskTypesForOlderClients();
+await testDispatcherFailsDisabledCommandModes();
 await testCommandResultCompletesOutputStorageAndMetadata();
 await testCommandOutputChunkRejectsQueuedAndNonOwnedCommands();
 await testInvocationDispatcherSendsKnownUnknownAndFailureCompletions();
