@@ -144,6 +144,13 @@ export const api = {
     );
   },
 
+  disableAllWorkers(token: string) {
+    return request<WorkerRegistration[]>("/api/workers/disable-all", {
+      token,
+      method: "POST",
+    });
+  },
+
   listCommands(token: string, workerId: string) {
     return request<Command[]>(
       `/api/workers/${encodeURIComponent(workerId)}/commands`,

@@ -90,6 +90,14 @@ class FakeWorkerStore implements WorkerStore {
     return { ...worker };
   }
 
+  public async disableWorkersForUser(): Promise<WorkerRegistration[]> {
+    const enabledWorkers = this.workers.filter((worker) => worker.enabled);
+    for (const worker of enabledWorkers) {
+      worker.enabled = false;
+    }
+    return enabledWorkers.map((worker) => ({ ...worker }));
+  }
+
   public async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "ai"): Promise<Command> {
     const queued = await this.createQueuedCommand({ userId, workerId, command, commandMode });
     return queued;

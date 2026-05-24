@@ -66,6 +66,15 @@ export class WorkerController {
     }
   };
 
+  public readonly disableAllWorkers: RequestHandler = async (req, res, next) => {
+    try {
+      const user = req.user as User;
+      res.json(await this.store.disableWorkersForUser(user.userId));
+    } catch (error) {
+      next(error);
+    }
+  };
+
   public readonly listWorkerCommands: RequestHandler = async (req, res, next) => {
     try {
       const user = req.user as User;

@@ -45,6 +45,7 @@ export type WorkerStore = {
   registerWorker(input: RegisterWorkerInput): Promise<WorkerRegistration>;
   markWorkerStopped(workerId: string, connectionId: string): Promise<void>;
   setWorkerEnabledForUser(userId: string, workerId: string, enabled: boolean): Promise<WorkerRegistration | undefined>;
+  disableWorkersForUser(userId: string): Promise<WorkerRegistration[]>;
   createWorkerCommand(userId: string, workerId: string, command: string, commandMode?: CommandMode, executionCommand?: string): Promise<Command>;
   createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
   getWorkerCommand(transactionId: string): Promise<Command | undefined>;
@@ -110,6 +111,13 @@ export function createWorkerStore(
       if (!record) return undefined;
 
       return mergeWorkerState(record, await commands.getInProgressWorkerCommands(workerId));
+    },
+
+    async disableWorkersForUser(userId: string): Promise<WorkerRegistration[]> {
+      const records = await workers.disableWorkersForUser(userId);
+      const inProgressCommands = await commands.getInProgressWorkerCommandsByWorkerIds(records.map((record) => record.workerId));
+
+      return records.map((record) => mergeWorkerState(record, inProgressCommands.get(record.workerId) ?? []));
     },
 
     async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "ai", executionCommand?: string): Promise<Command> {
