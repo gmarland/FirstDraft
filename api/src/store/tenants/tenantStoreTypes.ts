@@ -4,14 +4,14 @@ import {
   CreateApiKeyInput,
   CreateApiKeyResult,
 } from "../tenantApiKeys/tenantApiKeyTypes.js";
-import { CreateUserInput } from "../tenantUsers/tenantUserTypes.js";
+import { CreateUserInput, UpdateUserInput } from "../tenantUsers/tenantUserTypes.js";
 
 export type {
   AuthenticatedApiKey,
   CreateApiKeyInput,
   CreateApiKeyResult,
 } from "../tenantApiKeys/tenantApiKeyTypes.js";
-export type { CreateUserInput } from "../tenantUsers/tenantUserTypes.js";
+export type { CreateUserInput, UpdateUserInput } from "../tenantUsers/tenantUserTypes.js";
 
 export type AppStore = {
   migrate(): Promise<void>;
@@ -19,6 +19,7 @@ export type AppStore = {
   listUsers(): Promise<User[]>;
   getUser(userId: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  updateUser(userId: string, input: UpdateUserInput): Promise<User | undefined>;
   authenticateUser(
     email: string,
     password: string,

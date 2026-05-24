@@ -6,3 +6,9 @@ export type CreateUserInput = {
   name?: string;
   role?: UserRole;
 };
+
+export type UpdateUserInput = {
+  email?: string;
+  name?: string;
+  password?: string;
+};

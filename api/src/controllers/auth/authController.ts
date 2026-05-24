@@ -4,7 +4,7 @@ import { JwtConfig } from "../../auth/passport.js";
 import { AppStore } from "../../store/tenantStore.js";
 import { User } from "../../types.js";
 import { createAuthResponse, toAuthUserResponse } from "./authResponses.js";
-import { isUniqueViolation, validateUserInput } from "./authValidation.js";
+import { isUniqueViolation, readUpdateProfileInput, validateUpdateProfileInput, validateUserInput } from "./authValidation.js";
 
 export class AuthController {
   public constructor(
@@ -59,6 +59,34 @@ export class AuthController {
 
   public readonly me: RequestHandler = (req, res) => {
     res.json({ user: toAuthUserResponse(req.user as User) });
+  };
+
+  public readonly updateMe: RequestHandler = async (req, res, next) => {
+    try {
+      const input = readUpdateProfileInput(req.body);
+      const inputError = validateUpdateProfileInput(input);
+      if (inputError) {
+        return res.status(400).json({ error: inputError });
+      }
+
+      const currentUser = req.user as User | undefined;
+      if (!currentUser) {
+        return res.status(401).json({ error: "authentication required" });
+      }
+
+      const user = await this.tenants.updateUser(currentUser.userId, input);
+      if (!user) {
+        return res.status(404).json({ error: "user not found" });
+      }
+
+      res.json({ user: toAuthUserResponse(user) });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        return res.status(409).json({ error: "email already exists" });
+      }
+
+      next(error);
+    }
   };
 }
 

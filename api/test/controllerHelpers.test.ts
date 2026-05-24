@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { normalizeEnabledTaskTypes } from "../src/commandModes.js";
-import { validateUserInput } from "../src/controllers/auth/authValidation.js";
+import { readUpdateProfileInput, validateUpdateProfileInput, validateUserInput } from "../src/controllers/auth/authValidation.js";
 import { validateConnectionInput, validateWorkflowInput } from "../src/controllers/integrations/integrationRequests.js";
 import { parseRepositoryInput, validateRepositoryInput } from "../src/controllers/repositories/repositoryRequests.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readWorkerEnabled } from "../src/controllers/workers/workerRequests.js";
@@ -10,6 +10,10 @@ function testAuthValidation(): void {
   assert.equal(validateUserInput("user@example.com", ""), "password is required");
   assert.equal(validateUserInput("user@example.com", "short"), "password must be at least 8 characters");
   assert.equal(validateUserInput("user@example.com", "password123"), undefined);
+  assert.equal(validateUpdateProfileInput(readUpdateProfileInput({ email: "" })), "email is required");
+  assert.equal(validateUpdateProfileInput(readUpdateProfileInput({ password: "short" })), "password must be at least 8 characters");
+  assert.equal(validateUpdateProfileInput(readUpdateProfileInput({ email: "user@example.com" })), undefined);
+  assert.equal(validateUpdateProfileInput(readUpdateProfileInput({ email: "user@example.com", password: "password123" })), undefined);
 }
 
 function testRepositoryRequests(): void {

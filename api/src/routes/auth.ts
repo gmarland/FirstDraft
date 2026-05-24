@@ -11,6 +11,7 @@ export function createAuthRoutes(config: JwtConfig, tenants: AppStore): Router {
   router.post("/signup", controller.signup);
   router.post("/login", controller.login);
   router.get("/me", requireJwt, controller.me);
+  router.patch("/me", requireJwt, controller.updateMe);
 
   return router;
 }

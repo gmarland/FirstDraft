@@ -3,7 +3,7 @@ import { ApiKey, User } from "../../types.js";
 import { ApiKeyStore } from "../tenantApiKeys/tenantApiKeyStore.js";
 import { UserStore } from "../tenantUsers/tenantUserStore.js";
 import { SchemaMigrator } from "./tenantSchemaMigrator.js";
-import { AuthenticatedApiKey, CreateApiKeyInput, CreateApiKeyResult, CreateUserInput, AppStore } from "./tenantStoreTypes.js";
+import { AuthenticatedApiKey, CreateApiKeyInput, CreateApiKeyResult, CreateUserInput, UpdateUserInput, AppStore } from "./tenantStoreTypes.js";
 
 export class PostgresAppStore implements AppStore {
   public constructor(
@@ -31,6 +31,10 @@ export class PostgresAppStore implements AppStore {
 
   public getUserByEmail(email: string): Promise<User | undefined> {
     return this.users.getUserByEmail(email);
+  }
+
+  public updateUser(userId: string, input: UpdateUserInput): Promise<User | undefined> {
+    return this.users.updateUser(userId, input);
   }
 
   public authenticateUser(email: string, password: string): Promise<User | undefined> {
