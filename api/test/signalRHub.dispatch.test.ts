@@ -9,7 +9,7 @@ import { SignalRHub } from "../src/signalr/signalRHub.js";
 import { SignalRConnection } from "../src/signalr/shared/types.js";
 import { WorkerRegistrationService } from "../src/signalr/workers/workerRegistrationService.js";
 import type { WorkerStore } from "../src/store/clientStore.js";
-import type { Command, CommandMode, WorkerRegistration } from "../src/types.js";
+import type { Command, CommandMode, PaginatedCommands, WorkerRegistration } from "../src/types.js";
 
 type SentInvocation = {
   target: string;
@@ -130,8 +130,17 @@ class FakeWorkerStore implements WorkerStore {
     return this.commands.find((command) => command.transactionId === transactionId);
   }
 
-  public async listWorkerCommands(): Promise<Command[]> {
-    return [...this.commands];
+  public async listWorkerCommands(workerId: string, pagination: { page: number; pageSize: number }): Promise<PaginatedCommands> {
+    const offset = pagination.page * pagination.pageSize;
+    const workerCommands = this.commands
+      .filter((command) => command.workerId === workerId)
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+    return {
+      commands: workerCommands.slice(offset, offset + pagination.pageSize),
+      total: workerCommands.length,
+      page: pagination.page,
+      pageSize: pagination.pageSize
+    };
   }
 
   public async getQueuedWorkerCommands(workerId: string): Promise<Command[]> {

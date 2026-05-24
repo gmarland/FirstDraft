@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
-import { Command, CommandMode } from "../../types.js";
+import { Command, CommandMode, PaginatedCommands } from "../../types.js";
 import { DbClient } from "../../db/dbClient.js";
-import type { CancelCommandInput, CommandOutputMetadataInput, CompleteCommandInput } from "../clientStore.js";
+import type { CancelCommandInput, CommandOutputMetadataInput, CommandPagination, CompleteCommandInput } from "../clientStore.js";
 import { mapCommand } from "./commandRowMappers.js";
 
 export type CreateQueuedCommandInput = {
@@ -158,18 +158,35 @@ export class CommandStore {
     return commandsByWorkerId;
   }
 
-  public async listWorkerCommands(workerId: string): Promise<Command[]> {
-    const result = await this.pool.query(
-      `
-        select ${commandColumns}
-        from client_commands
-        where worker_id = $1
-        order by created_at desc
-      `,
-      [workerId]
-    );
+  public async listWorkerCommands(workerId: string, pagination: CommandPagination): Promise<PaginatedCommands> {
+    const offset = pagination.page * pagination.pageSize;
+    const [commandsResult, countResult] = await Promise.all([
+      this.pool.query(
+        `
+          select ${commandColumns}
+          from client_commands
+          where worker_id = $1
+          order by created_at desc
+          limit $2 offset $3
+        `,
+        [workerId, pagination.pageSize, offset]
+      ),
+      this.pool.query(
+        `
+          select count(*) as total
+          from client_commands
+          where worker_id = $1
+        `,
+        [workerId]
+      )
+    ]);
 
-    return result.rows.map(mapCommand);
+    return {
+      commands: commandsResult.rows.map(mapCommand),
+      total: Number(countResult.rows[0]?.total ?? 0),
+      page: pagination.page,
+      pageSize: pagination.pageSize
+    };
   }
 
   public async markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined> {

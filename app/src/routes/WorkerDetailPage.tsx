@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Button, FormControlLabel, Stack, Switch } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -20,26 +20,19 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
   const { token } = useAuth();
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [updatingEnabled, setUpdatingEnabled] = useState(false);
+  const [commandPage, setCommandPage] = useState(0);
+  const [commandPageSize, setCommandPageSize] = useState(10);
 
   const loadState = useCallback(
     () => api.getWorkerState(token!, workerId),
     [workerId, token],
   );
   const loadCommands = useCallback(
-    () => api.listCommands(token!, workerId),
-    [workerId, token],
+    () => api.listCommands(token!, workerId, { page: commandPage, pageSize: commandPageSize }),
+    [workerId, token, commandPage, commandPageSize],
   );
   const state = useAsyncData(loadState, [loadState]);
   const commands = useAsyncData(loadCommands, [loadCommands]);
-
-  const sortedCommands = useMemo(
-    () =>
-      [...(commands.data ?? [])].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ),
-    [commands.data],
-  );
 
   const updateEnabled = async (enabled: boolean) => {
     if (!token || updatingEnabled) return;
@@ -117,14 +110,28 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
         skills={state.data?.skills ?? []}
         enabledTaskTypes={state.data?.enabledTaskTypes}
         onCommandQueued={async () => {
+          if (commandPage !== 0) {
+            setCommandPage(0);
+            await state.refresh();
+            return;
+          }
+
           await Promise.all([state.refresh(), commands.refresh()]);
         }}
       />
 
       <CommandHistoryPanel
         workerId={workerId}
-        commands={sortedCommands}
+        commands={commands.data?.commands ?? []}
+        total={commands.data?.total ?? 0}
+        page={commandPage}
+        pageSize={commandPageSize}
         loading={commands.loading}
+        onPageChange={setCommandPage}
+        onPageSizeChange={(nextPageSize) => {
+          setCommandPageSize(nextPageSize);
+          setCommandPage(0);
+        }}
         onCommandChanged={async () => {
           await Promise.all([state.refresh(), commands.refresh()]);
         }}

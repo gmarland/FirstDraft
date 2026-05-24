@@ -1,4 +1,4 @@
-import { WorkerRegistration, Command, CommandMode } from "../types.js";
+import { WorkerRegistration, Command, CommandMode, PaginatedCommands } from "../types.js";
 import { CommandStore, CreateQueuedCommandInput } from "./commands/commandStore.js";
 import { WorkerRecord, WorkerRecordStore } from "./workers/workerRecordStore.js";
 import { normalizeMaxConcurrentTasks } from "../workers/workerState.js";
@@ -37,6 +37,11 @@ export type CancelCommandInput = {
   reason: string;
 };
 
+export type CommandPagination = {
+  page: number;
+  pageSize: number;
+};
+
 export type WorkerStore = {
   listWorkers(): Promise<WorkerRegistration[]>;
   listWorkersForUser(userId: string): Promise<WorkerRegistration[]>;
@@ -49,7 +54,7 @@ export type WorkerStore = {
   createWorkerCommand(userId: string, workerId: string, command: string, commandMode?: CommandMode, executionCommand?: string): Promise<Command>;
   createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
   getWorkerCommand(transactionId: string): Promise<Command | undefined>;
-  listWorkerCommands(workerId: string): Promise<Command[]>;
+  listWorkerCommands(workerId: string, pagination: CommandPagination): Promise<PaginatedCommands>;
   getQueuedWorkerCommands(workerId: string): Promise<Command[]>;
   getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]>;
   getInProgressWorkerCommands(workerId: string): Promise<Command[]>;
@@ -132,8 +137,8 @@ export function createWorkerStore(
       return commands.getWorkerCommand(transactionId);
     },
 
-    listWorkerCommands(workerId: string): Promise<Command[]> {
-      return commands.listWorkerCommands(workerId);
+    listWorkerCommands(workerId: string, pagination: CommandPagination): Promise<PaginatedCommands> {
+      return commands.listWorkerCommands(workerId, pagination);
     },
 
     async getQueuedWorkerCommands(workerId: string): Promise<Command[]> {

@@ -183,9 +183,13 @@ export const openApiDocument = {
         tags: ["Workers"],
         summary: "List worker commands",
         security: bearerSecurity(),
-        parameters: [pathParam("workerId", "Worker id")],
+        parameters: [
+          pathParam("workerId", "Worker id"),
+          queryParam("page", "Zero-based page index", { type: "integer", minimum: 0, default: 0 }),
+          queryParam("pageSize", "Rows per page", { type: "integer", enum: [5, 10, 25, 50], default: 10 })
+        ],
         responses: {
-          "200": jsonResponse("Commands", array(ref("Command"))),
+          "200": jsonResponse("Commands", ref("PaginatedCommands")),
           "401": errorResponse(),
           "404": errorResponse()
         }
@@ -435,6 +439,12 @@ export const openApiDocument = {
         outputStartedAt: { type: "string", format: "date-time" },
         outputUpdatedAt: { type: "string", format: "date-time" }
       }, ["transactionId", "userId", "command", "commandMode", "status", "createdAt"]),
+      PaginatedCommands: object({
+        commands: array(ref("Command")),
+        total: { type: "integer" },
+        page: { type: "integer" },
+        pageSize: { type: "integer" }
+      }, ["commands", "total", "page", "pageSize"]),
       CommandResponses: object({ command: ref("Command"), responses: array(freeForm()) }, ["command", "responses"]),
       GitRepository: object({
         repositoryUrl: { type: "string" },
@@ -643,6 +653,16 @@ function pathParam(name: string, description: string): Schema {
     required: true,
     description,
     schema: { type: "string" }
+  };
+}
+
+function queryParam(name: string, description: string, schema: Schema): Schema {
+  return {
+    name,
+    in: "query",
+    required: false,
+    description,
+    schema
   };
 }
 
