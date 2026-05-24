@@ -53,6 +53,11 @@ export class GitRepositoryStore {
   public constructor(private readonly pool: DbClient) {}
 
   public async recordGitflowUsage(input: RecordGitRepositoryUsageInput): Promise<void> {
+    await this.recordUserGitflowUsage(input);
+    await this.recordWorkerGitflowUsage(input);
+  }
+
+  public async recordUserGitflowUsage(input: Omit<RecordGitRepositoryUsageInput, "workerId" | "localPath">): Promise<void> {
     const normalizedRepositoryUrl = normalizeRepositoryUrl(input.repositoryUrl);
     const sourceBranch = cleanBranch(input.sourceBranch) || "main";
 
@@ -76,6 +81,12 @@ export class GitRepositoryStore {
       `,
       [input.userId, input.repositoryUrl.trim(), normalizedRepositoryUrl, sourceBranch]
     );
+  }
+
+  public async recordWorkerGitflowUsage(input: Omit<RecordGitRepositoryUsageInput, "userId">): Promise<void> {
+    const normalizedRepositoryUrl = normalizeRepositoryUrl(input.repositoryUrl);
+    const sourceBranch = cleanBranch(input.sourceBranch) || "main";
+
     await this.pool.query(
       `
         insert into worker_git_repositories (

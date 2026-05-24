@@ -245,10 +245,12 @@ export class SchemaMigrator {
       create table if not exists client_commands (
         transaction_id text primary key,
         user_id uuid not null references users(id),
-        worker_id text not null,
+        worker_id text,
         command text not null,
         execution_command text,
         command_mode text not null default 'ai',
+        repository_url text,
+        normalized_repository_url text,
         status text not null,
         result text,
         agent_response text,
@@ -263,10 +265,19 @@ export class SchemaMigrator {
       );
 
       alter table client_commands
+        alter column worker_id drop not null;
+
+      alter table client_commands
         add column if not exists result text;
 
       alter table client_commands
         add column if not exists execution_command text;
+
+      alter table client_commands
+        add column if not exists repository_url text;
+
+      alter table client_commands
+        add column if not exists normalized_repository_url text;
 
       alter table client_commands
         add column if not exists agent_response text;
@@ -283,6 +294,12 @@ export class SchemaMigrator {
 
       create index if not exists client_commands_status_idx
         on client_commands(status);
+
+      create index if not exists client_commands_queue_idx
+        on client_commands(status, worker_id, command_mode, created_at);
+
+      create index if not exists client_commands_repository_idx
+        on client_commands(normalized_repository_url);
     `);
   }
 }

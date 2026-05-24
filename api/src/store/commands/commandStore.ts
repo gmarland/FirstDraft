@@ -4,6 +4,16 @@ import { DbClient } from "../../db/dbClient.js";
 import type { CancelCommandInput, CommandOutputMetadataInput, CompleteCommandInput } from "../clientStore.js";
 import { mapCommand } from "./commandRowMappers.js";
 
+export type CreateQueuedCommandInput = {
+  userId: string;
+  workerId?: string;
+  command: string;
+  commandMode?: CommandMode;
+  executionCommand?: string;
+  repositoryUrl?: string;
+  normalizedRepositoryUrl?: string;
+};
+
 export class CommandStore {
   public constructor(private readonly pool: DbClient) {}
 
@@ -14,15 +24,42 @@ export class CommandStore {
     commandMode: CommandMode = "ai",
     executionCommand?: string
   ): Promise<Command> {
+    return this.createQueuedCommand({
+      userId,
+      workerId,
+      command,
+      commandMode,
+      executionCommand
+    });
+  }
+
+  public async createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command> {
     const result = await this.pool.query(
       `
-        insert into client_commands (transaction_id, user_id, worker_id, command, execution_command, command_mode, status)
-        values ($1, $2, $3, $4, $6, $5, 'queued')
-          returning transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        insert into client_commands (
+          transaction_id,
+          user_id,
+          worker_id,
+          command,
+          execution_command,
+          command_mode,
+          repository_url,
+          normalized_repository_url,
+          status
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, 'queued')
+        returning ${commandColumns}
       `,
-      [nanoid(), userId, workerId, command, commandMode, executionCommand ?? null]
+      [
+        nanoid(),
+        input.userId,
+        input.workerId ?? null,
+        input.command,
+        input.executionCommand ?? null,
+        input.commandMode ?? "ai",
+        input.repositoryUrl ?? null,
+        input.normalizedRepositoryUrl ?? null
+      ]
     );
 
     return mapCommand(result.rows[0]);
@@ -31,9 +68,7 @@ export class CommandStore {
   public async getWorkerCommand(transactionId: string): Promise<Command | undefined> {
     const result = await this.pool.query(
       `
-        select transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        select ${commandColumns}
         from client_commands
         where transaction_id = $1
       `,
@@ -46,9 +81,7 @@ export class CommandStore {
   public async getQueuedWorkerCommands(workerId: string): Promise<Command[]> {
     const result = await this.pool.query(
       `
-        select transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        select ${commandColumns}
         from client_commands
         where worker_id = $1 and status = 'queued'
         order by created_at
@@ -59,12 +92,37 @@ export class CommandStore {
     return result.rows.map(mapCommand);
   }
 
+  public async getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]> {
+    const supportsGitflow = workerSkills.map((skill) => skill.toLowerCase()).includes("git");
+    const result = await this.pool.query(
+      `
+        select ${prefixedCommandColumns},
+          worker_repos.normalized_repository_url is not null as worker_repository_match
+        from client_commands commands
+        left join worker_git_repositories worker_repos
+          on worker_repos.worker_id = $1
+          and worker_repos.normalized_repository_url = commands.normalized_repository_url
+        where commands.status = 'queued'
+          and (commands.worker_id = $1 or commands.worker_id is null)
+          and (
+            commands.command_mode in ('ai', 'shell')
+            or ($2::boolean and commands.command_mode = 'gitflow')
+          )
+        order by
+          case when commands.worker_id = $1 then 0 else 1 end,
+          case when worker_repos.normalized_repository_url is not null then 0 else 1 end,
+          commands.created_at
+      `,
+      [workerId, supportsGitflow]
+    );
+
+    return result.rows.map(mapCommand);
+  }
+
   public async getInProgressWorkerCommands(workerId: string): Promise<Command[]> {
     const result = await this.pool.query(
       `
-        select transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        select ${commandColumns}
         from client_commands
         where worker_id = $1 and status = 'in_progress'
         order by claimed_at, created_at
@@ -81,9 +139,7 @@ export class CommandStore {
 
     const result = await this.pool.query(
       `
-        select transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        select ${commandColumns}
         from client_commands
         where worker_id = any($1::text[])
           and status = 'in_progress'
@@ -93,6 +149,7 @@ export class CommandStore {
     );
 
     for (const command of result.rows.map(mapCommand)) {
+      if (!command.workerId) continue;
       const workerCommands = commandsByWorkerId.get(command.workerId) ?? [];
       workerCommands.push(command);
       commandsByWorkerId.set(command.workerId, workerCommands);
@@ -104,9 +161,7 @@ export class CommandStore {
   public async listWorkerCommands(workerId: string): Promise<Command[]> {
     const result = await this.pool.query(
       `
-        select transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        select ${commandColumns}
         from client_commands
         where worker_id = $1
         order by created_at desc
@@ -117,17 +172,22 @@ export class CommandStore {
     return result.rows.map(mapCommand);
   }
 
-  public async markWorkerCommandInProgress(command: Command): Promise<Command | undefined> {
+  public async markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined> {
+    const assignedWorkerId = workerId ?? command.workerId;
+    if (!assignedWorkerId) return undefined;
+
     const result = await this.pool.query(
       `
         update client_commands
-        set status = 'in_progress', claimed_at = now()
-        where transaction_id = $1 and status = 'queued'
-        returning transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        set worker_id = $2,
+          status = 'in_progress',
+          claimed_at = now()
+        where transaction_id = $1
+          and status = 'queued'
+          and (worker_id is null or worker_id = $2)
+        returning ${commandColumns}
       `,
-      [command.transactionId]
+      [command.transactionId, assignedWorkerId]
     );
 
     return result.rows[0] ? mapCommand(result.rows[0]) : undefined;
@@ -143,9 +203,7 @@ export class CommandStore {
           output_updated_at = $5
         where transaction_id = $1
           and ($6::text is null or worker_id = $6)
-        returning transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        returning ${commandColumns}
       `,
       [
         input.transactionId,
@@ -176,9 +234,7 @@ export class CommandStore {
         where transaction_id = $1
           and ($5::text is null or worker_id = $5)
           and status = 'in_progress'
-        returning transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        returning ${commandColumns}
       `,
       [input.transactionId, input.result, input.agentResponse ?? null, input.errorMessage, input.workerId ?? null]
     );
@@ -186,9 +242,7 @@ export class CommandStore {
     if (!result.rows[0]) {
       const existing = await this.pool.query(
         `
-          select transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-            output_object_key, output_bytes, output_started_at, output_updated_at,
-            created_at, claimed_at, completed_at
+          select ${commandColumns}
           from client_commands
           where transaction_id = $1
             and ($2::text is null or worker_id = $2)
@@ -216,9 +270,7 @@ export class CommandStore {
         where transaction_id = $1
           and ($2::text is null or worker_id = $2)
           and status in ('queued', 'in_progress')
-        returning transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        returning ${commandColumns}
       `,
       [input.transactionId, input.workerId ?? null, input.reason]
     );
@@ -229,9 +281,7 @@ export class CommandStore {
 
     const existing = await this.pool.query(
       `
-        select transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        select ${commandColumns}
         from client_commands
         where transaction_id = $1
           and ($2::text is null or worker_id = $2)
@@ -256,9 +306,7 @@ export class CommandStore {
         where status = 'in_progress'
           and claimed_at is not null
           and claimed_at < now() - ($1::int * interval '1 minute')
-        returning transaction_id, user_id, worker_id, command, execution_command, command_mode, status, result, agent_response, error_message,
-          output_object_key, output_bytes, output_started_at, output_updated_at,
-          created_at, claimed_at, completed_at
+        returning ${commandColumns}
       `,
       [timeoutMinutes, `command cancelled after being in progress for more than ${timeoutMinutes} minutes`]
     );
@@ -266,3 +314,30 @@ export class CommandStore {
     return result.rows.map(mapCommand);
   }
 }
+
+const commandColumnNames = [
+  "transaction_id",
+  "user_id",
+  "worker_id",
+  "command",
+  "execution_command",
+  "command_mode",
+  "repository_url",
+  "normalized_repository_url",
+  "status",
+  "result",
+  "agent_response",
+  "error_message",
+  "output_object_key",
+  "output_bytes",
+  "output_started_at",
+  "output_updated_at",
+  "created_at",
+  "claimed_at",
+  "completed_at"
+];
+
+const commandColumns = commandColumnNames.join(", ");
+const prefixedCommandColumns = commandColumnNames
+  .map((column) => `commands.${column}`)
+  .join(", ");

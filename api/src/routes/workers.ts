@@ -6,6 +6,7 @@ import { GitRepositoryStore } from "../store/gitRepositories/gitRepositoryStore.
 
 type CommandDispatcher = {
   dispatchCommand(workerId: string, transactionId: string): Promise<void>;
+  dispatchQueuedCommands?(workerId?: string): Promise<void>;
 };
 
 export function createWorkerRoutes(

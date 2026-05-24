@@ -30,7 +30,11 @@ export class WorkerCommandDispatcher {
   }
 
   public async dispatchQueuedCommands(workerId?: string): Promise<void> {
-    if (!workerId) return;
+    if (!workerId) {
+      const workers = await this.store.listWorkers();
+      await Promise.all(workers.map((worker) => this.dispatchQueuedCommands(worker.workerId)));
+      return;
+    }
 
     await this.withWorkerDispatchLock(workerId, async () => {
       while (true) {
@@ -40,7 +44,7 @@ export class WorkerCommandDispatcher {
         const connection = this.connections.get(client.connectionId);
         if (!connection || connection.socket.readyState !== WebSocket.OPEN) return;
 
-        const queuedCommands = await this.store.getQueuedWorkerCommands(workerId);
+        const queuedCommands = await this.store.getDispatchableQueuedCommands(workerId, client.skills);
         if (queuedCommands.length === 0) return;
 
         let claimedCommand = false;
@@ -48,11 +52,12 @@ export class WorkerCommandDispatcher {
           const latestClient = await this.store.getWorker(workerId);
           if (!latestClient || !canDispatchMoreCommands(latestClient)) return;
 
-          const claimed = await this.store.markWorkerCommandInProgress(nextCommand);
+          const claimed = await this.store.markWorkerCommandInProgress(nextCommand, workerId);
           if (!claimed) continue;
+          if (!claimed.workerId) continue;
 
           claimedCommand = true;
-          this.notifyCommandStarted(claimed);
+          await this.notifyCommandStarted(claimed);
           this.sendInvocation(connection, "ExecuteCommand", [
             this.apiToWorkerTokens.signCommand(claimed.workerId, claimed.transactionId),
             claimed.transactionId,
@@ -71,7 +76,7 @@ export class WorkerCommandDispatcher {
     const failedCommands = await this.store.failStuckWorkerCommands(stuckCommandTimeoutMinutes);
     if (!dispatchQueued || failedCommands.length === 0) return;
 
-    const workerIds = new Set(failedCommands.map((command) => command.workerId));
+    const workerIds = new Set(failedCommands.map((command) => command.workerId).filter((failedWorkerId): failedWorkerId is string => Boolean(failedWorkerId)));
     await Promise.all([...workerIds].map((workerId) => this.dispatchQueuedCommands(workerId)));
   }
 
@@ -79,13 +84,15 @@ export class WorkerCommandDispatcher {
     connection.socket.send(invocationMessage(target, args));
   }
 
-  private notifyCommandStarted(command: Command): void {
-    this.lifecycle?.commandStarted(command).catch((error) => {
+  private async notifyCommandStarted(command: Command): Promise<void> {
+    try {
+      await this.lifecycle?.commandStarted(command);
+    } catch (error) {
       console.error("error handling command started lifecycle", {
         transactionId: command.transactionId,
         error: error instanceof Error ? error.message : String(error)
       });
-    });
+    }
   }
 
   private async withWorkerDispatchLock<T>(workerId: string, action: () => Promise<T>): Promise<T> {

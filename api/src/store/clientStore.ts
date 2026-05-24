@@ -1,5 +1,5 @@
 import { WorkerRegistration, Command, CommandMode } from "../types.js";
-import { CommandStore } from "./commands/commandStore.js";
+import { CommandStore, CreateQueuedCommandInput } from "./commands/commandStore.js";
 import { WorkerRecord, WorkerRecordStore } from "./workers/workerRecordStore.js";
 import { normalizeMaxConcurrentTasks } from "../workers/workerState.js";
 
@@ -43,11 +43,13 @@ export type WorkerStore = {
   registerWorker(input: RegisterWorkerInput): Promise<WorkerRegistration>;
   markWorkerStopped(workerId: string, connectionId: string): Promise<void>;
   createWorkerCommand(userId: string, workerId: string, command: string, commandMode?: CommandMode, executionCommand?: string): Promise<Command>;
+  createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
   getWorkerCommand(transactionId: string): Promise<Command | undefined>;
   listWorkerCommands(workerId: string): Promise<Command[]>;
   getQueuedWorkerCommands(workerId: string): Promise<Command[]>;
+  getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]>;
   getInProgressWorkerCommands(workerId: string): Promise<Command[]>;
-  markWorkerCommandInProgress(command: Command): Promise<Command | undefined>;
+  markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined>;
   recordWorkerCommandOutputMetadata(input: CommandOutputMetadataInput): Promise<Command>;
   completeWorkerCommand(input: CompleteCommandInput): Promise<Command>;
   cancelWorkerCommand(input: CancelCommandInput): Promise<Command>;
@@ -104,6 +106,10 @@ export function createWorkerStore(
       return commands.createWorkerCommand(userId, workerId, command, commandMode, executionCommand);
     },
 
+    async createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command> {
+      return commands.createQueuedCommand(input);
+    },
+
     getWorkerCommand(transactionId: string): Promise<Command | undefined> {
       return commands.getWorkerCommand(transactionId);
     },
@@ -116,15 +122,20 @@ export function createWorkerStore(
       return commands.getQueuedWorkerCommands(workerId);
     },
 
+    async getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]> {
+      return commands.getDispatchableQueuedCommands(workerId, workerSkills);
+    },
+
     async getInProgressWorkerCommands(workerId: string): Promise<Command[]> {
       return commands.getInProgressWorkerCommands(workerId);
     },
 
-    async markWorkerCommandInProgress(command: Command): Promise<Command | undefined> {
-      const claimed = await commands.markWorkerCommandInProgress(command);
+    async markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined> {
+      const claimed = await commands.markWorkerCommandInProgress(command, workerId);
       if (!claimed) return undefined;
+      if (!claimed.workerId) return undefined;
 
-      await refreshWorkerActivity(commands, workers, command.workerId);
+      await refreshWorkerActivity(commands, workers, claimed.workerId);
 
       return claimed;
     },
@@ -136,7 +147,9 @@ export function createWorkerStore(
     async completeWorkerCommand(input: CompleteCommandInput): Promise<Command> {
       const command = await commands.completeWorkerCommand(input);
 
-      await refreshWorkerActivity(commands, workers, command.workerId);
+      if (command.workerId) {
+        await refreshWorkerActivity(commands, workers, command.workerId);
+      }
 
       return command;
     },
@@ -144,7 +157,9 @@ export function createWorkerStore(
     async cancelWorkerCommand(input: CancelCommandInput): Promise<Command> {
       const command = await commands.cancelWorkerCommand(input);
 
-      await refreshWorkerActivity(commands, workers, command.workerId);
+      if (command.workerId) {
+        await refreshWorkerActivity(commands, workers, command.workerId);
+      }
 
       return command;
     },
@@ -153,7 +168,7 @@ export function createWorkerStore(
       const failedCommands = await commands.failStuckWorkerCommands(timeoutMinutes);
       if (failedCommands.length === 0) return failedCommands;
 
-      const workerIds = [...new Set(failedCommands.map((command) => command.workerId))];
+      const workerIds = [...new Set(failedCommands.map((command) => command.workerId).filter((workerId): workerId is string => Boolean(workerId)))];
       await Promise.all(workerIds.map((workerId) => refreshWorkerActivity(commands, workers, workerId)));
 
       return failedCommands;
