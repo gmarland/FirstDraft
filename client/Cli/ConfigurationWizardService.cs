@@ -35,6 +35,7 @@ namespace FirstDraft.Cli
                 ValidateExternalApi);
 
             applicationData.AIProvider = PromptAIProvider(applicationData.AIProvider);
+            applicationData.PlanningEnabled = PromptBool("AI planning enabled", applicationData.PlanningEnabled);
 
             applicationData.AIWorkingDirectory = PromptUntilValid(
                 "AI working directory",
@@ -105,6 +106,26 @@ namespace FirstDraft.Cli
             return 0;
         }
 
+        public async Task<int> EnablePlanning()
+        {
+            ApplicationData applicationData = await _applicationDataService.GetApplicationData();
+
+            Console.WriteLine("firstdraft enablePlanning");
+            Console.WriteLine("Configure the AI planning pass for this client.");
+
+            applicationData.PlanningEnabled = PromptBool("AI planning enabled", applicationData.PlanningEnabled);
+
+            await _applicationDataService.Save(applicationData);
+
+            Console.WriteLine();
+            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
+            Console.WriteLine(applicationData.PlanningEnabled
+                ? "AI planning is enabled."
+                : "AI planning is disabled.");
+
+            return 0;
+        }
+
         private static string PromptRequired(string label, string defaultValue)
         {
             return PromptUntilValid(label, defaultValue, value =>
@@ -164,6 +185,21 @@ namespace FirstDraft.Cli
             }
         }
 
+        private static bool PromptBool(string label, bool defaultValue)
+        {
+            string defaultText = defaultValue ? "yes" : "no";
+
+            while (true)
+            {
+                string input = Prompt($"{label} (yes/no)", defaultText);
+
+                if (IsYes(input)) return true;
+                if (IsNo(input)) return false;
+
+                Console.Error.WriteLine($"{label} must be yes or no");
+            }
+        }
+
         private static string PromptSensitive(string label, string defaultValue)
         {
             string suffix = !string.IsNullOrWhiteSpace(defaultValue) ? " [configured]" : string.Empty;
@@ -173,6 +209,22 @@ namespace FirstDraft.Cli
             if (string.IsNullOrWhiteSpace(input)) return defaultValue ?? string.Empty;
 
             return input.Trim();
+        }
+
+        private static bool IsYes(string value)
+        {
+            return string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "y", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsNo(string value)
+        {
+            return string.Equals(value, "no", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "n", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "0", StringComparison.OrdinalIgnoreCase);
         }
 
         private static AIProvider PromptAIProvider(AIProvider defaultProvider)

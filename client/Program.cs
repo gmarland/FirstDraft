@@ -30,6 +30,11 @@ namespace FirstDraft
                     ConfigurationWizardService capacityConfigurationWizardService = new ConfigurationWizardService(capacityApplicationDataService);
                     return await capacityConfigurationWizardService.Capacity();
 
+                case "enableplanning":
+                    ApplicationDataService planningApplicationDataService = new ApplicationDataService();
+                    ConfigurationWizardService planningConfigurationWizardService = new ConfigurationWizardService(planningApplicationDataService);
+                    return await planningConfigurationWizardService.EnablePlanning();
+
                 case "run":
                     await CreateHostBuilder(args.Skip(1).ToArray()).Build().RunAsync();
                     return 0;
@@ -68,6 +73,7 @@ namespace FirstDraft
             Console.WriteLine("  firstdraft init    Create or update config.json interactively");
             Console.WriteLine("  firstdraft skills  Update worker skills interactively");
             Console.WriteLine("  firstdraft capacity  Update max concurrent gitflow tasks interactively");
+            Console.WriteLine("  firstdraft enablePlanning  Configure AI planning for this client");
             Console.WriteLine("  firstdraft run     Start the FirstDraft client worker");
             Console.WriteLine("  firstdraft help    Show this help");
         }
