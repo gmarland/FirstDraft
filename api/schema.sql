@@ -57,6 +57,7 @@ create table if not exists client_workers (
   last_connection_id text,
   paths text[] not null default '{}',
   skills text[] not null default '{}',
+  enabled_task_types text[] not null default '{ai,shell,gitflow}',
   max_concurrent_tasks integer not null default 1,
   state text not null default 'stopped',
   state_updated_at timestamptz,

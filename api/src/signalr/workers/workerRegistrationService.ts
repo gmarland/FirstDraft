@@ -1,6 +1,7 @@
 import { WebSocket } from "ws";
 import { WorkerAccessPayload } from "../../auth/workerAuthTypes.js";
 import { WorkerTokenService } from "../../auth/workerTokens.js";
+import { normalizeEnabledTaskTypes } from "../../commandModes.js";
 import { WorkerStore } from "../../store/clientStore.js";
 import { normalizeMaxConcurrentTasks } from "../../workers/workerState.js";
 import { readRequiredString, readString } from "../shared/argumentReaders.js";
@@ -28,6 +29,7 @@ export class WorkerRegistrationService {
       .filter(Boolean);
     const skills = normalizeSkills(readString(args[4]));
     const maxConcurrentTasks = normalizeMaxConcurrentTasks(args[5]);
+    const enabledTaskTypes = normalizeEnabledTaskTypes(args[6]);
 
     await this.markStaleWorkerStopped(workerId, connectionId);
 
@@ -40,6 +42,7 @@ export class WorkerRegistrationService {
       connectionId,
       paths,
       skills,
+      enabledTaskTypes,
       maxConcurrentTasks
     });
 

@@ -2,6 +2,7 @@ import { Box, Chip, Stack, Typography } from "@mui/material";
 import { StatusBadge } from "../StatusBadge";
 import { SummaryCard } from "../SummaryCard";
 import { formatDate, relativeTime } from "../../lib/dates";
+import { formatTaskType } from "../workers/WorkerTaskTypesCell";
 import type { WorkerRegistration } from "../../types/api";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 
 export function WorkerSummaryGrid({ state }: Props) {
   const skills = state?.skills ?? [];
+  const enabledTaskTypes = state?.enabledTaskTypes ?? [];
   const activeTaskCount =
     state?.activeTaskCount ??
     state?.activeTransactionIds?.length ??
@@ -23,7 +25,7 @@ export function WorkerSummaryGrid({ state }: Props) {
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", md: "repeat(4, minmax(0, 1fr))" },
+        gridTemplateColumns: { xs: "1fr", md: "repeat(5, minmax(0, 1fr))" },
         gap: 1.5,
       }}
     >
@@ -34,6 +36,18 @@ export function WorkerSummaryGrid({ state }: Props) {
         <Typography sx={{ fontWeight: 800 }}>
           {state ? `${activeTaskCount} / ${maxConcurrentTasks}` : "Loading"}
         </Typography>
+      </SummaryCard>
+      <SummaryCard label="Task types">
+        <Stack
+          direction="row"
+          spacing={0.75}
+          useFlexGap
+          sx={{ flexWrap: "wrap" }}
+        >
+          {enabledTaskTypes.map((taskType) => (
+            <Chip key={taskType} size="small" label={formatTaskType(taskType)} />
+          ))}
+        </Stack>
       </SummaryCard>
       <SummaryCard label="Skills">
         <Stack

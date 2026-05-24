@@ -30,6 +30,12 @@ namespace FirstDraft
                     ConfigurationWizardService capacityConfigurationWizardService = new ConfigurationWizardService(capacityApplicationDataService);
                     return await capacityConfigurationWizardService.Capacity();
 
+                case "tasktypes":
+                case "task-types":
+                    ApplicationDataService taskTypesApplicationDataService = new ApplicationDataService();
+                    ConfigurationWizardService taskTypesConfigurationWizardService = new ConfigurationWizardService(taskTypesApplicationDataService);
+                    return await taskTypesConfigurationWizardService.TaskTypes();
+
                 case "enableplanning":
                     ApplicationDataService planningApplicationDataService = new ApplicationDataService();
                     ConfigurationWizardService planningConfigurationWizardService = new ConfigurationWizardService(planningApplicationDataService);
@@ -54,8 +60,14 @@ namespace FirstDraft
 
         public static IHostBuilder CreateHostBuilder(string[] args)
         {
+            WorkerRuntimeOptions runtimeOptions = new WorkerRuntimeOptions
+            {
+                EnabledTaskTypesOverride = ParseTaskTypesOverride(args)
+            };
+
             return Host.CreateDefaultBuilder(args).ConfigureServices((hostContext, services) =>
             {
+                services.AddSingleton(runtimeOptions);
                 services.AddSingleton<ApplicationDataService>();
                 services.AddSingleton<ICommandHandler, ShellCommandHandler>();
                 services.AddSingleton<ICommandHandler, AICommandHandler>();
@@ -73,9 +85,36 @@ namespace FirstDraft
             Console.WriteLine("  firstdraft init    Create or update config.json interactively");
             Console.WriteLine("  firstdraft skills  Update worker skills interactively");
             Console.WriteLine("  firstdraft capacity  Update max concurrent gitflow tasks interactively");
+            Console.WriteLine("  firstdraft taskTypes  Update enabled task types interactively");
             Console.WriteLine("  firstdraft enablePlanning  Configure AI planning for this client");
-            Console.WriteLine("  firstdraft run     Start the FirstDraft client worker");
+            Console.WriteLine("  firstdraft run [--task-types ai,shell,gitflow]  Start the FirstDraft client worker");
             Console.WriteLine("  firstdraft help    Show this help");
+        }
+
+        private static string[]? ParseTaskTypesOverride(string[] args)
+        {
+            for (int index = 0; index < args.Length; index++)
+            {
+                string arg = args[index];
+                string? value = null;
+
+                if (arg.StartsWith("--task-types=", StringComparison.OrdinalIgnoreCase))
+                {
+                    value = arg.Substring("--task-types=".Length);
+                }
+                else if (string.Equals(arg, "--task-types", StringComparison.OrdinalIgnoreCase) && index + 1 < args.Length)
+                {
+                    value = args[index + 1];
+                }
+
+                if (value != null)
+                {
+                    return WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(
+                        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                }
+            }
+
+            return null;
         }
     }
 }

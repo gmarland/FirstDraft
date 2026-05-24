@@ -73,9 +73,17 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
 
       <WorkerPanelsGrid
         workerId={workerId}
-        commandDisabled={state.data?.state === "stopped"}
+        commandDisabled={!state.data || state.data.state === "stopped"}
+        commandDisabledReason={
+          !state.data
+            ? "Commands are disabled while the worker state loads."
+            : state.data.state === "stopped"
+              ? "Commands are disabled while the client is offline."
+              : undefined
+        }
         paths={state.data?.paths ?? []}
         skills={state.data?.skills ?? []}
+        enabledTaskTypes={state.data?.enabledTaskTypes}
         onCommandQueued={async () => {
           await Promise.all([state.refresh(), commands.refresh()]);
         }}

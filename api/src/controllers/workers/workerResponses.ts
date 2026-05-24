@@ -10,6 +10,7 @@ export function toWorkerStateResponse(client: WorkerRegistration) {
     connectionId: client.connectionId,
     paths: client.paths,
     skills: client.skills,
+    enabledTaskTypes: client.enabledTaskTypes,
     state: client.state,
     currentTransactionId: client.currentTransactionId,
     activeTransactionIds: client.activeTransactionIds ?? (client.currentTransactionId ? [client.currentTransactionId] : []),

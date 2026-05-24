@@ -154,13 +154,15 @@ namespace FirstDraft.Api
 
                     string appPathsParam = ((_applicationData.ApplicationPaths != null) && (_applicationData.ApplicationPaths.Length > 0)) ? string.Join("|", _applicationData.ApplicationPaths) : string.Empty;
                     string skillsParam = string.Join("|", WorkerSkillRegistry.ResolveAvailableSkills(_applicationData.Skills));
+                    string enabledTaskTypesParam = string.Join("|", WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(_applicationData.EnabledTaskTypes));
 
-                    await _apiHubConnection.InvokeAsync("Register", await _tokens.EnsureAccessTokenAsync(), _apiHubConnection.ConnectionId, _applicationData.WorkerId, appPathsParam, skillsParam, GetMaxConcurrentTasks(_applicationData));
+                    await _apiHubConnection.InvokeAsync("Register", await _tokens.EnsureAccessTokenAsync(), _apiHubConnection.ConnectionId, _applicationData.WorkerId, appPathsParam, skillsParam, GetMaxConcurrentTasks(_applicationData), enabledTaskTypesParam);
 
                     _handshakeComplete = true;
 
                     _logger.Info("Connection made, worker registered");
                     _logger.Info($"Max concurrent tasks: {GetMaxConcurrentTasks(_applicationData)}");
+                    _logger.Info($"Enabled task types: {enabledTaskTypesParam}");
 
                     await FlushPendingCommandEvents(waitForLock: true);
                 }

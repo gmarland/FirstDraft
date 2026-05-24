@@ -2,6 +2,7 @@ import { WorkerRegistration, Command, CommandMode } from "../types.js";
 import { CommandStore, CreateQueuedCommandInput } from "./commands/commandStore.js";
 import { WorkerRecord, WorkerRecordStore } from "./workers/workerRecordStore.js";
 import { normalizeMaxConcurrentTasks } from "../workers/workerState.js";
+import { normalizeEnabledTaskTypes } from "../commandModes.js";
 
 export type RegisterWorkerInput = {
   workerId: string;
@@ -9,6 +10,7 @@ export type RegisterWorkerInput = {
   connectionId: string;
   paths: string[];
   skills: string[];
+  enabledTaskTypes?: CommandMode[];
   maxConcurrentTasks?: number;
 };
 
@@ -203,6 +205,7 @@ export function mergeWorkerState(record: WorkerRecord, inProgressCommands: Comma
     connectionId: record.lastConnectionId ?? "",
     paths: record.paths,
     skills: record.skills,
+    enabledTaskTypes: normalizeEnabledTaskTypes(record.enabledTaskTypes),
     state,
     activeTransactionIds,
     activeTaskCount: activeTransactionIds.length,

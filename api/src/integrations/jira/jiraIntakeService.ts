@@ -13,6 +13,8 @@ import {
   JiraIntegrationStore,
 } from "../../store/integrations/jiraIntegrationStore.js";
 import { IntegrationIntakeEventStore } from "../../store/integrations/integrationIntakeEventStore.js";
+import { WorkerRegistration } from "../../types.js";
+import { isTaskTypeEnabled } from "../../commandModes.js";
 
 type CommandDispatcher = {
   dispatchQueuedCommands(workerId?: string): Promise<void>;
@@ -491,6 +493,27 @@ function readJiraText(value: unknown): string {
   const text = typeof payload.text === "string" ? payload.text.trim() : "";
   const content = readJiraText(payload.content);
   return [text, content].filter(Boolean).join("\n");
+}
+
+function isAvailableGitWorker(worker: WorkerRegistration): boolean {
+  return (
+    worker.state !== "stopped" &&
+    isTaskTypeEnabled(worker.enabledTaskTypes, "gitflow") &&
+    worker.skills.map((skill) => skill.toLowerCase()).includes("git") &&
+    activeTaskCount(worker) < maxConcurrentTasks(worker)
+  );
+}
+
+function activeTaskCount(worker: WorkerRegistration): number {
+  return (
+    worker.activeTaskCount ??
+    worker.activeTransactionIds?.length ??
+    (worker.currentTransactionId ? 1 : 0)
+  );
+}
+
+function maxConcurrentTasks(worker: WorkerRegistration): number {
+  return Math.max(1, worker.maxConcurrentTasks ?? 1);
 }
 
 function normalizeMaxIssues(value: number | undefined): number {

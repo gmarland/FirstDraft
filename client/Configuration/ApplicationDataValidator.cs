@@ -22,6 +22,8 @@ namespace FirstDraft.Configuration
 
             WorkerSkillRegistry.NormalizeConfiguredSkills(applicationData.Skills);
 
+            WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(applicationData.EnabledTaskTypes);
+
             if (applicationData.MaxConcurrentTasks < 1 || applicationData.MaxConcurrentTasks > 8) throw new Exception("MaxConcurrentTasks must be between 1 and 8");
         }
 

@@ -4,12 +4,14 @@ import type { CommandMode, GitRepositorySuggestion } from "../../types/api";
 
 type Props = {
   disabled: boolean;
+  disabledReason?: string;
   supportedSkills: string[];
+  enabledTaskTypes?: CommandMode[];
   gitRepositorySuggestions?: GitRepositorySuggestion[];
   onSubmit(command: string, commandMode: CommandMode): Promise<void>;
 };
 
-export function QuickCommandPanel({ disabled, supportedSkills, gitRepositorySuggestions = [], onSubmit }: Props) {
+export function QuickCommandPanel({ disabled, disabledReason, supportedSkills, enabledTaskTypes, gitRepositorySuggestions = [], onSubmit }: Props) {
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={2}>
@@ -19,12 +21,13 @@ export function QuickCommandPanel({ disabled, supportedSkills, gitRepositorySugg
         <CommandComposer
           disabled={disabled}
           supportedSkills={supportedSkills}
+          enabledTaskTypes={enabledTaskTypes}
           gitRepositorySuggestions={gitRepositorySuggestions}
           onSubmit={onSubmit}
         />
         {disabled && (
           <Typography color="text.secondary">
-            Commands are disabled while the client is offline.
+            {disabledReason ?? "Commands are disabled."}
           </Typography>
         )}
       </Stack>
