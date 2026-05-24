@@ -105,6 +105,96 @@ async function testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWork
   assert.equal(db.calls.length, 2);
 }
 
+class DispatchableQueueDbClient implements DbClient {
+  public calls: QueryCall[] = [];
+
+  public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
+    this.calls.push({ sql, parameters });
+
+    assert.match(sql, /inner join client_workers claiming_worker/);
+    assert.match(sql, /claiming_worker\.worker_id = \$1/);
+    assert.match(sql, /inner join api_keys claiming_api_key/);
+    assert.match(sql, /claiming_api_key\.id = claiming_worker\.api_key_id/);
+    assert.match(sql, /commands\.user_id = claiming_api_key\.user_id/);
+    assert.match(sql, /claiming_api_key\.revoked_at is null/);
+    assert.match(sql, /commands\.worker_id = \$1 or commands\.worker_id is null/);
+    assert.deepEqual(parameters, ["worker-1", true]);
+
+    return {
+      rows: [
+        commandRow("owned-unassigned", "2026-05-24T09:00:00.000Z", {
+          status: "queued",
+          workerId: null,
+          userId: "user-1"
+        })
+      ],
+      rowCount: 1
+    };
+  }
+}
+
+async function testGetDispatchableQueuedCommandsScopesUnassignedCommandsToApiKeyOwner(): Promise<void> {
+  const db = new DispatchableQueueDbClient();
+  const store = new CommandStore(db);
+
+  const result = await store.getDispatchableQueuedCommands("worker-1", ["git"]);
+
+  assert.deepEqual(result.map((command) => command.transactionId), ["owned-unassigned"]);
+  assert.equal(result[0].workerId, undefined);
+  assert.equal(db.calls.length, 1);
+}
+
+class ClaimCommandDbClient implements DbClient {
+  public calls: QueryCall[] = [];
+
+  public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
+    this.calls.push({ sql, parameters });
+
+    assert.match(sql, /update client_commands/);
+    assert.match(sql, /from client_workers claiming_worker/);
+    assert.match(sql, /inner join api_keys claiming_api_key/);
+    assert.match(sql, /claiming_api_key\.id = claiming_worker\.api_key_id/);
+    assert.match(sql, /where client_commands\.transaction_id = \$1/);
+    assert.match(sql, /claiming_worker\.worker_id = \$2/);
+    assert.match(sql, /client_commands\.user_id = claiming_api_key\.user_id/);
+    assert.match(sql, /claiming_api_key\.revoked_at is null/);
+    assert.match(sql, /client_commands\.status = 'queued'/);
+    assert.match(sql, /client_commands\.worker_id is null or client_commands\.worker_id = \$2/);
+    assert.match(sql, /returning client_commands\.transaction_id/);
+    assert.match(sql, /client_commands\.user_id/);
+    assert.deepEqual(parameters, ["owned-unassigned", "worker-1"]);
+
+    return {
+      rows: [
+        commandRow("owned-unassigned", "2026-05-24T09:00:00.000Z", {
+          status: "in_progress",
+          workerId: "worker-1"
+        })
+      ],
+      rowCount: 1
+    };
+  }
+}
+
+async function testMarkWorkerCommandInProgressScopesClaimToApiKeyOwner(): Promise<void> {
+  const db = new ClaimCommandDbClient();
+  const store = new CommandStore(db);
+
+  const result = await store.markWorkerCommandInProgress({
+    transactionId: "owned-unassigned",
+    userId: "user-1",
+    command: "echo hello",
+    commandMode: "shell",
+    status: "queued",
+    createdAt: "2026-05-24T09:00:00.000Z"
+  }, "worker-1");
+
+  assert.equal(result?.transactionId, "owned-unassigned");
+  assert.equal(result?.workerId, "worker-1");
+  assert.equal(result?.status, "in_progress");
+  assert.equal(db.calls.length, 1);
+}
+
 function commandRow(
   transactionId: string,
   createdAt: string,
@@ -147,5 +237,7 @@ function commandRow(
 
 await testListWorkerCommandsPaginatesAndCounts();
 await testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWorker();
+await testGetDispatchableQueuedCommandsScopesUnassignedCommandsToApiKeyOwner();
+await testMarkWorkerCommandInProgressScopesClaimToApiKeyOwner();
 
 console.log("command store tests passed");
