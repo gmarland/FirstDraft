@@ -20,3 +20,30 @@ pre {
   font-size: 12px;
   line-height: 1.6;
 }
+
+.command-output-wrapper {
+  position: relative;
+}
+
+.command-output-block {
+  padding-right: 48px;
+  padding-bottom: 48px;
+}
+
+.command-output-fullscreen-button {
+  position: absolute !important;
+  right: 8px;
+  bottom: 8px;
+  border: 1px solid rgba(231, 239, 242, 0.2) !important;
+  background: rgba(15, 27, 32, 0.88) !important;
+  color: #e7eff2 !important;
+}
+
+.command-output-fullscreen-button:hover {
+  background: rgba(35, 54, 62, 0.96) !important;
+}
+
+.command-output-fullscreen-block {
+  height: calc(100vh - 112px);
+  max-height: none;
+}

@@ -3,17 +3,24 @@ import {
   Alert,
   Box,
   Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Divider,
+  IconButton,
   Paper,
   Stack,
   Tab as MuiTab,
   Tabs,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import CancelIcon from "@mui/icons-material/Cancel";
+import CloseIcon from "@mui/icons-material/Close";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import DescriptionIcon from "@mui/icons-material/Description";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import InfoIcon from "@mui/icons-material/Info";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -37,6 +44,7 @@ export function CommandDetailPanel({ workerId, command, onCommandChanged }: Prop
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [outputFullscreenOpen, setOutputFullscreenOpen] = useState(false);
 
   const loadDetail = useCallback(async () => {
     if (!token || !command || tab === "summary") return;
@@ -78,6 +86,7 @@ export function CommandDetailPanel({ workerId, command, onCommandChanged }: Prop
     setResponses(null);
     setOutput("");
     setError(null);
+    setOutputFullscreenOpen(false);
   }, [command?.transactionId]);
 
   useEffect(() => {
@@ -112,6 +121,8 @@ export function CommandDetailPanel({ workerId, command, onCommandChanged }: Prop
       </Paper>
     );
   }
+
+  const outputText = output || "No output stored yet.";
 
   return (
     <Paper variant="outlined" sx={panelSx}>
@@ -199,13 +210,62 @@ export function CommandDetailPanel({ workerId, command, onCommandChanged }: Prop
             )}
             {error && <Alert severity="error">{error}</Alert>}
             {!loading && !error && tab === "output" && (
-              <pre className="code-block">
-                {output || "No output stored yet."}
-              </pre>
+              <Box className="command-output-wrapper">
+                <pre className="code-block command-output-block">
+                  {outputText}
+                </pre>
+                <Tooltip title="Open output fullscreen">
+                  <IconButton
+                    aria-label="Open output fullscreen"
+                    className="command-output-fullscreen-button"
+                    size="small"
+                    onClick={() => setOutputFullscreenOpen(true)}
+                  >
+                    <FullscreenIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             )}
           </Stack>
         )}
       </Stack>
+      <Dialog
+        fullScreen
+        open={outputFullscreenOpen}
+        onClose={() => setOutputFullscreenOpen(false)}
+      >
+        <DialogTitle
+          sx={{
+            alignItems: "center",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 2,
+          }}
+        >
+          <Box>
+            <Typography variant="caption" color="text.secondary">
+              Command output
+            </Typography>
+            <Typography sx={{ fontWeight: 800 }}>
+              {shortId(command.transactionId)}
+            </Typography>
+          </Box>
+          <Tooltip title="Close fullscreen output">
+            <IconButton
+              aria-label="Close fullscreen output"
+              edge="end"
+              onClick={() => setOutputFullscreenOpen(false)}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Tooltip>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, pt: 0 }}>
+          <pre className="code-block command-output-fullscreen-block">
+            {outputText}
+          </pre>
+        </DialogContent>
+      </Dialog>
     </Paper>
   );
 }
