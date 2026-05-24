@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import {
+  AzureCommandOutputStorage,
   BufferedCommandOutputStorage,
   createCommandOutputStorageFromEnv,
   GcsCommandOutputStorage,
@@ -92,8 +93,28 @@ async function testFactorySelectsGcsAliases(): Promise<void> {
   });
 }
 
+async function testFactorySelectsAzureAliases(): Promise<void> {
+  await withEnv({
+    COMMAND_OUTPUT_BUCKET: "container",
+    COMMAND_OUTPUT_STORAGE_PROVIDER: "azure",
+    AZURE_STORAGE_ACCOUNT_NAME: "account",
+    AZURE_STORAGE_ACCOUNT_KEY: "a2V5"
+  }, () => {
+    assert.ok(createCommandOutputStorageFromEnv() instanceof AzureCommandOutputStorage);
+  });
+
+  await withEnv({
+    COMMAND_OUTPUT_BUCKET: "container",
+    COMMAND_OUTPUT_STORAGE_PROVIDER: "az",
+    AZURE_STORAGE_ACCOUNT_NAME: "account",
+    AZURE_STORAGE_ACCOUNT_KEY: "a2V5"
+  }, () => {
+    assert.ok(createCommandOutputStorageFromEnv() instanceof AzureCommandOutputStorage);
+  });
+}
+
 async function testFactoryRejectsUnsupportedProvider(): Promise<void> {
-  await withEnv({ COMMAND_OUTPUT_BUCKET: "bucket", COMMAND_OUTPUT_STORAGE_PROVIDER: "azure" }, () => {
+  await withEnv({ COMMAND_OUTPUT_BUCKET: "bucket", COMMAND_OUTPUT_STORAGE_PROVIDER: "bogus" }, () => {
     assert.throws(
       () => createCommandOutputStorageFromEnv(),
       /Unsupported COMMAND_OUTPUT_STORAGE_PROVIDER/
@@ -167,6 +188,7 @@ await testFactoryReturnsUndefinedWithoutBucket();
 await testFactoryDefaultsToS3();
 await testFactorySelectsS3Aliases();
 await testFactorySelectsGcsAliases();
+await testFactorySelectsAzureAliases();
 await testFactoryRejectsUnsupportedProvider();
 await testBufferedStorageUploadsNdjsonAndIgnoresDuplicates();
 

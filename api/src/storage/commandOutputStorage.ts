@@ -5,6 +5,7 @@ import path from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-blob";
 import { Storage } from "@google-cloud/storage";
 
 export type CommandOutputChunkInput = {
@@ -43,14 +44,24 @@ type CommandOutputState = {
   pendingWrite: Promise<void>;
 };
 
-export type CommandOutputStorageProvider = "s3" | "gcs";
+export type CommandOutputStorageProvider = "s3" | "gcs" | "azure";
 
 export function createCommandOutputStorageFromEnv(): CommandOutputStorage | undefined {
   const bucket = process.env.COMMAND_OUTPUT_BUCKET;
   if (!bucket) return undefined;
 
   const provider = getCommandOutputStorageProviderFromEnv();
-  
+
+  if (provider === "azure") {
+    return new AzureCommandOutputStorage({
+      container: bucket,
+      prefix: process.env.COMMAND_OUTPUT_PREFIX,
+      connectionString: process.env.AZURE_STORAGE_CONNECTION_STRING,
+      accountName: process.env.AZURE_STORAGE_ACCOUNT_NAME,
+      accountKey: process.env.AZURE_STORAGE_ACCOUNT_KEY
+    });
+  }
+
   if (provider === "gcs") {
     return new GcsCommandOutputStorage({
       bucket,
@@ -80,7 +91,8 @@ export function parseStorageProvider(value: string | undefined): CommandOutputSt
   const normalized = (value ?? "s3").trim().toLowerCase();
   if (normalized === "s3" || normalized === "aws") return "s3";
   if (normalized === "gcs" || normalized === "google") return "gcs";
-  throw new Error("Unsupported COMMAND_OUTPUT_STORAGE_PROVIDER. Expected one of: s3, aws, gcs, google");
+  if (normalized === "azure" || normalized === "az") return "azure";
+  throw new Error("Unsupported COMMAND_OUTPUT_STORAGE_PROVIDER. Expected one of: s3, aws, gcs, google, azure, az");
 }
 
 export abstract class BufferedCommandOutputStorage implements CommandOutputStorage {
@@ -231,6 +243,64 @@ export class GcsCommandOutputStorage extends BufferedCommandOutputStorage {
       body: file.createReadStream(),
       contentType: typeof metadata.contentType === "string" ? metadata.contentType : undefined
     };
+  }
+}
+
+export class AzureCommandOutputStorage extends BufferedCommandOutputStorage {
+  private serviceClient?: BlobServiceClient;
+  private readonly containerClient: ReturnType<BlobServiceClient["getContainerClient"]>;
+
+  public constructor(private readonly options: {
+    container: string;
+    prefix?: string;
+    connectionString?: string;
+    accountName?: string;
+    accountKey?: string;
+    serviceClient?: BlobServiceClient;
+  }) {
+    super({ prefix: options.prefix });
+    this.serviceClient = options.serviceClient;
+    this.containerClient = this.getServiceClient().getContainerClient(options.container);
+  }
+
+  protected async uploadFile(objectKey: string, filePath: string): Promise<void> {
+    const blob = this.containerClient.getBlockBlobClient(objectKey);
+    await blob.uploadFile(filePath, {
+      blobHTTPHeaders: {
+        blobContentType: "application/x-ndjson"
+      }
+    });
+  }
+
+  public async getOutput(objectKey: string): Promise<StoredCommandOutput> {
+    const blob = this.containerClient.getBlockBlobClient(objectKey);
+    const result = await blob.download();
+
+    if (!result.readableStreamBody || !(result.readableStreamBody instanceof Readable)) {
+      throw new Error("Azure blob body is not readable");
+    }
+
+    return {
+      body: result.readableStreamBody,
+      contentType: result.contentType
+    };
+  }
+
+  private getServiceClient(): BlobServiceClient {
+    if (this.serviceClient) return this.serviceClient;
+
+    if (this.options.connectionString) {
+      this.serviceClient = BlobServiceClient.fromConnectionString(this.options.connectionString);
+      return this.serviceClient;
+    }
+
+    if (this.options.accountName && this.options.accountKey) {
+      const credential = new StorageSharedKeyCredential(this.options.accountName, this.options.accountKey);
+      this.serviceClient = new BlobServiceClient(`https://${this.options.accountName}.blob.core.windows.net`, credential);
+      return this.serviceClient;
+    }
+
+    throw new Error("Azure command output storage requires AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_NAME and AZURE_STORAGE_ACCOUNT_KEY");
   }
 }
 
