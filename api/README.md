@@ -101,7 +101,6 @@ Common local settings:
 
 ```bash
 PORT=5080
-REDIS_URL=redis://localhost:6379
 COMMAND_OUTPUT_BUCKET=firstdraft-command-output
 COMMAND_OUTPUT_PREFIX=dev/
 S3_ENDPOINT_URL=http://localhost:9000

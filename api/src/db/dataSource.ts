@@ -7,6 +7,7 @@ import { DropRepositoryBranches1710000000002 } from "./migrations/1710000000002-
 import { JiraIntakeEvents1710000000003 } from "./migrations/1710000000003-JiraIntakeEvents.js";
 import { GeneralizeIntakeEvents1710000000004 } from "./migrations/1710000000004-GeneralizeIntakeEvents.js";
 import { AllowRepeatedIntegrationIntakeEvents1710000000005 } from "./migrations/1710000000005-AllowRepeatedIntegrationIntakeEvents.js";
+import { WorkerRuntimeState1710000000006 } from "./migrations/1710000000006-WorkerRuntimeState.js";
 
 export function createDataSource(databaseUrl: string): DataSource {
   return new DataSource({
@@ -19,7 +20,8 @@ export function createDataSource(databaseUrl: string): DataSource {
       DropRepositoryBranches1710000000002,
       JiraIntakeEvents1710000000003,
       GeneralizeIntakeEvents1710000000004,
-      AllowRepeatedIntegrationIntakeEvents1710000000005
+      AllowRepeatedIntegrationIntakeEvents1710000000005,
+      WorkerRuntimeState1710000000006
     ],
     synchronize: false,
     migrationsRun: false
