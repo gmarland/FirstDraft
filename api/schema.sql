@@ -57,7 +57,10 @@ create table if not exists client_workers (
   last_connection_id text,
   paths text[] not null default '{}',
   skills text[] not null default '{}',
-  max_concurrent_tasks integer not null default 1
+  max_concurrent_tasks integer not null default 1,
+  state text not null default 'stopped',
+  state_updated_at timestamptz,
+  stopped_at timestamptz
 );
 
 create index if not exists client_workers_last_seen_idx

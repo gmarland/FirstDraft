@@ -27,7 +27,7 @@ Gitflow commands require the worker to advertise the `git` skill.
 
 ## Storage
 
-Users, API key pairs, worker records, and command records are stored in Postgres. Worker runtime state is stored in Redis.
+Users, API key pairs, worker records, worker runtime state, and command records are stored in Postgres.
 
 Stored command output is written as NDJSON at `workers/<workerId>/commands/<transactionId>/output.ndjson`, optionally prefixed by `COMMAND_OUTPUT_PREFIX`.
 
@@ -44,7 +44,6 @@ Common optional settings:
 
 ```bash
 PORT=5080
-REDIS_URL=redis://localhost:6379
 COMMAND_OUTPUT_BUCKET=firstdraft-command-output
 COMMAND_OUTPUT_PREFIX=dev/
 ```

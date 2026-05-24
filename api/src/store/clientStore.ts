@@ -1,7 +1,7 @@
 import { WorkerRegistration, Command, CommandMode } from "../types.js";
 import { CommandStore } from "./commands/commandStore.js";
 import { WorkerRecord, WorkerRecordStore } from "./workers/workerRecordStore.js";
-import { getActiveTransactionIds, normalizeMaxConcurrentTasks } from "../workers/workerState.js";
+import { normalizeMaxConcurrentTasks } from "../workers/workerState.js";
 
 export type RegisterWorkerInput = {
   workerId: string;
@@ -54,116 +54,50 @@ export type WorkerStore = {
   failStuckWorkerCommands(timeoutMinutes: number): Promise<Command[]>;
 };
 
-type RedisStoreClient = {
-  get(key: string): Promise<string | null>;
-  set(
-    key: string,
-    value: string,
-    options?: { NX?: boolean; EX?: number }
-  ): Promise<unknown>;
-  del(key: string): Promise<unknown>;
-  sAdd(key: string, member: string): Promise<unknown>;
-  sMembers(key: string): Promise<string[]>;
-};
-
 export function createWorkerStore(
-  redis: RedisStoreClient,
   commands: CommandStore,
   workers: WorkerRecordStore
 ): WorkerStore {
   return {
     async listWorkers(): Promise<WorkerRegistration[]> {
       const records = await workers.listWorkers();
-      const clients = await Promise.all(records.map(async (record) => mergeWorkerState(record, await getRuntimeWorker(redis, record.workerId))));
+      const inProgressCommands = await commands.getInProgressWorkerCommandsByWorkerIds(records.map((record) => record.workerId));
 
-      return clients;
+      return records.map((record) => mergeWorkerState(record, inProgressCommands.get(record.workerId) ?? []));
     },
 
     async listWorkersForUser(userId: string): Promise<WorkerRegistration[]> {
       const records = await workers.listWorkersForUser(userId);
-      const clients = await Promise.all(records.map(async (record) => mergeWorkerState(record, await getRuntimeWorker(redis, record.workerId))));
+      const inProgressCommands = await commands.getInProgressWorkerCommandsByWorkerIds(records.map((record) => record.workerId));
 
-      return clients;
+      return records.map((record) => mergeWorkerState(record, inProgressCommands.get(record.workerId) ?? []));
     },
 
     async getWorker(workerId: string): Promise<WorkerRegistration | undefined> {
-      const [record, runtime] = await Promise.all([
-        workers.getWorker(workerId),
-        getRuntimeWorker(redis, workerId)
-      ]);
+      const record = await workers.getWorker(workerId);
+      if (!record) return undefined;
 
-      if (record) return mergeWorkerState(record, runtime);
-      return runtime;
+      return mergeWorkerState(record, await commands.getInProgressWorkerCommands(workerId));
     },
 
     async getWorkerForUser(userId: string, workerId: string): Promise<WorkerRegistration | undefined> {
       const record = await workers.getWorkerForUser(userId, workerId);
       if (!record) return undefined;
 
-      return mergeWorkerState(record, await getRuntimeWorker(redis, workerId));
+      return mergeWorkerState(record, await commands.getInProgressWorkerCommands(workerId));
     },
 
     async registerWorker(input: RegisterWorkerInput): Promise<WorkerRegistration> {
-      const lockKey = workerRegistrationLockKey(input.workerId);
-      const lockValue = `${input.connectionId}:${Date.now()}:${Math.random()}`;
-      const lockAcquired = await redis.set(lockKey, lockValue, { NX: true, EX: 10 });
-      if (!lockAcquired) {
-        throw new Error("worker id is already registering");
-      }
+      const record = await workers.upsertWorkerRegistration(input);
+      const inProgressCommands = await commands.getInProgressWorkerCommands(input.workerId);
+      const state = inProgressCommands.length > 0 ? "running_command" : "started";
+      await workers.refreshWorkerActivity(input.workerId, state);
 
-      const now = new Date().toISOString();
-      try {
-        const existing = await getRuntimeWorker(redis, input.workerId);
-        if (existing && existing.connectionId !== input.connectionId && existing.state !== "stopped") {
-          throw new Error("worker id is already registered");
-        }
-
-        const record = await workers.upsertWorkerRegistration(input);
-        const existingActiveTransactionIds = getActiveTransactionIds(existing);
-        const inProgressCommands = existingActiveTransactionIds.length > 0
-          ? (await Promise.all(existingActiveTransactionIds.map((transactionId) => commands.getWorkerCommand(transactionId))))
-            .filter((command): command is Command => command?.status === "in_progress")
-          : await commands.getInProgressWorkerCommands(input.workerId);
-        const activeTransactionIds = inProgressCommands.map((command) => command.transactionId);
-        const client: WorkerRegistration = {
-          workerId: input.workerId,
-          apiKeyId: record.apiKeyId,
-          connectionId: input.connectionId,
-          paths: input.paths,
-          skills: input.skills,
-          state: activeTransactionIds.length > 0 ? "running_command" : "started",
-          activeTransactionIds,
-          activeTaskCount: activeTransactionIds.length,
-          maxConcurrentTasks: normalizeMaxConcurrentTasks(input.maxConcurrentTasks),
-          ...(activeTransactionIds[0] ? { currentTransactionId: activeTransactionIds[0] } : {}),
-          registeredAt: record.firstRegisteredAt,
-          firstRegisteredAt: record.firstRegisteredAt,
-          lastRegisteredAt: record.lastRegisteredAt,
-          lastSeenAt: now,
-          stateUpdatedAt: now
-        };
-
-        await redis.sAdd(workersKey(), input.workerId);
-        await setJson(redis, workerKey(input.workerId), client);
-
-        return client;
-      } finally {
-        if ((await redis.get(lockKey)) === lockValue) {
-          await redis.del(lockKey);
-        }
-      }
+      return mergeWorkerState({ ...record, state }, inProgressCommands);
     },
 
     async markWorkerStopped(workerId: string, connectionId: string): Promise<void> {
-      const client = await getRuntimeWorker(redis, workerId);
-      if (!client) return;
-      if (client.connectionId !== connectionId) return;
-
-      const now = new Date().toISOString();
-      client.state = "stopped";
-      client.stoppedAt = now;
-      client.stateUpdatedAt = now;
-      await setJson(redis, workerKey(workerId), client);
+      await workers.markWorkerStopped(workerId, connectionId);
     },
 
     async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "ai", executionCommand?: string): Promise<Command> {
@@ -187,12 +121,10 @@ export function createWorkerStore(
     },
 
     async markWorkerCommandInProgress(command: Command): Promise<Command | undefined> {
-      const now = new Date().toISOString();
-
       const claimed = await commands.markWorkerCommandInProgress(command);
       if (!claimed) return undefined;
 
-      await refreshRuntimeWorkerActivity(redis, commands, command.workerId, now);
+      await refreshWorkerActivity(commands, workers, command.workerId);
 
       return claimed;
     },
@@ -202,19 +134,17 @@ export function createWorkerStore(
     },
 
     async completeWorkerCommand(input: CompleteCommandInput): Promise<Command> {
-      const now = new Date().toISOString();
       const command = await commands.completeWorkerCommand(input);
 
-      await refreshRuntimeWorkerActivity(redis, commands, command.workerId, now);
+      await refreshWorkerActivity(commands, workers, command.workerId);
 
       return command;
     },
 
     async cancelWorkerCommand(input: CancelCommandInput): Promise<Command> {
-      const now = new Date().toISOString();
       const command = await commands.cancelWorkerCommand(input);
 
-      await refreshRuntimeWorkerActivity(redis, commands, command.workerId, now);
+      await refreshWorkerActivity(commands, workers, command.workerId);
 
       return command;
     },
@@ -223,106 +153,51 @@ export function createWorkerStore(
       const failedCommands = await commands.failStuckWorkerCommands(timeoutMinutes);
       if (failedCommands.length === 0) return failedCommands;
 
-      const failedTransactionIds = new Set(failedCommands.map((command) => command.transactionId));
-      const now = new Date().toISOString();
-      const workerIds = await redis.sMembers(workersKey());
-
-      await Promise.all(workerIds.map(async (workerId) => {
-        const client = await getRuntimeWorker(redis, workerId);
-        if (!client) return;
-        const activeTransactionIds = getActiveTransactionIds(client);
-        if (!activeTransactionIds.some((transactionId) => failedTransactionIds.has(transactionId))) return;
-
-        await refreshRuntimeWorkerActivity(redis, commands, workerId, now);
-      }));
+      const workerIds = [...new Set(failedCommands.map((command) => command.workerId))];
+      await Promise.all(workerIds.map((workerId) => refreshWorkerActivity(commands, workers, workerId)));
 
       return failedCommands;
     }
   };
 }
 
-async function getRuntimeWorker(
-  redis: RedisStoreClient,
-  workerId: string
-): Promise<WorkerRegistration | undefined> {
-  return getJson<WorkerRegistration>(redis, workerKey(workerId));
-}
-
-async function getJson<T>(redis: RedisStoreClient, key: string): Promise<T | undefined> {
-  const value = await redis.get(key);
-  return value ? (JSON.parse(value) as T) : undefined;
-}
-
-function setJson(redis: RedisStoreClient, key: string, value: unknown): Promise<unknown> {
-  return redis.set(key, JSON.stringify(value));
-}
-
-function workersKey(): string {
-  return "firstdraft:workers";
-}
-
-function workerKey(workerId: string): string {
-  return `firstdraft:worker:${workerId}`;
-}
-
-function workerRegistrationLockKey(workerId: string): string {
-  return `firstdraft:worker:${workerId}:registration-lock`;
-}
-
-async function refreshRuntimeWorkerActivity(
-  redis: RedisStoreClient,
+async function refreshWorkerActivity(
   commands: CommandStore,
-  workerId: string,
-  now: string
+  workers: WorkerRecordStore,
+  workerId: string
 ): Promise<void> {
-  const client = await getRuntimeWorker(redis, workerId);
-  if (!client) return;
-
   const inProgressCommands = await commands.getInProgressWorkerCommands(workerId);
-  const activeTransactionIds = inProgressCommands.map((command) => command.transactionId);
-  client.activeTransactionIds = activeTransactionIds;
-  client.activeTaskCount = activeTransactionIds.length;
-  client.currentTransactionId = activeTransactionIds[0];
-  if (!client.currentTransactionId) delete client.currentTransactionId;
-  delete client.stoppedAt;
-  client.state = activeTransactionIds.length > 0 ? "running_command" : "started";
-  client.lastSeenAt = now;
-  client.stateUpdatedAt = now;
-  await setJson(redis, workerKey(workerId), client);
+  await workers.refreshWorkerActivity(workerId, inProgressCommands.length > 0 ? "running_command" : "started");
 }
 
-function mergeWorkerState(record: WorkerRecord, runtime?: WorkerRegistration): WorkerRegistration {
-  if (runtime) {
-    return {
-      ...runtime,
-      apiKeyId: record.apiKeyId,
-      registeredAt: record.firstRegisteredAt,
-      firstRegisteredAt: record.firstRegisteredAt,
-      lastRegisteredAt: record.lastRegisteredAt,
-      paths: runtime.paths.length > 0 ? runtime.paths : record.paths,
-      skills: (runtime.skills ?? []).length > 0 ? runtime.skills : record.skills,
-      activeTransactionIds: getActiveTransactionIds(runtime),
-      activeTaskCount: getActiveTransactionIds(runtime).length,
-      maxConcurrentTasks: normalizeMaxConcurrentTasks(runtime.maxConcurrentTasks ?? record.maxConcurrentTasks)
-    };
-  }
-
+export function mergeWorkerState(record: WorkerRecord, inProgressCommands: Command[] = []): WorkerRegistration {
+  const activeTransactionIds = record.state === "stopped"
+    ? []
+    : inProgressCommands.map((command) => command.transactionId);
+  const state = record.state === "stopped"
+    ? "stopped"
+    : activeTransactionIds.length > 0
+      ? "running_command"
+      : "started";
   const lastSeenAt = record.lastSeenAt ?? record.lastRegisteredAt;
+  const stateUpdatedAt = record.stateUpdatedAt ?? lastSeenAt;
+
   return {
     workerId: record.workerId,
     apiKeyId: record.apiKeyId,
     connectionId: record.lastConnectionId ?? "",
     paths: record.paths,
     skills: record.skills,
-    state: "stopped",
-    activeTransactionIds: [],
-    activeTaskCount: 0,
+    state,
+    activeTransactionIds,
+    activeTaskCount: activeTransactionIds.length,
     maxConcurrentTasks: normalizeMaxConcurrentTasks(record.maxConcurrentTasks),
+    ...(activeTransactionIds[0] ? { currentTransactionId: activeTransactionIds[0] } : {}),
     registeredAt: record.firstRegisteredAt,
     firstRegisteredAt: record.firstRegisteredAt,
     lastRegisteredAt: record.lastRegisteredAt,
     lastSeenAt,
-    stateUpdatedAt: lastSeenAt,
-    stoppedAt: lastSeenAt
+    stateUpdatedAt,
+    ...(state === "stopped" ? { stoppedAt: record.stoppedAt ?? stateUpdatedAt } : {})
   };
 }

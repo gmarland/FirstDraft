@@ -27,7 +27,7 @@ This repository contains the full FirstDraft stack:
 | `api/` | Express API, authentication, worker coordination, SignalR-compatible hub, OpenAPI docs, persistence, and integrations |
 | `app/` | React/Vite console for users, workers, repositories, integrations, API keys, and command history |
 | `client/` | .NET worker that connects to the API, advertises skills, and executes shell, AI, and gitflow commands |
-| `docker-compose.yml` | Local Postgres, Redis, and MinIO services for development |
+| `docker-compose.yml` | Local Postgres and MinIO services for development |
 
 ## Architecture
 
@@ -36,7 +36,7 @@ Browser console / Jira / API clients
             |
             v
       FirstDraft API
-   Express + Postgres + Redis
+      Express + Postgres
             |
             v
       WorkerHub connection
@@ -49,7 +49,7 @@ Browser console / Jira / API clients
  local repositories and toolchains
 ```
 
-Workers authenticate with API credentials, maintain a live hub connection, and execute commands on the machines where they are installed. The API records command metadata in Postgres, tracks live state in Redis, and writes command output as NDJSON so runs can be audited after the fact.
+Workers authenticate with API credentials, maintain a live hub connection, and execute commands on the machines where they are installed. The API records command metadata and worker runtime state in Postgres, and writes command output as NDJSON so runs can be audited after the fact.
 
 ## Remote Worker Fleet
 
@@ -95,7 +95,7 @@ When intake runs, FirstDraft finds eligible issues and queues repository-backed 
 docker compose up -d
 ```
 
-This starts Postgres, Redis, and MinIO. MinIO creates a local `firstdraft-command-output` bucket for command output storage.
+This starts Postgres and MinIO. MinIO creates a local `firstdraft-command-output` bucket for command output storage.
 
 ### 2. Run the API
 
@@ -106,7 +106,6 @@ npm install
 cat > .env <<'EOF'
 DATABASE_URL=postgres://firstdraft:firstdraft@localhost:5432/firstdraft
 JWT_SECRET=replace-with-a-local-development-secret
-REDIS_URL=redis://localhost:6379
 PORT=5080
 COMMAND_OUTPUT_BUCKET=firstdraft-command-output
 COMMAND_OUTPUT_PREFIX=dev/
@@ -206,7 +205,6 @@ Important API environment variables:
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `JWT_SECRET` | Yes | Secret used to sign user JWTs |
-| `REDIS_URL` | No | Redis connection string, defaults to `redis://localhost:6379` |
 | `PORT` | No | API port, defaults to `5080` |
 | `COMMAND_OUTPUT_BUCKET` | No | S3-compatible bucket for command output |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |

@@ -1,6 +1,5 @@
 import "dotenv/config";
 import { createServer } from "http";
-import { createClient } from "redis";
 import { createApp } from "./server/app.js";
 import { createWorkerStore } from "./store/clientStore.js";
 import { createAppStore } from "./store/tenantStore.js";
@@ -28,19 +27,10 @@ import { JiraIntakeService } from "./integrations/jira/jiraIntakeService.js";
 import { IntegrationLifecycleService } from "./integrations/integrationLifecycleService.js";
 
 const port = Number(process.env.PORT ?? 5080);
-const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required");
 }
-
-const redis = createClient({ url: redisUrl });
-
-redis.on("error", (error) => {
-  console.error("redis error", error);
-});
-
-await redis.connect();
 
 const dataSource = createDataSource(databaseUrl);
 await dataSource.initialize();
@@ -54,7 +44,8 @@ const workerRecords = new WorkerRecordStore(db);
 const gitRepositories = new GitRepositoryStore(db);
 const jiraIntegrations = new JiraIntegrationStore(db, tenantCrypto);
 const integrationIntakeEvents = new IntegrationIntakeEventStore(db);
-const store = createWorkerStore(redis, commands, workerRecords);
+await workerRecords.markAllWorkersStopped();
+const store = createWorkerStore(commands, workerRecords);
 const tenants = createAppStore(db, tenantCrypto);
 const jwtConfig = createJwtConfigFromEnv();
 configurePassport(tenants, jwtConfig);
@@ -88,7 +79,6 @@ signalRHub.attach(server);
 server.listen(port, () => {
   console.log(`firstdraft api listening on http://localhost:${port}`);
   console.log(`signalr hub listening on http://localhost:${port}/WorkerHub`);
-  console.log(`redis connected at ${redisUrl}`);
   console.log("postgres connected");
   console.log(`command output storage ${outputStorage ? "enabled" : "disabled: set COMMAND_OUTPUT_BUCKET to enable S3 uploads"}`);
   console.log("tenant encryption settings loaded from postgres");
@@ -96,7 +86,6 @@ server.listen(port, () => {
 
 async function shutdown(): Promise<void> {
   server.close();
-  await redis.quit();
   await tenants.close();
 }
 
