@@ -2,6 +2,7 @@ import type {
   WorkerRegistration,
   Command,
   CommandMode,
+  PaginatedCommands,
   CreatedApiKey,
   LoginResponse,
   ApiKey,
@@ -151,9 +152,14 @@ export const api = {
     });
   },
 
-  listCommands(token: string, workerId: string) {
-    return request<Command[]>(
-      `/api/workers/${encodeURIComponent(workerId)}/commands`,
+  listCommands(token: string, workerId: string, pagination: { page: number; pageSize: number }) {
+    const params = new URLSearchParams({
+      page: String(pagination.page),
+      pageSize: String(pagination.pageSize),
+    });
+
+    return request<PaginatedCommands>(
+      `/api/workers/${encodeURIComponent(workerId)}/commands?${params.toString()}`,
       { token },
     );
   },

@@ -47,6 +47,13 @@ export type Command = {
   outputUpdatedAt?: string;
 };
 
+export type PaginatedCommands = {
+  commands: Command[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type ApiKey = {
   keyId: string;
   userId: string;

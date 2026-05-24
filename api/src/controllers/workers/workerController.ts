@@ -7,6 +7,10 @@ import { isTaskTypeEnabled } from "../../commandModes.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason, readWorkerEnabled } from "./workerRequests.js";
 import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from "./workerResponses.js";
 
+const DEFAULT_COMMAND_PAGE = 0;
+const DEFAULT_COMMAND_PAGE_SIZE = 10;
+const ALLOWED_COMMAND_PAGE_SIZES = [5, 10, 25, 50];
+
 type CommandDispatcher = {
   dispatchCommand(workerId: string, transactionId: string, options?: { allowDisabledWorker?: boolean }): Promise<void>;
   dispatchQueuedCommands?(workerId?: string): Promise<void>;
@@ -83,7 +87,7 @@ export class WorkerController {
         return res.status(404).json({ error: "worker is not registered" });
       }
 
-      res.json(await this.store.listWorkerCommands(client.workerId));
+      res.json(await this.store.listWorkerCommands(client.workerId, readCommandPagination(req.query)));
     } catch (error) {
       next(error);
     }
@@ -219,6 +223,23 @@ export class WorkerController {
     const command = await this.store.getWorkerCommand(transactionId);
     return command?.workerId === client.workerId ? command : undefined;
   }
+}
+
+function readCommandPagination(query: Record<string, unknown>): { page: number; pageSize: number } {
+  const page = readNonNegativeInteger(query.page, DEFAULT_COMMAND_PAGE);
+  const requestedPageSize = readNonNegativeInteger(query.pageSize, DEFAULT_COMMAND_PAGE_SIZE);
+  const pageSize = ALLOWED_COMMAND_PAGE_SIZES.includes(requestedPageSize)
+    ? requestedPageSize
+    : DEFAULT_COMMAND_PAGE_SIZE;
+
+  return { page, pageSize };
+}
+
+function readNonNegativeInteger(value: unknown, fallback: number): number {
+  if (typeof value !== "string" || value.trim() === "") return fallback;
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 export function createWorkerController(
