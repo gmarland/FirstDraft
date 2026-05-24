@@ -105,12 +105,10 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
 
       <WorkerPanelsGrid
         workerId={workerId}
-        commandDisabled={!state.data || !state.data.enabled || state.data.state === "stopped"}
+        commandDisabled={!state.data || state.data.state === "stopped"}
         commandDisabledReason={
           !state.data
             ? "Commands are disabled while the worker state loads."
-            : !state.data.enabled
-              ? "Commands are disabled while the worker is disabled."
             : state.data.state === "stopped"
               ? "Commands are disabled while the client is offline."
               : undefined

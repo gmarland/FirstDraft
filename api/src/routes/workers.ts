@@ -5,7 +5,7 @@ import { WorkerStore } from "../store/clientStore.js";
 import { GitRepositoryStore } from "../store/gitRepositories/gitRepositoryStore.js";
 
 type CommandDispatcher = {
-  dispatchCommand(workerId: string, transactionId: string): Promise<void>;
+  dispatchCommand(workerId: string, transactionId: string, options?: { allowDisabledWorker?: boolean }): Promise<void>;
   dispatchQueuedCommands?(workerId?: string): Promise<void>;
 };
 

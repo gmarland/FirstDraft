@@ -522,6 +522,44 @@ async function testDisabledWorkersDoNotClaimQueuedCommands(): Promise<void> {
   assert.equal(sent.length, 0);
 }
 
+async function testTargetedManualCommandsDispatchToDisabledWorkers(): Promise<void> {
+  const store = new FakeWorkerStore(2, []);
+  store.worker.enabled = false;
+  store.commands.push(
+    {
+      transactionId: "central-1",
+      userId: "user-1",
+      command: "central",
+      commandMode: "ai",
+      status: "queued",
+      createdAt: "2026-05-24T10:00:00.000Z"
+    },
+    {
+      transactionId: "manual-1",
+      userId: "user-1",
+      workerId: "worker-1",
+      command: "manual",
+      commandMode: "ai",
+      status: "queued",
+      createdAt: "2026-05-24T10:01:00.000Z"
+    }
+  );
+  const connection = createConnection();
+  const connections = new Map<string, SignalRConnection>([[connection.connectionId, connection]]);
+  const dispatcher = createCommandDispatcher(store, connections);
+  const sent = [] as SentInvocation[];
+  connection.socket.send = (payload: string) => {
+    sent.push(JSON.parse(payload.split("\x1e")[0]) as SentInvocation);
+  };
+
+  await dispatcher.dispatchCommand("worker-1", "manual-1", { allowDisabledWorker: true });
+
+  assert.equal(store.commands.find((command) => command.transactionId === "central-1")?.status, "queued");
+  assert.equal(store.commands.find((command) => command.transactionId === "manual-1")?.status, "in_progress");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].arguments[1], "manual-1");
+}
+
 async function testBackfillsAvailableSlotsAfterCompletionAndCancel(): Promise<void> {
   const store = new FakeWorkerStore(3, ["ai", "shell", "gitflow", "ai", "shell"]);
   const { hub, sent } = createHub(store);
@@ -708,6 +746,7 @@ await testNonLocalCentralTasksStillDispatchWhenNoLocalMatchExists();
 await testCentralQueueFillsCapacityAfterCompletion();
 await testWorkersWithoutGitSkillDoNotClaimGitflowTasks();
 await testDisabledWorkersDoNotClaimQueuedCommands();
+await testTargetedManualCommandsDispatchToDisabledWorkers();
 await testBackfillsAvailableSlotsAfterCompletionAndCancel();
 await testRegistrationRejectsMismatchedTokenAndRemapsConnection();
 await testRegistrationDefaultsTaskTypesForOlderClients();

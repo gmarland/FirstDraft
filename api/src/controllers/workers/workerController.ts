@@ -8,7 +8,7 @@ import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReas
 import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from "./workerResponses.js";
 
 type CommandDispatcher = {
-  dispatchCommand(workerId: string, transactionId: string): Promise<void>;
+  dispatchCommand(workerId: string, transactionId: string, options?: { allowDisabledWorker?: boolean }): Promise<void>;
   dispatchQueuedCommands?(workerId?: string): Promise<void>;
 };
 
@@ -122,9 +122,6 @@ export class WorkerController {
       if (!client) {
         return res.status(404).json({ error: "worker is not registered" });
       }
-      if (!client.enabled) {
-        return res.status(400).json({ error: "worker is disabled" });
-      }
 
       const { command, commandMode } = req.body as { command?: string; commandMode?: string };
       if (!command) {
@@ -159,7 +156,7 @@ export class WorkerController {
       }
 
       const queued = await this.store.createWorkerCommand(user.userId, client.workerId, command, parsedCommandMode);
-      await this.dispatcher.dispatchCommand(client.workerId, queued.transactionId);
+      await this.dispatcher.dispatchCommand(client.workerId, queued.transactionId, { allowDisabledWorker: true });
 
       res.status(202).json(queued);
     } catch (error) {
