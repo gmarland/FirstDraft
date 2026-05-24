@@ -34,6 +34,10 @@ export type Command = {
   commandMode: CommandMode;
   repositoryUrl?: string;
   normalizedRepositoryUrl?: string;
+  sourceProvider?: string;
+  sourceItemId?: string;
+  sourceItemKey?: string;
+  sourceItemUrl?: string;
   status: CommandStatus;
   createdAt: string;
   claimedAt?: string;

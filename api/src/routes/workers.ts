@@ -20,6 +20,7 @@ export function createWorkerRoutes(
 
   router.get("/", controller.listWorkers);
   router.post("/disable-all", controller.disableAllWorkers);
+  router.get("/task-queue", controller.listTaskQueue);
   router.patch("/:workerId", controller.updateWorker);
   router.get("/:workerId/state", controller.getWorkerState);
   router.get("/:workerId/commands", controller.listWorkerCommands);

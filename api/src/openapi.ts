@@ -162,6 +162,21 @@ export const openApiDocument = {
         }
       }
     },
+    "/api/workers/task-queue": {
+      get: {
+        tags: ["Workers"],
+        summary: "List active queued and in-progress tasks for the current user",
+        security: bearerSecurity(),
+        parameters: [
+          queryParam("page", "Zero-based page index", { type: "integer", minimum: 0, default: 0 }),
+          queryParam("pageSize", "Rows per page", { type: "integer", enum: [5, 10, 25, 50], default: 10 })
+        ],
+        responses: {
+          "200": jsonResponse("Task queue", ref("PaginatedCommands")),
+          "401": errorResponse()
+        }
+      }
+    },
     "/api/workers/{workerId}": {
       patch: {
         tags: ["Workers"],

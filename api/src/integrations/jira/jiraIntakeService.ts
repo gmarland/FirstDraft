@@ -214,6 +214,7 @@ export class JiraIntakeService {
       integrationId: integration.id,
       sourceItemId: issue.id,
       sourceItemKey: issue.key,
+      sourceItemUrl: buildIssueUrl(integration.siteUrl, issue.key),
       repositoryUrl,
       normalizedRepositoryUrl,
       metadata: {

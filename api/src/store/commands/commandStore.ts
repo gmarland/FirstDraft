@@ -189,6 +189,47 @@ export class CommandStore {
     };
   }
 
+  public async listTaskQueueForUser(userId: string, pagination: CommandPagination): Promise<PaginatedCommands> {
+    const offset = pagination.page * pagination.pageSize;
+    const [commandsResult, countResult] = await Promise.all([
+      this.pool.query(
+        `
+          select ${prefixedCommandColumns},
+            intake.provider as source_provider,
+            intake.source_item_id,
+            intake.source_item_key,
+            intake.source_item_url
+          from client_commands commands
+          left join integration_intake_events intake
+            on intake.transaction_id = commands.transaction_id
+          where commands.user_id = $1
+            and commands.status in ('queued', 'in_progress')
+          order by
+            case when commands.status = 'queued' then 0 else 1 end,
+            commands.created_at asc
+          limit $2 offset $3
+        `,
+        [userId, pagination.pageSize, offset]
+      ),
+      this.pool.query(
+        `
+          select count(*) as total
+          from client_commands
+          where user_id = $1
+            and status in ('queued', 'in_progress')
+        `,
+        [userId]
+      )
+    ]);
+
+    return {
+      commands: commandsResult.rows.map(mapCommand),
+      total: Number(countResult.rows[0]?.total ?? 0),
+      page: pagination.page,
+      pageSize: pagination.pageSize
+    };
+  }
+
   public async markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined> {
     const assignedWorkerId = workerId ?? command.workerId;
     if (!assignedWorkerId) return undefined;

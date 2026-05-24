@@ -173,6 +173,18 @@ export const api = {
     );
   },
 
+  listTaskQueue(token: string, pagination: { page: number; pageSize: number }) {
+    const params = new URLSearchParams({
+      page: String(pagination.page),
+      pageSize: String(pagination.pageSize),
+    });
+
+    return request<PaginatedCommands>(
+      `/api/workers/task-queue?${params.toString()}`,
+      { token },
+    );
+  },
+
   getGitflowSuggestions(token: string, workerId: string) {
     return request<GitflowSuggestions>(
       `/api/workers/${encodeURIComponent(workerId)}/gitflow-suggestions`,
