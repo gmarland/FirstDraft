@@ -1,5 +1,5 @@
-import { useCallback, useMemo } from "react";
-import { Alert, Button, Stack } from "@mui/material";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, Button, FormControlLabel, Stack, Switch } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -18,6 +18,8 @@ type Props = {
 
 export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
   const { token } = useAuth();
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [updatingEnabled, setUpdatingEnabled] = useState(false);
 
   const loadState = useCallback(
     () => api.getWorkerState(token!, workerId),
@@ -38,6 +40,25 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
       ),
     [commands.data],
   );
+
+  const updateEnabled = async (enabled: boolean) => {
+    if (!token || updatingEnabled) return;
+
+    setUpdatingEnabled(true);
+    setToggleError(null);
+    try {
+      await api.updateWorker(token, workerId, { enabled });
+      await Promise.all([state.refresh(), commands.refresh()]);
+    } catch (caught) {
+      setToggleError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to update worker enabled state",
+      );
+    } finally {
+      setUpdatingEnabled(false);
+    }
+  };
 
   return (
     <Stack spacing={2.75}>
@@ -61,22 +82,35 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
             >
               Refresh
             </Button>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={state.data?.enabled ?? true}
+                  onChange={(event) => void updateEnabled(event.target.checked)}
+                  disabled={!state.data || updatingEnabled}
+                />
+              }
+              label={state.data?.enabled === false ? "Disabled" : "Enabled"}
+              sx={{ ml: { sm: 0.5 } }}
+            />
           </Stack>
         }
       />
 
-      {(state.error || commands.error) && (
-        <Alert severity="error">{state.error || commands.error}</Alert>
+      {(state.error || commands.error || toggleError) && (
+        <Alert severity="error">{state.error || commands.error || toggleError}</Alert>
       )}
 
       <WorkerSummaryGrid state={state.data ?? undefined} />
 
       <WorkerPanelsGrid
         workerId={workerId}
-        commandDisabled={!state.data || state.data.state === "stopped"}
+        commandDisabled={!state.data || !state.data.enabled || state.data.state === "stopped"}
         commandDisabledReason={
           !state.data
             ? "Commands are disabled while the worker state loads."
+            : !state.data.enabled
+              ? "Commands are disabled while the worker is disabled."
             : state.data.state === "stopped"
               ? "Commands are disabled while the client is offline."
               : undefined

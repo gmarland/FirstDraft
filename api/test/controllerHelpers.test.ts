@@ -3,7 +3,7 @@ import { normalizeEnabledTaskTypes } from "../src/commandModes.js";
 import { validateUserInput } from "../src/controllers/auth/authValidation.js";
 import { validateConnectionInput, validateWorkflowInput } from "../src/controllers/integrations/integrationRequests.js";
 import { parseRepositoryInput, validateRepositoryInput } from "../src/controllers/repositories/repositoryRequests.js";
-import { getMissingSkills, parseCommandMode, parseGitflowPayload } from "../src/controllers/workers/workerRequests.js";
+import { getMissingSkills, parseCommandMode, parseGitflowPayload, readWorkerEnabled } from "../src/controllers/workers/workerRequests.js";
 
 function testAuthValidation(): void {
   assert.equal(validateUserInput("", "password123"), "email is required");
@@ -43,6 +43,9 @@ function testWorkerRequests(): void {
   assert.deepEqual(normalizeEnabledTaskTypes(undefined), ["ai", "shell", "gitflow"]);
   assert.deepEqual(normalizeEnabledTaskTypes("gitflow|ai|unknown|ai"), ["gitflow", "ai"]);
   assert.deepEqual(normalizeEnabledTaskTypes(["shell", "AI"]), ["shell", "ai"]);
+  assert.equal(readWorkerEnabled({ enabled: true }), true);
+  assert.equal(readWorkerEnabled({ enabled: false }), false);
+  assert.equal(readWorkerEnabled({ enabled: "false" }), undefined);
 }
 
 function testIntegrationRequests(): void {

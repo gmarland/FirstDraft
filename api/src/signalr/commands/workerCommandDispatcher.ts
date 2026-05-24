@@ -40,7 +40,7 @@ export class WorkerCommandDispatcher {
     await this.withWorkerDispatchLock(workerId, async () => {
       while (true) {
         const client = await this.store.getWorker(workerId);
-        if (!client || !canDispatchMoreCommands(client)) return;
+        if (!client || !client.enabled || !canDispatchMoreCommands(client)) return;
 
         const connection = this.connections.get(client.connectionId);
         if (!connection || connection.socket.readyState !== WebSocket.OPEN) return;
@@ -51,7 +51,7 @@ export class WorkerCommandDispatcher {
         let claimedCommand = false;
         for (const nextCommand of queuedCommands) {
           const latestClient = await this.store.getWorker(workerId);
-          if (!latestClient || !canDispatchMoreCommands(latestClient)) return;
+          if (!latestClient || !latestClient.enabled || !canDispatchMoreCommands(latestClient)) return;
 
           if (!isTaskTypeEnabled(latestClient.enabledTaskTypes, nextCommand.commandMode)) {
             await this.store.cancelWorkerCommand({

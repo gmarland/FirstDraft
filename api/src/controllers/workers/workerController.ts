@@ -4,7 +4,7 @@ import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { Command, User } from "../../types.js";
 import { isTaskTypeEnabled } from "../../commandModes.js";
-import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason } from "./workerRequests.js";
+import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason, readWorkerEnabled } from "./workerRequests.js";
 import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from "./workerResponses.js";
 
 type CommandDispatcher = {
@@ -35,6 +35,29 @@ export class WorkerController {
       const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
       if (!client) {
         return res.status(404).json({ error: "worker is not registered" });
+      }
+
+      res.json(toWorkerStateResponse(client));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public readonly updateWorker: RequestHandler = async (req, res, next) => {
+    try {
+      const user = req.user as User;
+      const enabled = readWorkerEnabled(req.body);
+      if (enabled === undefined) {
+        return res.status(400).json({ error: "enabled must be a boolean" });
+      }
+
+      const client = await this.store.setWorkerEnabledForUser(user.userId, req.params.workerId, enabled);
+      if (!client) {
+        return res.status(404).json({ error: "worker is not registered" });
+      }
+
+      if (enabled) {
+        await (this.dispatcher.dispatchQueuedCommands?.(client.workerId) ?? Promise.resolve());
       }
 
       res.json(toWorkerStateResponse(client));
@@ -89,6 +112,9 @@ export class WorkerController {
       const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
       if (!client) {
         return res.status(404).json({ error: "worker is not registered" });
+      }
+      if (!client.enabled) {
+        return res.status(400).json({ error: "worker is disabled" });
       }
 
       const { command, commandMode } = req.body as { command?: string; commandMode?: string };

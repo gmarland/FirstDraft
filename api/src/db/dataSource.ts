@@ -10,6 +10,7 @@ import { AllowRepeatedIntegrationIntakeEvents1710000000005 } from "./migrations/
 import { WorkerRuntimeState1710000000006 } from "./migrations/1710000000006-WorkerRuntimeState.js";
 import { WorkerTaskTypes1710000000007 } from "./migrations/1710000000007-WorkerTaskTypes.js";
 import { CentralCommandQueue1710000000007 } from "./migrations/1710000000007-CentralCommandQueue.js";
+import { ClientWorkerEnabled1710000000008 } from "./migrations/1710000000008-ClientWorkerEnabled.js";
 
 export function createDataSource(databaseUrl: string): DataSource {
   return new DataSource({
@@ -26,6 +27,7 @@ export function createDataSource(databaseUrl: string): DataSource {
       WorkerRuntimeState1710000000006,
       WorkerTaskTypes1710000000007,
       CentralCommandQueue1710000000007,
+      ClientWorkerEnabled1710000000008,
     ],
     synchronize: false,
     migrationsRun: false,

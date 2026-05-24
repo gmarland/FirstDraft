@@ -14,6 +14,7 @@ export type WorkerRecord = {
   lastConnectionId?: string;
   paths: string[];
   skills: string[];
+  enabled: boolean;
   enabledTaskTypes: CommandMode[];
   maxConcurrentTasks: number;
   state: ClientState;
@@ -157,6 +158,23 @@ export class WorkerRecordStore {
     );
   }
 
+  public async setWorkerEnabledForUser(userId: string, workerId: string, enabled: boolean): Promise<WorkerRecord | undefined> {
+    const result = await this.pool.query(
+      `
+        update client_workers
+        set enabled = $3
+        from api_keys
+        where api_keys.id = client_workers.api_key_id
+          and api_keys.user_id = $1
+          and client_workers.worker_id = $2
+        returning ${workerRecordColumns}
+      `,
+      [userId, workerId, enabled]
+    );
+
+    return result.rows[0] ? mapWorkerRecord(result.rows[0]) : undefined;
+  }
+
   public async refreshWorkerActivity(workerId: string, state: Exclude<ClientState, "stopped">): Promise<void> {
     await this.pool.query(
       `
@@ -182,6 +200,7 @@ const workerRecordColumnNames = [
   "last_connection_id",
   "paths",
   "skills",
+  "enabled",
   "enabled_task_types",
   "max_concurrent_tasks",
   "state",
@@ -207,6 +226,7 @@ export function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
     lastConnectionId: row.last_connection_id ? String(row.last_connection_id) : undefined,
     paths: Array.isArray(row.paths) ? row.paths.map(String) : [],
     skills: Array.isArray(row.skills) ? row.skills.map(String) : [],
+    enabled: row.enabled !== false,
     enabledTaskTypes: normalizeEnabledTaskTypes(row.enabled_task_types),
     maxConcurrentTasks: normalizeMaxConcurrentTasks(Number(row.max_concurrent_tasks)),
     state,
