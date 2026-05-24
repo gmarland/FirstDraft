@@ -6,7 +6,7 @@ Express and TypeScript API for the FirstDraft control plane. It handles user aut
 
 - Postgres for users, API keys, repositories, integrations, workers, and command records.
 - Redis for live worker runtime state.
-- MinIO or another S3-compatible service for durable command output.
+- MinIO, another S3-compatible service, or Google Cloud Storage for durable command output.
 
 The local `docker-compose.yml` starts Postgres, Redis, MinIO, and creates a `firstdraft-command-output` bucket.
 
@@ -102,6 +102,7 @@ Common local settings:
 ```bash
 PORT=5080
 COMMAND_OUTPUT_BUCKET=firstdraft-command-output
+COMMAND_OUTPUT_STORAGE_PROVIDER=s3
 COMMAND_OUTPUT_PREFIX=dev/
 S3_ENDPOINT_URL=http://localhost:9000
 S3_FORCE_PATH_STYLE=true
@@ -109,6 +110,14 @@ AWS_ACCESS_KEY_ID=minioadmin
 AWS_SECRET_ACCESS_KEY=minioadmin
 AWS_REGION=us-east-1
 ```
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `COMMAND_OUTPUT_BUCKET` | No | Bucket for command output |
+| `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws` or `gcs`/`google`; defaults to `s3` |
+| `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |
+
+For Google Cloud Storage, set `COMMAND_OUTPUT_STORAGE_PROVIDER=gcs` and `COMMAND_OUTPUT_BUCKET` to the GCS bucket name. Authentication uses Google Application Default Credentials, including `GOOGLE_APPLICATION_CREDENTIALS`; optionally set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
 
 ## Development
 

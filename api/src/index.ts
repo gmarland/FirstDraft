@@ -9,7 +9,7 @@ import { createWorkerAuthRoutes } from "./routes/workerAuth.js";
 import { createWorkerRoutes } from "./routes/workers.js";
 import { createUserApiKeyRoutes } from "./routes/userApiKeys.js";
 import { SignalRHub } from "./signalr/signalRHub.js";
-import { createCommandOutputStorageFromEnv } from "./storage/commandOutputStorage.js";
+import { createCommandOutputStorageFromEnv, getCommandOutputStorageProviderFromEnv } from "./storage/commandOutputStorage.js";
 import { publicConfigEncryptionKey, TenantCrypto } from "./security/tenantCrypto.js";
 import { CommandStore } from "./store/commands/commandStore.js";
 import { WorkerRecordStore } from "./store/workers/workerRecordStore.js";
@@ -53,6 +53,7 @@ const workerRefreshTokens = new WorkerRefreshTokenStore(db);
 const workerTokenService = new WorkerTokenService(createWorkerJwtConfigFromEnv(), workerRefreshTokens);
 const apiToWorkerTokens = new ApiToWorkerTokenIssuer();
 const outputStorage = createCommandOutputStorageFromEnv();
+const outputStorageProvider = outputStorage ? getCommandOutputStorageProviderFromEnv() : undefined;
 const integrationLifecycle = new IntegrationLifecycleService(integrationIntakeEvents, jiraIntegrations, gitRepositories);
 const signalRHub = new SignalRHub(store, workerTokenService, apiToWorkerTokens, outputStorage, integrationLifecycle);
 const jiraIntake = new JiraIntakeService(jiraIntegrations, integrationIntakeEvents, store, gitRepositories, signalRHub);
@@ -80,7 +81,7 @@ server.listen(port, () => {
   console.log(`firstdraft api listening on http://localhost:${port}`);
   console.log(`signalr hub listening on http://localhost:${port}/WorkerHub`);
   console.log("postgres connected");
-  console.log(`command output storage ${outputStorage ? "enabled" : "disabled: set COMMAND_OUTPUT_BUCKET to enable S3 uploads"}`);
+  console.log(`command output storage ${outputStorage ? `enabled (${outputStorageProvider})` : "disabled: set COMMAND_OUTPUT_BUCKET to enable command output uploads"}`);
   console.log("tenant encryption settings loaded from postgres");
 });
 
