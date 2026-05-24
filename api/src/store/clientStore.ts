@@ -55,6 +55,7 @@ export type WorkerStore = {
   createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
   getWorkerCommand(transactionId: string): Promise<Command | undefined>;
   listWorkerCommands(workerId: string, pagination: CommandPagination): Promise<PaginatedCommands>;
+  listTaskQueueForUser(userId: string, pagination: CommandPagination): Promise<PaginatedCommands>;
   getQueuedWorkerCommands(workerId: string): Promise<Command[]>;
   getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]>;
   getInProgressWorkerCommands(workerId: string): Promise<Command[]>;
@@ -139,6 +140,10 @@ export function createWorkerStore(
 
     listWorkerCommands(workerId: string, pagination: CommandPagination): Promise<PaginatedCommands> {
       return commands.listWorkerCommands(workerId, pagination);
+    },
+
+    listTaskQueueForUser(userId: string, pagination: CommandPagination): Promise<PaginatedCommands> {
+      return commands.listTaskQueueForUser(userId, pagination);
     },
 
     async getQueuedWorkerCommands(workerId: string): Promise<Command[]> {

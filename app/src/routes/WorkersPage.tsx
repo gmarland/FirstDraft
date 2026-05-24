@@ -1,6 +1,7 @@
 import { MouseEvent, useCallback, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
   IconButton,
   ListItemIcon,
@@ -9,6 +10,8 @@ import {
   MenuItem,
   Skeleton,
   Stack,
+  Tab,
+  Tabs,
   Tooltip,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -16,6 +19,7 @@ import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import KeyIcon from "@mui/icons-material/VpnKey";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { DisableAllWorkersDialog } from "../components/workers/actions/DisableAllWorkersDialog";
+import { TaskQueuePanel } from "../components/workers/TaskQueuePanel";
 import { WorkersTable } from "../components/workers/table/WorkersTable";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -27,20 +31,35 @@ type Props = {
   navigate(to: string): void;
 };
 
+type WorkersTab = "workers" | "taskQueue";
+
 export function WorkersPage({ navigate }: Props) {
   const { token } = useAuth();
+  const [activeTab, setActiveTab] = useState<WorkersTab>("workers");
   const [actionsMenuAnchor, setActionsMenuAnchor] =
     useState<HTMLElement | null>(null);
   const [disableAllDialogOpen, setDisableAllDialogOpen] = useState(false);
   const [disableAllError, setDisableAllError] = useState<string | null>(null);
   const [disablingAll, setDisablingAll] = useState(false);
+  const [queuePage, setQueuePage] = useState(0);
+  const [queuePageSize, setQueuePageSize] = useState(10);
   const load = useCallback(() => api.listWorkers(token!), [token]);
+  const loadQueue = useCallback(
+    () => api.listTaskQueue(token!, { page: queuePage, pageSize: queuePageSize }),
+    [token, queuePage, queuePageSize],
+  );
   const {
     data: workers,
     error,
     loading,
     refresh,
   } = useAsyncData(load, [load], 4000);
+  const {
+    data: taskQueue,
+    error: queueError,
+    loading: queueLoading,
+    refresh: refreshQueue,
+  } = useAsyncData(loadQueue, [loadQueue], 4000);
   const hasEnabledWorkers = workers?.some((worker) => worker.enabled) ?? false;
   const actionsMenuOpen = Boolean(actionsMenuAnchor);
 
@@ -65,7 +84,7 @@ export function WorkersPage({ navigate }: Props) {
     setDisableAllError(null);
     try {
       await api.disableAllWorkers(token);
-      await refresh();
+      await Promise.all([refresh(), refreshQueue()]);
       setDisableAllDialogOpen(false);
     } catch (caught) {
       setDisableAllError(
@@ -83,6 +102,14 @@ export function WorkersPage({ navigate }: Props) {
     setDisableAllDialogOpen(true);
   };
 
+  const refreshActiveTab = () => {
+    if (activeTab === "taskQueue") {
+      return refreshQueue();
+    }
+
+    return refresh();
+  };
+
   return (
     <Stack spacing={2.75}>
       <PageHeader
@@ -92,86 +119,126 @@ export function WorkersPage({ navigate }: Props) {
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
-              onClick={() => void refresh()}
+              onClick={() => void refreshActiveTab()}
             >
               Refresh
             </Button>
-            <Tooltip title="Worker actions">
-              <span>
-                <IconButton
-                  aria-label="Worker actions"
-                  aria-controls={
-                    actionsMenuOpen ? "worker-actions-menu" : undefined
-                  }
-                  aria-haspopup="menu"
-                  aria-expanded={actionsMenuOpen ? "true" : undefined}
-                  onClick={openActionsMenu}
-                  disabled={!workers}
+            {activeTab === "workers" && (
+              <>
+                <Tooltip title="Worker actions">
+                  <span>
+                    <IconButton
+                      aria-label="Worker actions"
+                      aria-controls={
+                        actionsMenuOpen ? "worker-actions-menu" : undefined
+                      }
+                      aria-haspopup="menu"
+                      aria-expanded={actionsMenuOpen ? "true" : undefined}
+                      onClick={openActionsMenu}
+                      disabled={!workers}
+                    >
+                      <MoreVertIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Menu
+                  id="worker-actions-menu"
+                  anchorEl={actionsMenuAnchor}
+                  open={actionsMenuOpen}
+                  onClose={closeActionsMenu}
+                  anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                  transformOrigin={{ vertical: "top", horizontal: "right" }}
                 >
-                  <MoreVertIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Menu
-              id="worker-actions-menu"
-              anchorEl={actionsMenuAnchor}
-              open={actionsMenuOpen}
-              onClose={closeActionsMenu}
-              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-              transformOrigin={{ vertical: "top", horizontal: "right" }}
-            >
-              <MenuItem
-                onClick={disableAllWorkersFromMenu}
-                disabled={!hasEnabledWorkers || disablingAll}
-              >
-                <ListItemIcon>
-                  <PowerSettingsNewIcon fontSize="small" color="error" />
-                </ListItemIcon>
-                <ListItemText>Disable all workers</ListItemText>
-              </MenuItem>
-            </Menu>
+                  <MenuItem
+                    onClick={disableAllWorkersFromMenu}
+                    disabled={!hasEnabledWorkers || disablingAll}
+                  >
+                    <ListItemIcon>
+                      <PowerSettingsNewIcon fontSize="small" color="error" />
+                    </ListItemIcon>
+                    <ListItemText>Disable all workers</ListItemText>
+                  </MenuItem>
+                </Menu>
+              </>
+            )}
           </Stack>
         }
       />
 
-      <DisableAllWorkersDialog
-        open={disableAllDialogOpen}
-        onClose={closeDisableAllDialog}
-        onConfirm={() => void disableAllWorkers()}
-        disabled={!hasEnabledWorkers}
-        submitting={disablingAll}
-      />
-
-      {(error || disableAllError) && (
-        <Alert severity="error">{error || disableAllError}</Alert>
-      )}
-      {loading && !workers && <Skeleton variant="rounded" height={220} />}
-
-      {workers && workers.length === 0 && (
-        <EmptyState
-          title="No client workers are registered"
-          action={
-            <Button
-              variant="contained"
-              startIcon={<KeyIcon />}
-              onClick={() => navigate("/settings/api-keys")}
-            >
-              Create API key
-            </Button>
-          }
+      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, value: WorkersTab) => setActiveTab(value)}
+          aria-label="Workers page tabs"
         >
-          Create an API key, configure the client worker, and start it.
-          Registered clients will appear here.
-        </EmptyState>
+          <Tab value="workers" label="Workers" />
+          <Tab value="taskQueue" label="Task queue" />
+        </Tabs>
+      </Box>
+
+      {activeTab === "workers" && (
+        <>
+          <DisableAllWorkersDialog
+            open={disableAllDialogOpen}
+            onClose={closeDisableAllDialog}
+            onConfirm={() => void disableAllWorkers()}
+            disabled={!hasEnabledWorkers}
+            submitting={disablingAll}
+          />
+
+          {(error || disableAllError) && (
+            <Alert severity="error">{error || disableAllError}</Alert>
+          )}
+          {loading && !workers && <Skeleton variant="rounded" height={220} />}
+
+          {workers && workers.length === 0 && (
+            <EmptyState
+              title="No client workers are registered"
+              action={
+                <Button
+                  variant="contained"
+                  startIcon={<KeyIcon />}
+                  onClick={() => navigate("/settings/api-keys")}
+                >
+                  Create API key
+                </Button>
+              }
+            >
+              Create an API key, configure the client worker, and start it.
+              Registered clients will appear here.
+            </EmptyState>
+          )}
+
+          {workers && workers.length > 0 && (
+            <WorkersTable
+              workers={workers}
+              onSelect={(workerId) =>
+                navigate(`/workers/${encodeURIComponent(workerId)}`)
+              }
+            />
+          )}
+        </>
       )}
 
-      {workers && workers.length > 0 && (
-        <WorkersTable
-          workers={workers}
-          onSelect={(workerId) =>
-            navigate(`/workers/${encodeURIComponent(workerId)}`)
-          }
-        />
+      {activeTab === "taskQueue" && (
+        <>
+          {queueError && <Alert severity="error">{queueError}</Alert>}
+          {queueLoading && !taskQueue && <Skeleton variant="rounded" height={260} />}
+          {taskQueue && (
+            <TaskQueuePanel
+              commands={taskQueue.commands}
+              total={taskQueue.total}
+              page={queuePage}
+              pageSize={queuePageSize}
+              loading={queueLoading}
+              onPageChange={setQueuePage}
+              onPageSizeChange={(nextPageSize) => {
+                setQueuePageSize(nextPageSize);
+                setQueuePage(0);
+              }}
+            />
+          )}
+        </>
       )}
     </Stack>
   );

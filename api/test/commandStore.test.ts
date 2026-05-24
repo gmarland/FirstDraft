@@ -7,7 +7,7 @@ type QueryCall = {
   parameters?: readonly unknown[];
 };
 
-class FakeDbClient implements DbClient {
+class WorkerCommandsDbClient implements DbClient {
   public calls: QueryCall[] = [];
 
   public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
@@ -32,7 +32,7 @@ class FakeDbClient implements DbClient {
 }
 
 async function testListWorkerCommandsPaginatesAndCounts(): Promise<void> {
-  const db = new FakeDbClient();
+  const db = new WorkerCommandsDbClient();
   const store = new CommandStore(db);
 
   const result = await store.listWorkerCommands("worker-1", { page: 1, pageSize: 2 });
@@ -44,17 +44,72 @@ async function testListWorkerCommandsPaginatesAndCounts(): Promise<void> {
   assert.equal(db.calls.length, 2);
 }
 
-function commandRow(transactionId: string, createdAt: string): Record<string, unknown> {
+class TaskQueueDbClient implements DbClient {
+  public calls: QueryCall[] = [];
+
+  public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
+    this.calls.push({ sql, parameters });
+
+    if (sql.includes("count(*)")) {
+      assert.match(sql, /where user_id = \$1/);
+      assert.match(sql, /status in \('queued', 'in_progress'\)/);
+      assert.deepEqual(parameters, ["user-1"]);
+      return { rows: [{ total: "4" }], rowCount: 1 };
+    }
+
+    assert.match(sql, /where user_id = \$1/);
+    assert.match(sql, /status in \('queued', 'in_progress'\)/);
+    assert.match(sql, /case when status = 'queued' then 0 else 1 end/);
+    assert.match(sql, /created_at asc/);
+    assert.match(sql, /limit \$2 offset \$3/);
+    assert.deepEqual(parameters, ["user-1", 2, 2]);
+    return {
+      rows: [
+        commandRow("queued-unassigned", "2026-05-24T09:00:00.000Z", {
+          status: "queued",
+          workerId: null
+        }),
+        commandRow("in-progress-assigned", "2026-05-24T10:00:00.000Z", {
+          status: "in_progress",
+          workerId: "worker-2"
+        })
+      ],
+      rowCount: 2
+    };
+  }
+}
+
+async function testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWorker(): Promise<void> {
+  const db = new TaskQueueDbClient();
+  const store = new CommandStore(db);
+
+  const result = await store.listTaskQueueForUser("user-1", { page: 1, pageSize: 2 });
+
+  assert.equal(result.total, 4);
+  assert.equal(result.page, 1);
+  assert.equal(result.pageSize, 2);
+  assert.deepEqual(result.commands.map((command) => command.transactionId), ["queued-unassigned", "in-progress-assigned"]);
+  assert.deepEqual(result.commands.map((command) => command.status), ["queued", "in_progress"]);
+  assert.equal(result.commands[0].workerId, undefined);
+  assert.equal(result.commands[1].workerId, "worker-2");
+  assert.equal(db.calls.length, 2);
+}
+
+function commandRow(
+  transactionId: string,
+  createdAt: string,
+  overrides: { status?: string; workerId?: string | null; userId?: string } = {}
+): Record<string, unknown> {
   return {
     transaction_id: transactionId,
-    user_id: "user-1",
-    worker_id: "worker-1",
+    user_id: overrides.userId ?? "user-1",
+    worker_id: overrides.workerId === undefined ? "worker-1" : overrides.workerId,
     command: "echo hello",
     execution_command: null,
     command_mode: "shell",
     repository_url: null,
     normalized_repository_url: null,
-    status: "completed",
+    status: overrides.status ?? "completed",
     result: null,
     agent_response: null,
     error_message: null,
@@ -69,5 +124,6 @@ function commandRow(transactionId: string, createdAt: string): Record<string, un
 }
 
 await testListWorkerCommandsPaginatesAndCounts();
+await testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWorker();
 
 console.log("command store tests passed");

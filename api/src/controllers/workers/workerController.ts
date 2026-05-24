@@ -93,6 +93,15 @@ export class WorkerController {
     }
   };
 
+  public readonly listTaskQueue: RequestHandler = async (req, res, next) => {
+    try {
+      const user = req.user as User;
+      res.json(await this.store.listTaskQueueForUser(user.userId, readCommandPagination(req.query)));
+    } catch (error) {
+      next(error);
+    }
+  };
+
   public readonly listGitflowSuggestions: RequestHandler = async (req, res, next) => {
     try {
       const user = req.user;
