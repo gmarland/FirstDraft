@@ -50,6 +50,7 @@ export function createCommandOutputStorageFromEnv(): CommandOutputStorage | unde
   if (!bucket) return undefined;
 
   const provider = getCommandOutputStorageProviderFromEnv();
+  
   if (provider === "gcs") {
     return new GcsCommandOutputStorage({
       bucket,
