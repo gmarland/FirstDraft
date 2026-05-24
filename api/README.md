@@ -113,11 +113,13 @@ AWS_REGION=us-east-1
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `COMMAND_OUTPUT_BUCKET` | No | Bucket for command output |
-| `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws` or `gcs`/`google`; defaults to `s3` |
+| `COMMAND_OUTPUT_BUCKET` | No | Bucket or Azure Blob container for command output |
+| `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws`, `gcs`/`google`, or `azure`/`az`; defaults to `s3` |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |
 
 For Google Cloud Storage, set `COMMAND_OUTPUT_STORAGE_PROVIDER=gcs` and `COMMAND_OUTPUT_BUCKET` to the GCS bucket name. Authentication uses Google Application Default Credentials, including `GOOGLE_APPLICATION_CREDENTIALS`; optionally set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
+
+For Azure Blob Storage, set `COMMAND_OUTPUT_STORAGE_PROVIDER=azure` and `COMMAND_OUTPUT_BUCKET` to the Blob container name. Authentication uses `AZURE_STORAGE_CONNECTION_STRING`, or `AZURE_STORAGE_ACCOUNT_NAME` with `AZURE_STORAGE_ACCOUNT_KEY`.
 
 ## Development
 
