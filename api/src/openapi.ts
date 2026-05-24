@@ -71,6 +71,29 @@ export const openApiDocument = {
           "200": jsonResponse("Current user", object({ user: ref("User") }, ["user"])),
           "401": errorResponse()
         }
+      },
+      patch: {
+        tags: ["Auth"],
+        summary: "Update the current authenticated user",
+        security: bearerSecurity(),
+        requestBody: jsonBody(ref("UpdateProfileRequest"), true),
+        responses: {
+          "200": jsonResponse("Updated user", object({ user: ref("User") }, ["user"])),
+          "400": errorResponse(),
+          "401": errorResponse(),
+          "404": errorResponse(),
+          "409": errorResponse()
+        }
+      },
+      delete: {
+        tags: ["Auth"],
+        summary: "Delete the current authenticated user and data",
+        security: bearerSecurity(),
+        responses: {
+          "204": { description: "Profile deleted" },
+          "401": errorResponse(),
+          "404": errorResponse()
+        }
       }
     },
     "/api/worker-auth/token": {
@@ -374,6 +397,7 @@ export const openApiDocument = {
       ErrorResponse: object({ error: { type: "string" } }, ["error"]),
       SignupRequest: object({ email: { type: "string", format: "email" }, password: { type: "string", minLength: 8 }, name: { type: "string" } }, ["email", "password"]),
       LoginRequest: object({ email: { type: "string", format: "email" }, password: { type: "string" } }, ["email", "password"]),
+      UpdateProfileRequest: object({ email: { type: "string", format: "email" }, name: { type: "string" }, password: { type: "string", minLength: 8 } }),
       AuthResponse: object({
         token: { type: "string" },
         tokenType: { type: "string", example: "Bearer" },

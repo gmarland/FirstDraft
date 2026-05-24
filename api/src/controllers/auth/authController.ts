@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import passport from "passport";
 import { JwtConfig } from "../../auth/passport.js";
+import { CommandOutputStorage } from "../../storage/commandOutputStorage.js";
 import { AppStore } from "../../store/tenantStore.js";
 import { User } from "../../types.js";
 import { createAuthResponse, toAuthUserResponse } from "./authResponses.js";
@@ -9,7 +10,8 @@ import { isUniqueViolation, readUpdateProfileInput, validateUpdateProfileInput, 
 export class AuthController {
   public constructor(
     private readonly config: JwtConfig,
-    private readonly tenants: AppStore
+    private readonly tenants: AppStore,
+    private readonly outputStorage?: CommandOutputStorage
   ) {}
 
   public readonly signup: RequestHandler = async (req, res, next) => {
@@ -88,8 +90,36 @@ export class AuthController {
       next(error);
     }
   };
+
+  public readonly deleteMe: RequestHandler = async (req, res, next) => {
+    try {
+      const currentUser = req.user as User | undefined;
+      if (!currentUser) {
+        return res.status(401).json({ error: "authentication required" });
+      }
+
+      const outputStorage = this.outputStorage;
+      if (outputStorage) {
+        const outputObjectKeys = await this.tenants.listCommandOutputObjectKeysForUser(currentUser.userId);
+        await Promise.all(outputObjectKeys.map((objectKey) => outputStorage.deleteOutput(objectKey)));
+      }
+
+      const deleted = await this.tenants.deleteUser(currentUser.userId);
+      if (!deleted) {
+        return res.status(404).json({ error: "user not found" });
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
-export function createAuthController(config: JwtConfig, tenants: AppStore): AuthController {
-  return new AuthController(config, tenants);
+export function createAuthController(
+  config: JwtConfig,
+  tenants: AppStore,
+  outputStorage?: CommandOutputStorage
+): AuthController {
+  return new AuthController(config, tenants, outputStorage);
 }

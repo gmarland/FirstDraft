@@ -20,6 +20,8 @@ export type AppStore = {
   getUser(userId: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   updateUser(userId: string, input: UpdateUserInput): Promise<User | undefined>;
+  listCommandOutputObjectKeysForUser(userId: string): Promise<string[]>;
+  deleteUser(userId: string): Promise<boolean>;
   authenticateUser(
     email: string,
     password: string,

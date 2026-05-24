@@ -121,6 +121,13 @@ export const api = {
     });
   },
 
+  deleteMe(token: string) {
+    return request<void>("/api/auth/me", {
+      token,
+      method: "DELETE",
+    });
+  },
+
   signup(input: {
     email: string;
     password: string;
