@@ -2,11 +2,6 @@ import { MouseEvent, useCallback, useState } from "react";
 import {
   Alert,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -20,6 +15,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import KeyIcon from "@mui/icons-material/VpnKey";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import { DisableAllWorkersDialog } from "../components/workers/DisableAllWorkersDialog";
 import { WorkersTable } from "../components/workers/WorkersTable";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -138,34 +134,13 @@ export function WorkersPage({ navigate }: Props) {
         }
       />
 
-      <Dialog
+      <DisableAllWorkersDialog
         open={disableAllDialogOpen}
         onClose={closeDisableAllDialog}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Stop all workers?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            This will disable every currently enabled worker. Queued work will
-            not be dispatched until workers are enabled again.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={closeDisableAllDialog} disabled={disablingAll}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            startIcon={<PowerSettingsNewIcon />}
-            onClick={() => void disableAllWorkers()}
-            disabled={!hasEnabledWorkers || disablingAll}
-          >
-            Stop all workers
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={() => void disableAllWorkers()}
+        disabled={!hasEnabledWorkers}
+        submitting={disablingAll}
+      />
 
       {(error || disableAllError) && (
         <Alert severity="error">{error || disableAllError}</Alert>
