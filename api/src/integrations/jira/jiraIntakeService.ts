@@ -173,19 +173,13 @@ export class JiraIntakeService {
     logJiraIntake("processing issue", issue);
     const repositoryUrl = readRepositoryField(issue, repositoryFieldKeys);
     if (!repositoryUrl) {
-      console.warn("[jira-intake] skipping issue without repository", {
+      console.warn("[jira-intake] handling issue without repository", {
         userId,
         integrationId: integration.id,
         issueKey: issue.key,
         issueId: issue.id,
       });
-      return {
-        integrationId: integration.id,
-        issueKey: issue.key,
-        issueId: issue.id,
-        status: "skipped",
-        reason: "repository field is missing",
-      };
+      return handleMissingRepositoryIssue(integration, issue, dryRun);
     }
 
     const normalizedRepositoryUrl = normalizeRepositoryUrl(repositoryUrl);
@@ -363,6 +357,60 @@ export class JiraIntakeService {
       };
     }
   }
+}
+
+async function handleMissingRepositoryIssue(
+  integration: JiraIntegrationCredentials,
+  issue: JiraIssueSummary,
+  dryRun: boolean,
+): Promise<JiraIntakeResultItem> {
+  const baseItem = {
+    integrationId: integration.id,
+    issueKey: issue.key,
+    issueId: issue.id,
+  };
+
+  if (dryRun) {
+    return {
+      ...baseItem,
+      status: "dry_run",
+      reason: "repository field is missing; would comment and move issue to processed status",
+    };
+  }
+
+  if (!integration.processedStatusId || !integration.processedStatusName) {
+    return {
+      ...baseItem,
+      status: "failed",
+      reason: "processed status is not configured",
+    };
+  }
+
+  try {
+    const jira = new JiraClient(integration);
+    await jira.addComment(issue.key, buildMissingRepositoryComment());
+    await jira.transitionIssue(
+      issue.key,
+      integration.processedStatusId,
+      integration.processedStatusName,
+    );
+
+    return {
+      ...baseItem,
+      status: "skipped",
+      reason: "repository field is missing",
+    };
+  } catch (error) {
+    return {
+      ...baseItem,
+      status: "failed",
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function buildMissingRepositoryComment(): string {
+  return "FirstDraft could not process this ticket because the required repository field is missing. Add a repository URL to the repository field before sending this ticket back for processing.";
 }
 
 function logJiraIntake(
