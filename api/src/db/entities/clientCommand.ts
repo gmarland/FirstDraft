@@ -3,10 +3,12 @@ import { EntitySchema } from "typeorm";
 export type ClientCommandEntity = {
   transactionId: string;
   userId: string;
-  workerId: string;
+  workerId?: string | null;
   command: string;
   executionCommand?: string | null;
   commandMode: string;
+  repositoryUrl?: string | null;
+  normalizedRepositoryUrl?: string | null;
   status: string;
   result?: string | null;
   agentResponse?: string | null;
@@ -26,10 +28,12 @@ export const ClientCommandSchema = new EntitySchema<ClientCommandEntity>({
   columns: {
     transactionId: { type: "text", name: "transaction_id", primary: true },
     userId: { type: "uuid", name: "user_id" },
-    workerId: { type: "text", name: "worker_id" },
+    workerId: { type: "text", name: "worker_id", nullable: true },
     command: { type: "text" },
     executionCommand: { type: "text", name: "execution_command", nullable: true },
     commandMode: { type: "text", name: "command_mode", default: "'ai'" },
+    repositoryUrl: { type: "text", name: "repository_url", nullable: true },
+    normalizedRepositoryUrl: { type: "text", name: "normalized_repository_url", nullable: true },
     status: { type: "text" },
     result: { type: "text", nullable: true },
     agentResponse: { type: "text", name: "agent_response", nullable: true },

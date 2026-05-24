@@ -6,10 +6,12 @@ export function mapCommand(row: QueryResultRow): Command {
   return {
     transactionId: String(row.transaction_id),
     userId: String(row.user_id),
-    workerId: String(row.worker_id),
+    workerId: row.worker_id ? String(row.worker_id) : undefined,
     command: String(row.command),
     executionCommand: row.execution_command ?? undefined,
     commandMode: row.command_mode === "shell" || row.command_mode === "gitflow" ? row.command_mode : "ai",
+    repositoryUrl: row.repository_url ? String(row.repository_url) : undefined,
+    normalizedRepositoryUrl: row.normalized_repository_url ? String(row.normalized_repository_url) : undefined,
     status: row.status,
     createdAt: toIsoString(row.created_at),
     claimedAt: row.claimed_at ? toIsoString(row.claimed_at) : undefined,

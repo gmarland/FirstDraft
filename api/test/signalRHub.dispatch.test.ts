@@ -18,10 +18,12 @@ type SentInvocation = {
 
 class FakeWorkerStore implements WorkerStore {
   public worker: WorkerRegistration;
+  public workers: WorkerRegistration[];
   public commands: Command[];
   public registeredInput?: unknown;
   public stoppedWorkers: Array<{ workerId: string; connectionId: string }> = [];
   public outputMetadataInput?: unknown;
+  public localRepositoriesByWorker = new Map<string, Set<string>>();
 
   public constructor(maxConcurrentTasks: number, commandModes: CommandMode[]) {
     const now = new Date().toISOString();
@@ -41,6 +43,7 @@ class FakeWorkerStore implements WorkerStore {
       lastSeenAt: now,
       stateUpdatedAt: now
     };
+    this.workers = [this.worker];
     this.commands = commandModes.map((commandMode, index) => ({
       transactionId: `command-${index + 1}`,
       userId: "user-1",
@@ -53,15 +56,16 @@ class FakeWorkerStore implements WorkerStore {
   }
 
   public async listWorkers(): Promise<WorkerRegistration[]> {
-    return [this.worker];
+    return this.workers.map((worker) => ({ ...worker }));
   }
 
   public async listWorkersForUser(): Promise<WorkerRegistration[]> {
-    return [this.worker];
+    return this.listWorkers();
   }
 
   public async getWorker(workerId: string): Promise<WorkerRegistration | undefined> {
-    return workerId === this.worker.workerId ? { ...this.worker } : undefined;
+    const worker = this.workers.find((candidate) => candidate.workerId === workerId);
+    return worker ? { ...worker } : undefined;
   }
 
   public async getWorkerForUser(_userId: string, workerId: string): Promise<WorkerRegistration | undefined> {
@@ -77,8 +81,32 @@ class FakeWorkerStore implements WorkerStore {
     this.stoppedWorkers.push({ workerId, connectionId });
   }
 
-  public async createWorkerCommand(): Promise<Command> {
-    throw new Error("not implemented");
+  public async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "ai"): Promise<Command> {
+    const queued = await this.createQueuedCommand({ userId, workerId, command, commandMode });
+    return queued;
+  }
+
+  public async createQueuedCommand(input: {
+    userId: string;
+    workerId?: string;
+    command: string;
+    commandMode?: CommandMode;
+    repositoryUrl?: string;
+    normalizedRepositoryUrl?: string;
+  }): Promise<Command> {
+    const command: Command = {
+      transactionId: `command-${this.commands.length + 1}`,
+      userId: input.userId,
+      workerId: input.workerId,
+      command: input.command,
+      commandMode: input.commandMode ?? "ai",
+      repositoryUrl: input.repositoryUrl,
+      normalizedRepositoryUrl: input.normalizedRepositoryUrl,
+      status: "queued",
+      createdAt: new Date(Date.now() + this.commands.length).toISOString()
+    };
+    this.commands.push(command);
+    return command;
   }
 
   public async getWorkerCommand(transactionId: string): Promise<Command | undefined> {
@@ -89,21 +117,44 @@ class FakeWorkerStore implements WorkerStore {
     return [...this.commands];
   }
 
-  public async getQueuedWorkerCommands(): Promise<Command[]> {
-    return this.commands.filter((command) => command.status === "queued");
+  public async getQueuedWorkerCommands(workerId: string): Promise<Command[]> {
+    return this.commands.filter((command) => command.workerId === workerId && command.status === "queued");
+  }
+
+  public async getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]> {
+    const supportsGitflow = workerSkills.map((skill) => skill.toLowerCase()).includes("git");
+    const localRepositories = this.localRepositoriesByWorker.get(workerId) ?? new Set<string>();
+    return this.commands
+      .filter((command) => {
+        if (command.status !== "queued") return false;
+        if (command.workerId && command.workerId !== workerId) return false;
+        if (command.commandMode === "gitflow" && !supportsGitflow) return false;
+        return command.commandMode === "ai" || command.commandMode === "shell" || command.commandMode === "gitflow";
+      })
+      .sort((left, right) => {
+        const assignedDelta = Number(left.workerId !== workerId) - Number(right.workerId !== workerId);
+        if (assignedDelta !== 0) return assignedDelta;
+        const leftLocal = left.normalizedRepositoryUrl ? localRepositories.has(left.normalizedRepositoryUrl) : false;
+        const rightLocal = right.normalizedRepositoryUrl ? localRepositories.has(right.normalizedRepositoryUrl) : false;
+        if (leftLocal !== rightLocal) return leftLocal ? -1 : 1;
+        return Date.parse(left.createdAt) - Date.parse(right.createdAt);
+      });
   }
 
   public async getInProgressWorkerCommands(): Promise<Command[]> {
     return this.commands.filter((command) => command.status === "in_progress");
   }
 
-  public async markWorkerCommandInProgress(command: Command): Promise<Command | undefined> {
+  public async markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined> {
     const stored = await this.getWorkerCommand(command.transactionId);
     if (!stored || stored.status !== "queued") return undefined;
+    if (stored.workerId && workerId && stored.workerId !== workerId) return undefined;
+    if (!stored.workerId) stored.workerId = workerId;
+    if (!stored.workerId) return undefined;
 
     stored.status = "in_progress";
     stored.claimedAt = new Date().toISOString();
-    this.refreshActiveState();
+    this.refreshActiveState(stored.workerId);
     return stored;
   }
 
@@ -130,7 +181,7 @@ class FakeWorkerStore implements WorkerStore {
     stored.agentResponse = input.agentResponse;
     stored.errorMessage = input.errorMessage;
     stored.completedAt = new Date().toISOString();
-    this.refreshActiveState();
+    if (stored.workerId) this.refreshActiveState(stored.workerId);
     return stored;
   }
 
@@ -141,7 +192,7 @@ class FakeWorkerStore implements WorkerStore {
     stored.status = "failed";
     stored.errorMessage = input.reason;
     stored.completedAt = new Date().toISOString();
-    this.refreshActiveState();
+    if (stored.workerId) this.refreshActiveState(stored.workerId);
     return stored;
   }
 
@@ -149,16 +200,18 @@ class FakeWorkerStore implements WorkerStore {
     return [];
   }
 
-  private refreshActiveState(): void {
+  private refreshActiveState(workerId: string = this.worker.workerId): void {
+    const worker = this.workers.find((candidate) => candidate.workerId === workerId);
+    if (!worker) return;
     const activeTransactionIds = this.commands
-      .filter((command) => command.status === "in_progress")
+      .filter((command) => command.workerId === workerId && command.status === "in_progress")
       .map((command) => command.transactionId);
 
-    this.worker.activeTransactionIds = activeTransactionIds;
-    this.worker.activeTaskCount = activeTransactionIds.length;
-    this.worker.currentTransactionId = activeTransactionIds[0];
-    if (!this.worker.currentTransactionId) delete this.worker.currentTransactionId;
-    this.worker.state = activeTransactionIds.length > 0 ? "running_command" : "started";
+    worker.activeTransactionIds = activeTransactionIds;
+    worker.activeTaskCount = activeTransactionIds.length;
+    worker.currentTransactionId = activeTransactionIds[0];
+    if (!worker.currentTransactionId) delete worker.currentTransactionId;
+    worker.state = activeTransactionIds.length > 0 ? "running_command" : "started";
   }
 }
 
@@ -265,6 +318,165 @@ async function testConcurrentDispatchDoesNotExceedCapacity(): Promise<void> {
   assert.equal(store.commands.filter((command) => command.status === "queued").length, 2);
   assert.equal(store.worker.activeTransactionIds?.length, 3);
   assert.equal(sent.length, 3);
+}
+
+async function testUnassignedQueuedCommandsAreClaimedByWorkerWithCapacity(): Promise<void> {
+  const store = new FakeWorkerStore(1, []);
+  store.commands.push({
+    transactionId: "central-1",
+    userId: "user-1",
+    command: "central work",
+    commandMode: "ai",
+    status: "queued",
+    createdAt: "2026-05-24T10:00:00.000Z"
+  });
+  const connection = createConnection();
+  const connections = new Map<string, SignalRConnection>([[connection.connectionId, connection]]);
+  const dispatcher = createCommandDispatcher(store, connections);
+  const sent = [] as SentInvocation[];
+  connection.socket.send = (payload: string) => {
+    sent.push(JSON.parse(payload.split("\x1e")[0]) as SentInvocation);
+  };
+
+  await dispatcher.dispatchQueuedCommands(store.worker.workerId);
+
+  assert.equal(store.commands[0].workerId, "worker-1");
+  assert.equal(store.commands[0].status, "in_progress");
+  assert.deepEqual(store.worker.activeTransactionIds, ["central-1"]);
+  assert.equal(sent.length, 1);
+}
+
+async function testLocalRepositoryMatchesArePreferredForCentralQueue(): Promise<void> {
+  const store = new FakeWorkerStore(1, []);
+  store.localRepositoriesByWorker.set("worker-1", new Set(["repo-local"]));
+  store.commands.push(
+    {
+      transactionId: "central-non-local",
+      userId: "user-1",
+      command: "non-local",
+      commandMode: "gitflow",
+      repositoryUrl: "https://example.com/non-local.git",
+      normalizedRepositoryUrl: "repo-non-local",
+      status: "queued",
+      createdAt: "2026-05-24T10:00:00.000Z"
+    },
+    {
+      transactionId: "central-local",
+      userId: "user-1",
+      command: "local",
+      commandMode: "gitflow",
+      repositoryUrl: "https://example.com/local.git",
+      normalizedRepositoryUrl: "repo-local",
+      status: "queued",
+      createdAt: "2026-05-24T10:00:01.000Z"
+    }
+  );
+  const connection = createConnection();
+  const connections = new Map<string, SignalRConnection>([[connection.connectionId, connection]]);
+  const dispatcher = createCommandDispatcher(store, connections);
+  const sent = [] as SentInvocation[];
+  connection.socket.send = (payload: string) => {
+    sent.push(JSON.parse(payload.split("\x1e")[0]) as SentInvocation);
+  };
+
+  await dispatcher.dispatchQueuedCommands("worker-1");
+
+  assert.equal(store.commands.find((command) => command.transactionId === "central-local")?.status, "in_progress");
+  assert.equal(store.commands.find((command) => command.transactionId === "central-local")?.workerId, "worker-1");
+  assert.equal(sent[0].arguments[1], "central-local");
+}
+
+async function testNonLocalCentralTasksStillDispatchWhenNoLocalMatchExists(): Promise<void> {
+  const store = new FakeWorkerStore(1, []);
+  store.localRepositoriesByWorker.set("worker-1", new Set(["repo-other"]));
+  store.commands.push({
+    transactionId: "central-non-local",
+    userId: "user-1",
+    command: "non-local",
+    commandMode: "gitflow",
+    repositoryUrl: "https://example.com/non-local.git",
+    normalizedRepositoryUrl: "repo-non-local",
+    status: "queued",
+    createdAt: "2026-05-24T10:00:00.000Z"
+  });
+  const connection = createConnection();
+  const connections = new Map<string, SignalRConnection>([[connection.connectionId, connection]]);
+  const dispatcher = createCommandDispatcher(store, connections);
+  const sent = [] as SentInvocation[];
+  connection.socket.send = (payload: string) => {
+    sent.push(JSON.parse(payload.split("\x1e")[0]) as SentInvocation);
+  };
+
+  await dispatcher.dispatchQueuedCommands("worker-1");
+
+  assert.equal(store.commands[0].status, "in_progress");
+  assert.equal(store.commands[0].workerId, "worker-1");
+  assert.equal(sent.length, 1);
+}
+
+async function testCentralQueueFillsCapacityAfterCompletion(): Promise<void> {
+  const store = new FakeWorkerStore(1, []);
+  store.commands.push(
+    {
+      transactionId: "central-1",
+      userId: "user-1",
+      command: "first",
+      commandMode: "ai",
+      status: "queued",
+      createdAt: "2026-05-24T10:00:00.000Z"
+    },
+    {
+      transactionId: "central-2",
+      userId: "user-1",
+      command: "second",
+      commandMode: "ai",
+      status: "queued",
+      createdAt: "2026-05-24T10:00:01.000Z"
+    }
+  );
+  const connection = createConnection();
+  const connections = new Map<string, SignalRConnection>([[connection.connectionId, connection]]);
+  const dispatcher = createCommandDispatcher(store, connections);
+  const sent = [] as SentInvocation[];
+  connection.socket.send = (payload: string) => {
+    sent.push(JSON.parse(payload.split("\x1e")[0]) as SentInvocation);
+  };
+
+  await dispatcher.dispatchQueuedCommands("worker-1");
+  await store.completeWorkerCommand({ transactionId: "central-1", result: null, errorMessage: null });
+  await dispatcher.dispatchQueuedCommands("worker-1");
+
+  assert.deepEqual(store.worker.activeTransactionIds, ["central-2"]);
+  assert.equal(store.commands.find((command) => command.transactionId === "central-2")?.workerId, "worker-1");
+  assert.deepEqual(sent.map((message) => message.arguments[1]), ["central-1", "central-2"]);
+}
+
+async function testWorkersWithoutGitSkillDoNotClaimGitflowTasks(): Promise<void> {
+  const store = new FakeWorkerStore(1, []);
+  store.worker.skills = [];
+  store.commands.push({
+    transactionId: "central-gitflow",
+    userId: "user-1",
+    command: "gitflow",
+    commandMode: "gitflow",
+    repositoryUrl: "https://example.com/repo.git",
+    normalizedRepositoryUrl: "repo",
+    status: "queued",
+    createdAt: "2026-05-24T10:00:00.000Z"
+  });
+  const connection = createConnection();
+  const connections = new Map<string, SignalRConnection>([[connection.connectionId, connection]]);
+  const dispatcher = createCommandDispatcher(store, connections);
+  const sent = [] as SentInvocation[];
+  connection.socket.send = (payload: string) => {
+    sent.push(JSON.parse(payload.split("\x1e")[0]) as SentInvocation);
+  };
+
+  await dispatcher.dispatchQueuedCommands("worker-1");
+
+  assert.equal(store.commands[0].status, "queued");
+  assert.equal(store.commands[0].workerId, undefined);
+  assert.equal(sent.length, 0);
 }
 
 async function testBackfillsAvailableSlotsAfterCompletionAndCancel(): Promise<void> {
@@ -409,6 +621,11 @@ async function testInvocationDispatcherSendsKnownUnknownAndFailureCompletions():
 
 await testMixedCommandsFillWorkerCapacity();
 await testConcurrentDispatchDoesNotExceedCapacity();
+await testUnassignedQueuedCommandsAreClaimedByWorkerWithCapacity();
+await testLocalRepositoryMatchesArePreferredForCentralQueue();
+await testNonLocalCentralTasksStillDispatchWhenNoLocalMatchExists();
+await testCentralQueueFillsCapacityAfterCompletion();
+await testWorkersWithoutGitSkillDoNotClaimGitflowTasks();
 await testBackfillsAvailableSlotsAfterCompletionAndCancel();
 await testRegistrationRejectsMismatchedTokenAndRemapsConnection();
 await testCommandResultCompletesOutputStorageAndMetadata();

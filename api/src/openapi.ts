@@ -392,6 +392,8 @@ export const openApiDocument = {
         command: { type: "string" },
         executionCommand: nullable({ type: "string" }),
         commandMode: { type: "string", enum: ["ai", "shell", "gitflow"] },
+        repositoryUrl: { type: "string" },
+        normalizedRepositoryUrl: { type: "string" },
         status: { type: "string", enum: ["queued", "in_progress", "completed", "failed"] },
         createdAt: { type: "string", format: "date-time" },
         claimedAt: { type: "string", format: "date-time" },
@@ -403,7 +405,7 @@ export const openApiDocument = {
         outputBytes: { type: "integer" },
         outputStartedAt: { type: "string", format: "date-time" },
         outputUpdatedAt: { type: "string", format: "date-time" }
-      }, ["transactionId", "userId", "workerId", "command", "commandMode", "status", "createdAt"]),
+      }, ["transactionId", "userId", "command", "commandMode", "status", "createdAt"]),
       CommandResponses: object({ command: ref("Command"), responses: array(freeForm()) }, ["command", "responses"]),
       GitRepository: object({
         repositoryUrl: { type: "string" },

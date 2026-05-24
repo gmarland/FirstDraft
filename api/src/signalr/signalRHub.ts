@@ -77,4 +77,8 @@ export class SignalRHub {
   public dispatchCommand(workerId: string, transactionId: string): Promise<void> {
     return this.commands.dispatchCommand(workerId, transactionId);
   }
+
+  public dispatchQueuedCommands(workerId?: string): Promise<void> {
+    return this.commands.dispatchQueuedCommands(workerId);
+  }
 }

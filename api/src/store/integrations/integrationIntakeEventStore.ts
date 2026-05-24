@@ -92,12 +92,12 @@ export class IntegrationIntakeEventStore {
     throw new Error("Integration intake event was not saved");
   }
 
-  public async markQueued(id: string, workerId: string, transactionId: string): Promise<IntegrationIntakeEvent> {
+  public async markQueued(id: string, transactionId: string, workerId?: string): Promise<IntegrationIntakeEvent> {
     return this.update(id, "queued", undefined, workerId, transactionId);
   }
 
-  public async markProcessing(id: string): Promise<IntegrationIntakeEvent> {
-    return this.update(id, "processing");
+  public async markProcessing(id: string, workerId?: string): Promise<IntegrationIntakeEvent> {
+    return this.update(id, "processing", undefined, workerId);
   }
 
   public async markProcessed(id: string): Promise<IntegrationIntakeEvent> {
