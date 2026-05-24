@@ -1,12 +1,12 @@
 import { Chip, TableCell, TableRow } from "@mui/material";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import { StatusBadge } from "../StatusBadge";
-import { formatDate, relativeTime } from "../../lib/dates";
-import { WorkerIdentityCell } from "./WorkerIdentityCell";
-import { WorkerSkillsCell } from "./WorkerSkillsCell";
-import { WorkerTaskSlotsCell } from "./WorkerTaskSlotsCell";
-import { WorkerTaskTypesCell } from "./WorkerTaskTypesCell";
-import type { WorkerRegistration } from "../../types/api";
+import { StatusBadge } from "../../StatusBadge";
+import { formatDate, relativeTime } from "../../../lib/dates";
+import { WorkerIdentityCell } from "./cells/WorkerIdentityCell";
+import { WorkerSkillsCell } from "./cells/WorkerSkillsCell";
+import { WorkerTaskSlotsCell } from "./cells/WorkerTaskSlotsCell";
+import { WorkerTaskTypesCell } from "./cells/WorkerTaskTypesCell";
+import type { WorkerRegistration } from "../../../types/api";
 
 type Props = {
   worker: WorkerRegistration;

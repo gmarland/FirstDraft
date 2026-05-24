@@ -1,6 +1,6 @@
 import { TableCell, Typography } from "@mui/material";
-import { formatDate, relativeTime } from "../../lib/dates";
-import type { WorkerRegistration } from "../../types/api";
+import { formatDate, relativeTime } from "../../../../lib/dates";
+import type { WorkerRegistration } from "../../../../types/api";
 
 type Props = {
   worker: Pick<WorkerRegistration, "workerId" | "registeredAt">;

@@ -2,7 +2,7 @@ import { Box, Chip, Stack, Typography } from "@mui/material";
 import { StatusBadge } from "../StatusBadge";
 import { SummaryCard } from "../SummaryCard";
 import { formatDate, relativeTime } from "../../lib/dates";
-import { formatTaskType } from "../workers/WorkerTaskTypesCell";
+import { formatTaskType } from "../workers/table/cells/WorkerTaskTypesCell";
 import type { WorkerRegistration } from "../../types/api";
 
 type Props = {
