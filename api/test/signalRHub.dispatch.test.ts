@@ -33,6 +33,7 @@ class FakeWorkerStore implements WorkerStore {
       connectionId: "connection-1",
       paths: [],
       skills: ["git", "npm"],
+      enabled: true,
       enabledTaskTypes,
       state: "started",
       activeTransactionIds: [],
@@ -80,6 +81,13 @@ class FakeWorkerStore implements WorkerStore {
 
   public async markWorkerStopped(workerId: string, connectionId: string): Promise<void> {
     this.stoppedWorkers.push({ workerId, connectionId });
+  }
+
+  public async setWorkerEnabledForUser(_userId: string, workerId: string, enabled: boolean): Promise<WorkerRegistration | undefined> {
+    const worker = this.workers.find((candidate) => candidate.workerId === workerId);
+    if (!worker) return undefined;
+    worker.enabled = enabled;
+    return { ...worker };
   }
 
   public async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "ai"): Promise<Command> {
@@ -480,6 +488,32 @@ async function testWorkersWithoutGitSkillDoNotClaimGitflowTasks(): Promise<void>
   assert.equal(sent.length, 0);
 }
 
+async function testDisabledWorkersDoNotClaimQueuedCommands(): Promise<void> {
+  const store = new FakeWorkerStore(2, ["ai"]);
+  store.worker.enabled = false;
+  store.commands.push({
+    transactionId: "central-1",
+    userId: "user-1",
+    command: "central",
+    commandMode: "ai",
+    status: "queued",
+    createdAt: "2026-05-24T10:00:00.000Z"
+  });
+  const connection = createConnection();
+  const connections = new Map<string, SignalRConnection>([[connection.connectionId, connection]]);
+  const dispatcher = createCommandDispatcher(store, connections);
+  const sent = [] as SentInvocation[];
+  connection.socket.send = (payload: string) => {
+    sent.push(JSON.parse(payload.split("\x1e")[0]) as SentInvocation);
+  };
+
+  await dispatcher.dispatchQueuedCommands("worker-1");
+
+  assert.deepEqual(store.commands.map((command) => command.status), ["queued", "queued"]);
+  assert.equal(store.commands[1].workerId, undefined);
+  assert.equal(sent.length, 0);
+}
+
 async function testBackfillsAvailableSlotsAfterCompletionAndCancel(): Promise<void> {
   const store = new FakeWorkerStore(3, ["ai", "shell", "gitflow", "ai", "shell"]);
   const { hub, sent } = createHub(store);
@@ -665,6 +699,7 @@ await testLocalRepositoryMatchesArePreferredForCentralQueue();
 await testNonLocalCentralTasksStillDispatchWhenNoLocalMatchExists();
 await testCentralQueueFillsCapacityAfterCompletion();
 await testWorkersWithoutGitSkillDoNotClaimGitflowTasks();
+await testDisabledWorkersDoNotClaimQueuedCommands();
 await testBackfillsAvailableSlotsAfterCompletionAndCancel();
 await testRegistrationRejectsMismatchedTokenAndRemapsConnection();
 await testRegistrationDefaultsTaskTypesForOlderClients();

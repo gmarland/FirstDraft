@@ -9,6 +9,7 @@ export type ClientWorkerEntity = {
   lastConnectionId?: string | null;
   paths: string[];
   skills: string[];
+  enabled: boolean;
   enabledTaskTypes: string[];
   maxConcurrentTasks: number;
   state: string;
@@ -28,6 +29,7 @@ export const ClientWorkerSchema = new EntitySchema<ClientWorkerEntity>({
     lastConnectionId: { type: "text", name: "last_connection_id", nullable: true },
     paths: { type: "text", array: true, default: "'{}'" },
     skills: { type: "text", array: true, default: "'{}'" },
+    enabled: { type: "boolean", default: true },
     enabledTaskTypes: { type: "text", name: "enabled_task_types", array: true, default: "'{ai,shell,gitflow}'" },
     maxConcurrentTasks: { type: "integer", name: "max_concurrent_tasks", default: 1 },
     state: { type: "text", default: "'stopped'" },

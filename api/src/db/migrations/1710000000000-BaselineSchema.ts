@@ -64,11 +64,13 @@ export class BaselineSchema1710000000000 implements MigrationInterface {
         last_connection_id text,
         paths text[] not null default '{}',
         skills text[] not null default '{}',
+        enabled boolean not null default true,
         enabled_task_types text[] not null default '{ai,shell,gitflow}',
         max_concurrent_tasks integer not null default 1
       );
 
       alter table client_workers
+        add column if not exists enabled boolean not null default true,
         add column if not exists enabled_task_types text[] not null default '{ai,shell,gitflow}',
         add column if not exists max_concurrent_tasks integer not null default 1;
 

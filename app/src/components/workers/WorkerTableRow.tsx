@@ -1,4 +1,4 @@
-import { TableCell, TableRow } from "@mui/material";
+import { Chip, TableCell, TableRow } from "@mui/material";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { StatusBadge } from "../StatusBadge";
 import { formatDate, relativeTime } from "../../lib/dates";
@@ -23,6 +23,14 @@ export function WorkerTableRow({ worker, onSelect }: Props) {
       <WorkerIdentityCell worker={worker} />
       <TableCell>
         <StatusBadge value={worker.state} />
+      </TableCell>
+      <TableCell>
+        <Chip
+          size="small"
+          label={worker.enabled ? "Enabled" : "Disabled"}
+          color={worker.enabled ? "success" : "default"}
+          sx={{ fontWeight: 800 }}
+        />
       </TableCell>
       <WorkerTaskSlotsCell worker={worker} />
       <WorkerTaskTypesCell taskTypes={worker.enabledTaskTypes} />

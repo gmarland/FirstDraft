@@ -19,6 +19,7 @@ export function createWorkerRoutes(
   const controller = createWorkerController(store, dispatcher, outputStorage, gitRepositories);
 
   router.get("/", controller.listWorkers);
+  router.patch("/:workerId", controller.updateWorker);
   router.get("/:workerId/state", controller.getWorkerState);
   router.get("/:workerId/commands", controller.listWorkerCommands);
   router.get("/:workerId/gitflow-suggestions", controller.listGitflowSuggestions);

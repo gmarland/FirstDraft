@@ -4,6 +4,7 @@ export type WorkerRegistration = {
   connectionId: string;
   paths: string[];
   skills: string[];
+  enabled: boolean;
   enabledTaskTypes: CommandMode[];
   state: ClientState;
   currentTransactionId?: string;

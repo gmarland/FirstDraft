@@ -133,6 +133,17 @@ export const api = {
     );
   },
 
+  updateWorker(token: string, workerId: string, input: { enabled: boolean }) {
+    return request<WorkerRegistration>(
+      `/api/workers/${encodeURIComponent(workerId)}`,
+      {
+        token,
+        method: "PATCH",
+        body: input,
+      },
+    );
+  },
+
   listCommands(token: string, workerId: string) {
     return request<Command[]>(
       `/api/workers/${encodeURIComponent(workerId)}/commands`,

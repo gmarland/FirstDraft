@@ -44,6 +44,7 @@ export type WorkerStore = {
   getWorkerForUser(userId: string, workerId: string): Promise<WorkerRegistration | undefined>;
   registerWorker(input: RegisterWorkerInput): Promise<WorkerRegistration>;
   markWorkerStopped(workerId: string, connectionId: string): Promise<void>;
+  setWorkerEnabledForUser(userId: string, workerId: string, enabled: boolean): Promise<WorkerRegistration | undefined>;
   createWorkerCommand(userId: string, workerId: string, command: string, commandMode?: CommandMode, executionCommand?: string): Promise<Command>;
   createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
   getWorkerCommand(transactionId: string): Promise<Command | undefined>;
@@ -102,6 +103,13 @@ export function createWorkerStore(
 
     async markWorkerStopped(workerId: string, connectionId: string): Promise<void> {
       await workers.markWorkerStopped(workerId, connectionId);
+    },
+
+    async setWorkerEnabledForUser(userId: string, workerId: string, enabled: boolean): Promise<WorkerRegistration | undefined> {
+      const record = await workers.setWorkerEnabledForUser(userId, workerId, enabled);
+      if (!record) return undefined;
+
+      return mergeWorkerState(record, await commands.getInProgressWorkerCommands(workerId));
     },
 
     async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "ai", executionCommand?: string): Promise<Command> {
@@ -205,6 +213,7 @@ export function mergeWorkerState(record: WorkerRecord, inProgressCommands: Comma
     connectionId: record.lastConnectionId ?? "",
     paths: record.paths,
     skills: record.skills,
+    enabled: record.enabled,
     enabledTaskTypes: normalizeEnabledTaskTypes(record.enabledTaskTypes),
     state,
     activeTransactionIds,

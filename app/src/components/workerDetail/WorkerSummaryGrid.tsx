@@ -25,12 +25,20 @@ export function WorkerSummaryGrid({ state }: Props) {
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", md: "repeat(5, minmax(0, 1fr))" },
+        gridTemplateColumns: { xs: "1fr", md: "repeat(6, minmax(0, 1fr))" },
         gap: 1.5,
       }}
     >
       <SummaryCard label="State">
         {state ? <StatusBadge value={state.state} /> : <strong>Loading</strong>}
+      </SummaryCard>
+      <SummaryCard label="Enabled">
+        <Chip
+          size="small"
+          label={state?.enabled === false ? "Disabled" : state ? "Enabled" : "Loading"}
+          color={state?.enabled === false ? "default" : "success"}
+          sx={{ fontWeight: 800 }}
+        />
       </SummaryCard>
       <SummaryCard label="Task slots">
         <Typography sx={{ fontWeight: 800 }}>

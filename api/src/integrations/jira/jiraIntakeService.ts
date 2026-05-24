@@ -498,6 +498,7 @@ function readJiraText(value: unknown): string {
 function isAvailableGitWorker(worker: WorkerRegistration): boolean {
   return (
     worker.state !== "stopped" &&
+    worker.enabled &&
     isTaskTypeEnabled(worker.enabledTaskTypes, "gitflow") &&
     worker.skills.map((skill) => skill.toLowerCase()).includes("git") &&
     activeTaskCount(worker) < maxConcurrentTasks(worker)
