@@ -29,6 +29,7 @@ export function AppShell() {
   const repositoriesActive = location.pathname === "/repositories";
   const integrationsActive = location.pathname === "/integrations";
   const apiKeysActive = location.pathname === "/settings/api-keys";
+  const profileActive = location.pathname === "/profile";
   const drawerWidth = 260;
 
   return (
@@ -106,21 +107,28 @@ export function AppShell() {
 
         <Box sx={{ flexGrow: 1 }} />
         <Stack spacing={1.5}>
-          <Box
+          <ListItemButton
+            selected={profileActive}
+            onClick={() => navigate("/profile")}
             sx={{
               border: "1px solid #2b4148",
               bgcolor: "#192a30",
               borderRadius: 1,
               p: 1.5,
+              display: "block",
+              color: "inherit",
+              "&.Mui-selected, &.Mui-selected:hover, &:hover": {
+                bgcolor: "#213238",
+              },
             }}
           >
-            <Typography sx={{ fontWeight: 800 }}>
+            <Typography sx={{ fontWeight: 800 }} className="wrap-code">
               {user?.name || user?.email}
             </Typography>
             <Typography variant="body2" sx={{ color: "#9fb0b7" }}>
-              {user?.role}
+              {user?.name ? user.email : user?.role}
             </Typography>
-          </Box>
+          </ListItemButton>
           <Button
             variant="outlined"
             color="inherit"

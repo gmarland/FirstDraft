@@ -17,6 +17,7 @@ import { WorkerDetailPage } from "./routes/WorkerDetailPage";
 import { WorkersPage } from "./routes/WorkersPage";
 import { CreateUserPage } from "./routes/CreateUserPage";
 import { LoginPage } from "./routes/LoginPage";
+import { ProfilePage } from "./routes/ProfilePage";
 
 export function App() {
   return (
@@ -36,6 +37,7 @@ export function App() {
             <Route path="repositories" element={<RepositoriesPage />} />
             <Route path="integrations" element={<IntegrationsPage />} />
             <Route path="settings/api-keys" element={<ApiKeysPage />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/workers" replace />} />

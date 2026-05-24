@@ -5,7 +5,7 @@ import { User } from "../../types.js";
 import { TypeOrmStoreContext } from "../../db/typeOrmStoreContext.js";
 import { UserPasswordHasher } from "./tenantUserPasswordHasher.js";
 import { mapUserEntity } from "./tenantUserRowMappers.js";
-import { CreateUserInput } from "./tenantUserTypes.js";
+import { CreateUserInput, UpdateUserInput } from "./tenantUserTypes.js";
 
 export class UserStore {
   private readonly users: Repository<UserEntity>;
@@ -41,6 +41,25 @@ export class UserStore {
   public async getUserByEmail(email: string): Promise<User | undefined> {
     const user = await this.findByEmail(email);
     return user ? mapUserEntity(user) : undefined;
+  }
+
+  public async updateUser(userId: string, input: UpdateUserInput): Promise<User | undefined> {
+    const user = await this.users.findOneBy({ id: userId });
+    if (!user) return undefined;
+
+    if (input.email !== undefined) {
+      user.email = normalizeEmail(input.email);
+    }
+
+    if (input.name !== undefined) {
+      user.name = input.name.trim() || null;
+    }
+
+    if (input.password !== undefined) {
+      user.passwordHash = await this.passwords.hashPassword(input.password);
+    }
+
+    return mapUserEntity(await this.users.save(user));
   }
 
   public async authenticateUser(email: string, password: string): Promise<User | undefined> {

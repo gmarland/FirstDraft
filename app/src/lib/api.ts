@@ -17,6 +17,7 @@ import type {
   JiraTransition,
   SaveJiraIntegrationInput,
   SaveGitRepositoryInput,
+  UpdateProfileInput,
 } from "../types/api";
 
 const API_BASE_URL =
@@ -110,6 +111,14 @@ export const api = {
 
   me(token: string) {
     return request<{ user: LoginResponse["user"] }>("/api/auth/me", { token });
+  },
+
+  updateMe(token: string, input: UpdateProfileInput) {
+    return request<{ user: LoginResponse["user"] }>("/api/auth/me", {
+      token,
+      method: "PATCH",
+      body: input,
+    });
   },
 
   signup(input: {

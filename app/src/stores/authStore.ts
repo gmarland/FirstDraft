@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api, ApiError } from "../lib/api";
-import type { LoginResponse, User } from "../types/api";
+import type { LoginResponse, UpdateProfileInput, User } from "../types/api";
 
 type LoginInput = {
   email: string;
@@ -18,6 +18,7 @@ type AuthStore = {
   initialize(): Promise<void>;
   login(input: LoginInput): Promise<void>;
   signup(input: SignupInput): Promise<void>;
+  updateProfile(input: UpdateProfileInput): Promise<void>;
   logout(): void;
 };
 
@@ -45,6 +46,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   async signup(input) {
     const response = await api.signup(input);
     setAuthenticated(response, set);
+  },
+
+  async updateProfile(input) {
+    const { token } = get();
+    if (!token) {
+      throw new Error("authentication required");
+    }
+
+    const { user } = await api.updateMe(token, input);
+    set({ user });
+    writeStoredAuth({ token, user });
   },
 
   logout() {

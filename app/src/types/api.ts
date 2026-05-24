@@ -161,6 +161,12 @@ export type User = {
   disabledAt?: string;
 };
 
+export type UpdateProfileInput = {
+  email?: string;
+  name?: string;
+  password?: string;
+};
+
 export type ApiKey = {
   keyId: string;
   userId: string;
