@@ -20,6 +20,7 @@ type Props = {
   gitflowContinuation?: boolean;
   placeholder?: string;
   supportedSkills?: string[];
+  enabledTaskTypes?: CommandMode[];
   gitRepositorySuggestions?: GitRepositorySuggestion[];
   onSubmit(command: string, commandMode: CommandMode): Promise<void>;
 };
@@ -30,6 +31,7 @@ export function CommandComposer({
   gitflowContinuation = false,
   placeholder,
   supportedSkills = [],
+  enabledTaskTypes,
   gitRepositorySuggestions = [],
   onSubmit
 }: Props) {
@@ -45,7 +47,10 @@ export function CommandComposer({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const normalizedSkills = useMemo(() => supportedSkills.map((skill) => skill.toLowerCase()), [supportedSkills]);
+  const acceptedTaskTypes = useMemo(() => normalizeEnabledTaskTypes(enabledTaskTypes), [enabledTaskTypes]);
   const commandMode = fixedCommandMode ?? selectedCommandMode;
+  const commandModeSupported = isCommandModeSupported(commandMode, normalizedSkills, acceptedTaskTypes);
+  const noAcceptedTaskTypes = acceptedTaskTypes.length === 0;
   const selectedRepository = useMemo(
     () => gitRepositorySuggestions.find((repository) => repository.repositoryUrl === gitflow.repositoryUrl),
     [gitRepositorySuggestions, gitflow.repositoryUrl]
@@ -67,10 +72,11 @@ export function CommandComposer({
       return;
     }
 
-    if (!isCommandModeSupported(selectedCommandMode, normalizedSkills)) {
-      setSelectedCommandMode("ai");
+    if (!isCommandModeSupported(selectedCommandMode, normalizedSkills, acceptedTaskTypes)) {
+      const nextMode = acceptedTaskTypes.find((mode) => isCommandModeSupported(mode, normalizedSkills, acceptedTaskTypes));
+      if (nextMode) setSelectedCommandMode(nextMode);
     }
-  }, [fixedCommandMode, selectedCommandMode, normalizedSkills]);
+  }, [fixedCommandMode, selectedCommandMode, normalizedSkills, acceptedTaskTypes]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -101,20 +107,20 @@ export function CommandComposer({
           size="small"
           value={commandMode}
           onChange={(_, value: CommandMode | null) => {
-            if (value && isCommandModeSupported(value, normalizedSkills)) setSelectedCommandMode(value);
+            if (value && isCommandModeSupported(value, normalizedSkills, acceptedTaskTypes)) setSelectedCommandMode(value);
           }}
           disabled={disabled || submitting}
           aria-label="Command mode"
         >
-          <ToggleButton value="ai" aria-label="AI command">
+          <ToggleButton value="ai" aria-label="AI command" disabled={!isCommandModeSupported("ai", normalizedSkills, acceptedTaskTypes)}>
             <AutoAwesomeIcon fontSize="small" sx={{ mr: 0.75 }} />
             AI
           </ToggleButton>
-          <ToggleButton value="shell" aria-label="Shell command">
+          <ToggleButton value="shell" aria-label="Shell command" disabled={!isCommandModeSupported("shell", normalizedSkills, acceptedTaskTypes)}>
             <TerminalIcon fontSize="small" sx={{ mr: 0.75 }} />
             Shell
           </ToggleButton>
-          <ToggleButton value="gitflow" aria-label="Gitflow command" disabled={!normalizedSkills.includes("git")}>
+          <ToggleButton value="gitflow" aria-label="Gitflow command" disabled={!isCommandModeSupported("gitflow", normalizedSkills, acceptedTaskTypes)}>
             <AccountTreeIcon fontSize="small" sx={{ mr: 0.75 }} />
             Gitflow
           </ToggleButton>
@@ -140,7 +146,7 @@ export function CommandComposer({
                 targetBranch: value.defaultTargetBranch || value.defaultSourceBranch || value.lastSourceBranch || current.targetBranch
               }));
             }}
-            disabled={disabled || submitting}
+            disabled={disabled || submitting || !commandModeSupported}
             renderInput={(params) => <TextField {...params} label="Repository URL" fullWidth />}
             renderOption={(props, option) => (
               <Box component="li" {...props} sx={{ alignItems: "flex-start !important", gap: 1 }}>
@@ -164,7 +170,7 @@ export function CommandComposer({
               options={branchOptions}
               inputValue={gitflow.sourceBranch}
               onInputChange={(_, value) => setGitflow((current) => ({ ...current, sourceBranch: value }))}
-              disabled={disabled || submitting}
+              disabled={disabled || submitting || !commandModeSupported}
               fullWidth
               renderInput={(params) => <TextField {...params} label="Source branch" fullWidth />}
             />
@@ -173,7 +179,7 @@ export function CommandComposer({
               options={branchOptions}
               inputValue={gitflow.targetBranch}
               onInputChange={(_, value) => setGitflow((current) => ({ ...current, targetBranch: value }))}
-              disabled={disabled || submitting}
+              disabled={disabled || submitting || !commandModeSupported}
               fullWidth
               renderInput={(params) => <TextField {...params} label="Target branch for PRs" fullWidth />}
             />
@@ -183,7 +189,7 @@ export function CommandComposer({
               label="Ticket number"
               value={gitflow.ticketNumber}
               onChange={(event) => setGitflow((current) => ({ ...current, ticketNumber: event.target.value }))}
-              disabled={disabled || submitting}
+              disabled={disabled || submitting || !commandModeSupported}
               fullWidth
             />
           </Stack>
@@ -191,7 +197,7 @@ export function CommandComposer({
             label="Feature or bug description"
             value={gitflow.description}
             onChange={(event) => setGitflow((current) => ({ ...current, description: event.target.value }))}
-            disabled={disabled || submitting}
+            disabled={disabled || submitting || !commandModeSupported}
             multiline
             minRows={4}
             fullWidth
@@ -202,15 +208,19 @@ export function CommandComposer({
           value={command}
           onChange={(event) => setCommand(event.target.value)}
           placeholder={placeholder ?? getCommandPlaceholder(commandMode, gitflowContinuation)}
-          disabled={disabled || submitting}
+          disabled={disabled || submitting || !commandModeSupported}
           multiline
           minRows={3}
           fullWidth
         />
       )}
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-        {error && <Alert severity="error" sx={{ flexGrow: 1 }}>{error}</Alert>}
-        <Button variant="contained" type="submit" startIcon={<SendIcon />} disabled={disabled || submitting || !canSubmit(commandMode, command, gitflow, gitflowContinuation)}>
+        {(error || !commandModeSupported) && (
+          <Alert severity={error ? "error" : "info"} sx={{ flexGrow: 1 }}>
+            {error ?? getUnsupportedCommandModeMessage(commandMode, normalizedSkills, acceptedTaskTypes, noAcceptedTaskTypes)}
+          </Alert>
+        )}
+        <Button variant="contained" type="submit" startIcon={<SendIcon />} disabled={disabled || submitting || !commandModeSupported || !canSubmit(commandMode, command, gitflow, gitflowContinuation)}>
           {submitting ? "Queueing" : "Queue command"}
         </Button>
       </Stack>
@@ -232,9 +242,27 @@ function uniqueStrings(values: Array<string | undefined>): string[] {
   return result;
 }
 
-function isCommandModeSupported(commandMode: CommandMode, supportedSkills: string[]): boolean {
+function normalizeEnabledTaskTypes(enabledTaskTypes: CommandMode[] | undefined): CommandMode[] {
+  return enabledTaskTypes ?? ["ai", "shell", "gitflow"];
+}
+
+function isCommandModeSupported(commandMode: CommandMode, supportedSkills: string[], enabledTaskTypes: CommandMode[]): boolean {
+  if (!enabledTaskTypes.includes(commandMode)) return false;
   if (commandMode === "gitflow") return supportedSkills.includes("git");
   return true;
+}
+
+function getUnsupportedCommandModeMessage(commandMode: CommandMode, supportedSkills: string[], enabledTaskTypes: CommandMode[], noAcceptedTaskTypes: boolean): string {
+  if (noAcceptedTaskTypes) return "This worker is not accepting commands.";
+  if (!enabledTaskTypes.includes(commandMode)) return `This worker does not accept ${formatCommandMode(commandMode)} tasks.`;
+  if (commandMode === "gitflow" && !supportedSkills.includes("git")) return "Gitflow commands require the worker to advertise the git skill.";
+  return "This command mode is not available for this worker.";
+}
+
+function formatCommandMode(commandMode: CommandMode): string {
+  if (commandMode === "ai") return "AI";
+  if (commandMode === "shell") return "Shell";
+  return "Gitflow";
 }
 
 function canSubmit(commandMode: CommandMode, command: string, gitflow: GitflowForm, gitflowContinuation: boolean): boolean {
