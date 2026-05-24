@@ -95,8 +95,6 @@ namespace FirstDraft.Gitflow
         {
           Emit("stdout", line);
         }
-        IReadOnlyList<string> changedFiles = ParseChangedFiles(status);
-
         RunGit(_log, worktreePath, new[] { "add", "-A" }, _timeoutMinutes, Emit);
         RunGit(_log, worktreePath, new[] { "commit", "-m", summary }, _timeoutMinutes, Emit);
         string commitHash = RunGit(_log, worktreePath, new[] { "rev-parse", "--short", "HEAD" }, _timeoutMinutes, Emit).Trim();
@@ -105,7 +103,7 @@ namespace FirstDraft.Gitflow
         string prUrl;
         try
         {
-          prUrl = CreateDraftPullRequest(_log, worktreePath, targetBranch, branchName, summary, payload, cleanAiSummary, changedFiles, _timeoutMinutes, Emit).Trim();
+          prUrl = CreateDraftPullRequest(_log, worktreePath, targetBranch, branchName, summary, payload, cleanAiSummary, _timeoutMinutes, Emit).Trim();
         }
         finally
         {

@@ -165,7 +165,9 @@ export class IntegrationLifecycleService {
     command: Command,
   ): Promise<void> {
     const details = parseGitflowResult(command.result ?? "");
-    const summary = details.aiSummary || command.agentResponse || command.result;
+    const summary = extractChangeSummary(
+      details.aiSummary || command.agentResponse || command.result || "",
+    );
     const lines = [
       "FirstDraft completed this gitflow task.",
       details.pullRequest ? `Pull request: ${details.pullRequest}` : undefined,
@@ -252,6 +254,80 @@ function truncateCommentSection(value: string): string {
   const normalized = value.trim();
   if (normalized.length <= maxJiraCommentSectionCharacters) return normalized;
   return `${normalized.slice(0, maxJiraCommentSectionCharacters).trimEnd()}\n...`;
+}
+
+function extractChangeSummary(value: string): string {
+  const normalized = value.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "";
+
+  const summary = extractMarkdownSection(normalized, ["PR Summary", "Summary"]);
+  if (summary) return summary;
+
+  const execution = textAfterLastDelimiter(normalized, "----- Execution -----");
+  const lines: string[] = [];
+  for (const rawLine of execution.split("\n")) {
+    const line = rawLine.trim();
+    if (isHeading(line, ["Tests", "Testing"])) break;
+    if (!line || line.startsWith("```")) continue;
+    lines.push(line);
+    if (lines.length >= 6) break;
+  }
+
+  return lines.join("\n");
+}
+
+function extractMarkdownSection(
+  value: string,
+  headings: readonly string[],
+): string {
+  const lines = value.split("\n");
+  let start = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (isHeading(lines[index], headings)) {
+      start = index + 1;
+      break;
+    }
+  }
+
+  if (start < 0) return "";
+
+  let end = lines.length;
+  for (let index = start; index < lines.length; index += 1) {
+    if (normalizeHeading(lines[index])) {
+      end = index;
+      break;
+    }
+  }
+
+  return lines.slice(start, end).join("\n").trim();
+}
+
+function isHeading(line: string, headings: readonly string[]): boolean {
+  const normalized = normalizeHeading(line);
+  return headings.some(
+    (heading) => normalized.toLowerCase() === heading.toLowerCase(),
+  );
+}
+
+function normalizeHeading(line: string): string {
+  const normalized = line
+    .trim()
+    .replace(/^#+/, "")
+    .trim()
+    .replace(/^\*+|\*+$/g, "")
+    .trim();
+  if (!normalized.endsWith(":")) return "";
+  const heading = normalized.slice(0, -1).trim();
+  if (heading.length > 80 || heading.includes(".") || heading.includes(",")) {
+    return "";
+  }
+  return heading;
+}
+
+function textAfterLastDelimiter(value: string, delimiter: string): string {
+  const index = value.lastIndexOf(delimiter);
+  if (index < 0) return value;
+  return value.slice(index + delimiter.length);
 }
 
 function truncateJiraComment(value: string): string {

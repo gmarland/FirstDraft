@@ -12,11 +12,10 @@ namespace FirstDraft.Gitflow
         string title,
         GitflowCommandPayload payload,
         string aiResult,
-        IReadOnlyList<string> changedFiles,
         int timeoutMinutes,
         Action<string, string> emit)
     {
-      string body = BuildPullRequestBody(aiResult, payload.TicketNumber, payload.TicketUrl, changedFiles);
+      string body = BuildPullRequestBody(aiResult, payload.TicketNumber, payload.TicketUrl);
 
       emit("stdout", "Creating draft pull request.");
       return RunProcess(

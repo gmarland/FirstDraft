@@ -4,75 +4,20 @@ namespace FirstDraft.Gitflow
 {
   public static partial class GitflowCommandService
   {
-    private static string BuildPullRequestBody(string aiResult, string ticketNumber, string? ticketUrl, IReadOnlyList<string> changedFiles)
+    private static string BuildPullRequestBody(string aiResult, string ticketNumber, string? ticketUrl)
     {
       StringBuilder body = new StringBuilder();
       body.Append(BuildPullRequestBodyPrefix(ticketNumber, ticketUrl));
 
-      string summary = ExtractMarkdownSection(aiResult, new[] { "PR Summary", "Summary" });
-      if (string.IsNullOrWhiteSpace(summary))
-      {
-        summary = BuildFallbackSummary(aiResult);
-      }
-
       body.AppendLine("Summary:");
-      body.AppendLine(NormalizeBodySection(summary));
-      body.AppendLine();
-
-      body.AppendLine("Changed files:");
-      if (changedFiles.Count == 0)
-      {
-        body.AppendLine("- No changed files were recorded.");
-      }
-      else
-      {
-        foreach (string file in changedFiles.Take(30))
-        {
-          body.AppendLine($"- `{file}`");
-        }
-        if (changedFiles.Count > 30)
-        {
-          body.AppendLine($"- ...and {changedFiles.Count - 30} more");
-        }
-      }
-      body.AppendLine();
-
-      string tests = ExtractMarkdownSection(aiResult, new[] { "Tests", "Testing" });
-      body.AppendLine("Tests:");
-      body.AppendLine(string.IsNullOrWhiteSpace(tests)
-          ? "- See FirstDraft command output for test details."
-          : NormalizeBodySection(tests));
+      body.AppendLine(ExtractChangeSummary(aiResult));
 
       return TrimPullRequestBody(body.ToString());
     }
 
     private static string BuildCleanAiSummary(string aiResult)
     {
-      string summary = ExtractMarkdownSectionFromLastHeading(aiResult, new[] { "PR Summary", "Summary" });
-      string tests = ExtractMarkdownSectionFromLastHeading(aiResult, new[] { "Tests", "Testing" });
-
-      if (string.IsNullOrWhiteSpace(summary) && string.IsNullOrWhiteSpace(tests))
-      {
-        return """
-        PR Summary:
-        - Implementation completed. See FirstDraft command output for details.
-
-        Tests:
-        - See FirstDraft command output for test details.
-        """;
-      }
-
-      StringBuilder clean = new StringBuilder();
-      clean.AppendLine("PR Summary:");
-      clean.AppendLine(string.IsNullOrWhiteSpace(summary)
-          ? "- Implementation completed. See FirstDraft command output for details."
-          : NormalizeBodySection(summary));
-      clean.AppendLine();
-      clean.AppendLine("Tests:");
-      clean.AppendLine(string.IsNullOrWhiteSpace(tests)
-          ? "- See FirstDraft command output for test details."
-          : NormalizeBodySection(tests));
-      return clean.ToString().TrimEnd();
+      return ExtractChangeSummary(aiResult);
     }
 
     private static string BuildPullRequestBodyPrefix(string ticketNumber, string? ticketUrl)
@@ -85,33 +30,6 @@ namespace FirstDraft.Gitflow
       }
       prefix.AppendLine();
       return prefix.ToString();
-    }
-
-    private static string ExtractMarkdownSection(string text, IReadOnlyList<string> headings)
-    {
-      string[] lines = text.Replace("\r\n", "\n").Split('\n');
-      int start = -1;
-      for (int i = 0; i < lines.Length; i++)
-      {
-        if (IsHeading(lines[i], headings))
-        {
-          start = i + 1;
-          break;
-        }
-      }
-      if (start < 0) return "";
-
-      int end = lines.Length;
-      for (int i = start; i < lines.Length; i++)
-      {
-        if (IsAnyHeading(lines[i]))
-        {
-          end = i;
-          break;
-        }
-      }
-
-      return string.Join('\n', lines.Skip(start).Take(end - start)).Trim();
     }
 
     private static string ExtractMarkdownSectionFromLastHeading(string text, IReadOnlyList<string> headings)
@@ -162,18 +80,43 @@ namespace FirstDraft.Gitflow
 
     private static string BuildFallbackSummary(string aiResult)
     {
-      string[] lines = aiResult.Replace("\r\n", "\n").Split('\n')
-          .Select(line => line.Trim())
-          .Where(line => !string.IsNullOrWhiteSpace(line))
-          .Where(line => !line.StartsWith("```", StringComparison.Ordinal))
-          .Take(8)
-          .ToArray();
+      string finalResult = ExtractFinalExecutionOutput(aiResult);
+      List<string> lines = new List<string>();
+      foreach (string rawLine in finalResult.Replace("\r\n", "\n").Split('\n'))
+      {
+        string line = rawLine.Trim();
+        if (string.Equals(NormalizeHeading(line), "Tests", StringComparison.OrdinalIgnoreCase)) break;
+        if (string.Equals(NormalizeHeading(line), "Testing", StringComparison.OrdinalIgnoreCase)) break;
+        if (string.IsNullOrWhiteSpace(line)) continue;
+        if (line.StartsWith("```", StringComparison.Ordinal)) continue;
+        lines.Add(line);
+        if (lines.Count >= 6) break;
+      }
 
-      if (lines.Length == 0) return "- See FirstDraft command output for implementation details.";
+      if (lines.Count == 0) return "- See FirstDraft command output for implementation details.";
 
       string summary = string.Join('\n', lines);
-      if (summary.Length <= 1200) return summary;
-      return summary.Substring(0, 1200).TrimEnd() + "...";
+      if (summary.Length <= 800) return summary;
+      return summary.Substring(0, 800).TrimEnd() + "...";
+    }
+
+    private static string ExtractChangeSummary(string aiResult)
+    {
+      string summary = ExtractMarkdownSectionFromLastHeading(aiResult, new[] { "PR Summary", "Summary" });
+      if (string.IsNullOrWhiteSpace(summary))
+      {
+        summary = BuildFallbackSummary(aiResult);
+      }
+
+      return NormalizeBodySection(summary);
+    }
+
+    private static string ExtractFinalExecutionOutput(string aiResult)
+    {
+      const string delimiter = "----- Execution -----";
+      int delimiterIndex = aiResult.LastIndexOf(delimiter, StringComparison.Ordinal);
+      if (delimiterIndex < 0) return aiResult;
+      return aiResult.Substring(delimiterIndex + delimiter.Length);
     }
 
     private static string NormalizeBodySection(string value)
