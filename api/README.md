@@ -7,7 +7,7 @@ Express and TypeScript API for the FirstDraft control plane. It handles user aut
 - Postgres for users, API keys, repositories, integrations, workers, and command records.
 - MinIO, another S3-compatible service, Google Cloud Storage, or Azure Blob Storage for durable command output.
 
-The local `docker-compose.yml` starts Postgres and MinIO, then creates a `firstdraft-command-output` bucket. The current API source does not require a local Redis service.
+The local `docker-compose.yml` starts Postgres and MinIO, then creates a `firstdraft-command-output` bucket.
 
 ## API Surface
 
