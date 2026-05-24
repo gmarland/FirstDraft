@@ -57,17 +57,23 @@ class TaskQueueDbClient implements DbClient {
       return { rows: [{ total: "4" }], rowCount: 1 };
     }
 
-    assert.match(sql, /where user_id = \$1/);
-    assert.match(sql, /status in \('queued', 'in_progress'\)/);
-    assert.match(sql, /case when status = 'queued' then 0 else 1 end/);
-    assert.match(sql, /created_at asc/);
+    assert.match(sql, /left join integration_intake_events intake/);
+    assert.match(sql, /intake\.provider as source_provider/);
+    assert.match(sql, /where commands\.user_id = \$1/);
+    assert.match(sql, /commands\.status in \('queued', 'in_progress'\)/);
+    assert.match(sql, /case when commands\.status = 'queued' then 0 else 1 end/);
+    assert.match(sql, /commands\.created_at asc/);
     assert.match(sql, /limit \$2 offset \$3/);
     assert.deepEqual(parameters, ["user-1", 2, 2]);
     return {
       rows: [
         commandRow("queued-unassigned", "2026-05-24T09:00:00.000Z", {
           status: "queued",
-          workerId: null
+          workerId: null,
+          sourceProvider: "jira",
+          sourceItemId: "10001",
+          sourceItemKey: "FD-123",
+          sourceItemUrl: "https://example.atlassian.net/browse/FD-123"
         }),
         commandRow("in-progress-assigned", "2026-05-24T10:00:00.000Z", {
           status: "in_progress",
@@ -92,13 +98,25 @@ async function testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWork
   assert.deepEqual(result.commands.map((command) => command.status), ["queued", "in_progress"]);
   assert.equal(result.commands[0].workerId, undefined);
   assert.equal(result.commands[1].workerId, "worker-2");
+  assert.equal(result.commands[0].sourceProvider, "jira");
+  assert.equal(result.commands[0].sourceItemId, "10001");
+  assert.equal(result.commands[0].sourceItemKey, "FD-123");
+  assert.equal(result.commands[0].sourceItemUrl, "https://example.atlassian.net/browse/FD-123");
   assert.equal(db.calls.length, 2);
 }
 
 function commandRow(
   transactionId: string,
   createdAt: string,
-  overrides: { status?: string; workerId?: string | null; userId?: string } = {}
+  overrides: {
+    status?: string;
+    workerId?: string | null;
+    userId?: string;
+    sourceProvider?: string;
+    sourceItemId?: string;
+    sourceItemKey?: string;
+    sourceItemUrl?: string;
+  } = {}
 ): Record<string, unknown> {
   return {
     transaction_id: transactionId,
@@ -109,6 +127,10 @@ function commandRow(
     command_mode: "shell",
     repository_url: null,
     normalized_repository_url: null,
+    source_provider: overrides.sourceProvider ?? null,
+    source_item_id: overrides.sourceItemId ?? null,
+    source_item_key: overrides.sourceItemKey ?? null,
+    source_item_url: overrides.sourceItemUrl ?? null,
     status: overrides.status ?? "completed",
     result: null,
     agent_response: null,

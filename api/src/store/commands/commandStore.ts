@@ -194,13 +194,19 @@ export class CommandStore {
     const [commandsResult, countResult] = await Promise.all([
       this.pool.query(
         `
-          select ${commandColumns}
-          from client_commands
-          where user_id = $1
-            and status in ('queued', 'in_progress')
+          select ${prefixedCommandColumns},
+            intake.provider as source_provider,
+            intake.source_item_id,
+            intake.source_item_key,
+            intake.source_item_url
+          from client_commands commands
+          left join integration_intake_events intake
+            on intake.transaction_id = commands.transaction_id
+          where commands.user_id = $1
+            and commands.status in ('queued', 'in_progress')
           order by
-            case when status = 'queued' then 0 else 1 end,
-            created_at asc
+            case when commands.status = 'queued' then 0 else 1 end,
+            commands.created_at asc
           limit $2 offset $3
         `,
         [userId, pagination.pageSize, offset]

@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { MouseEvent, useState } from "react";
 import {
   Box,
-  Chip,
-  Divider,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Link,
   Paper,
   Stack,
   Table,
@@ -14,6 +17,7 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import { EmptyState } from "../EmptyState";
 import { StatusBadge } from "../StatusBadge";
 import { formatDate, relativeTime } from "../../lib/dates";
@@ -38,22 +42,13 @@ export function TaskQueuePanel({
   onPageChange,
   onPageSizeChange,
 }: Props) {
-  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null);
+  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(
+    null,
+  );
   const selectedCommand =
-    commands.find((command) => command.transactionId === selectedCommandId) ??
-    commands[0] ??
-    null;
+    commands.find((command) => command.transactionId === selectedCommandId) ?? null;
 
-  useEffect(() => {
-    if (commands.length === 0) {
-      setSelectedCommandId(null);
-      return;
-    }
-
-    if (!selectedCommandId || !commands.some((command) => command.transactionId === selectedCommandId)) {
-      setSelectedCommandId(commands[0].transactionId);
-    }
-  }, [selectedCommandId, commands]);
+  const closeDetail = () => setSelectedCommandId(null);
 
   if (commands.length === 0 && !loading && total === 0) {
     return (
@@ -64,18 +59,18 @@ export function TaskQueuePanel({
   }
 
   return (
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 8fr) minmax(320px, 4fr)" }, gap: 2, alignItems: "flex-start" }}>
+    <>
       <Paper variant="outlined">
         <TableContainer>
-          <Table size="small" aria-label="Task queue">
+          <Table size="small" aria-label="Task queue" sx={{ tableLayout: "fixed" }}>
             <TableHead>
               <TableRow>
-                <TableCell>Status</TableCell>
+                <TableCell sx={{ width: 132 }}>Status</TableCell>
+                <TableCell sx={{ width: 132 }}>Source</TableCell>
                 <TableCell>Task</TableCell>
-                <TableCell>Created</TableCell>
-                <TableCell>Worker</TableCell>
-                <TableCell>Repository</TableCell>
-                <TableCell>Transaction</TableCell>
+                <TableCell sx={{ width: 180 }}>Worker</TableCell>
+                <TableCell sx={{ width: 220 }}>Repository</TableCell>
+                <TableCell sx={{ width: 132 }}>Created</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -88,34 +83,41 @@ export function TaskQueuePanel({
                   sx={{ cursor: "pointer" }}
                 >
                   <TableCell>
-                    <Stack spacing={0.75} sx={{ alignItems: "flex-start" }}>
-                      <StatusBadge value={command.status} />
-                      <Chip size="small" label={formatCommandMode(command.commandMode)} />
-                    </Stack>
+                    <StatusBadge value={command.status} />
                   </TableCell>
-                  <TableCell sx={{ minWidth: 240, maxWidth: 420 }}>
-                    <Typography component="code" className="wrap-code" sx={{ display: "block" }}>
+                  <TableCell>
+                    <SourceLabel command={command} />
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="body2"
+                      title={formatCommandSummary(command)}
+                      sx={oneLineTextSx}
+                    >
                       {formatCommandSummary(command)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="body2"
+                      title={command.workerId ?? "Unassigned"}
+                      sx={oneLineTextSx}
+                    >
+                      {command.workerId ?? "Unassigned"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="body2"
+                      title={command.repositoryUrl ?? "-"}
+                      sx={oneLineTextSx}
+                    >
+                      {command.repositoryUrl ?? "-"}
                     </Typography>
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" title={formatDate(command.createdAt)}>
                       {relativeTime(command.createdAt)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography component="code" className="wrap-code">
-                      {command.workerId ?? "Unassigned"}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 260 }}>
-                    <Typography component="code" className="wrap-code">
-                      {command.repositoryUrl ?? "-"}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography component="code">
-                      {shortId(command.transactionId)}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -135,43 +137,97 @@ export function TaskQueuePanel({
           />
         )}
       </Paper>
-
-      <TaskQueueDetail command={selectedCommand} />
-    </Box>
+      <TaskQueueDetailDialog command={selectedCommand} onClose={closeDetail} />
+    </>
   );
 }
 
-function TaskQueueDetail({ command }: { command: Command | null }) {
-  if (!command) {
+function SourceLabel({ command }: { command: Command }) {
+  const source = formatSource(command);
+  const label = source.key ? `${source.provider} ${source.key}` : source.provider;
+
+  const stopRowClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.stopPropagation();
+  };
+
+  if (command.sourceItemUrl) {
     return (
-      <Paper variant="outlined" sx={detailPanelSx}>
-        <Typography color="text.secondary">Select a task to inspect queue metadata.</Typography>
-      </Paper>
+      <Link
+        href={command.sourceItemUrl}
+        target="_blank"
+        rel="noreferrer"
+        onClick={stopRowClick}
+        title={label}
+        sx={oneLineTextSx}
+      >
+        {label}
+      </Link>
     );
   }
 
   return (
-    <Paper variant="outlined" sx={detailPanelSx}>
-      <Stack spacing={2}>
-        <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
+    <Typography title={label} sx={oneLineTextSx}>
+      {label}
+    </Typography>
+  );
+}
+
+function TaskQueueDetailDialog({
+  command,
+  onClose,
+}: {
+  command: Command | null;
+  onClose(): void;
+}) {
+  if (!command) {
+    return null;
+  }
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ pr: 7 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+          <Typography component="span" sx={{ fontWeight: 800 }}>
+            Task {shortId(command.transactionId)}
+          </Typography>
+          <StatusBadge value={command.status} />
+        </Stack>
+        <IconButton
+          aria-label="Close task detail"
+          onClick={onClose}
+          sx={{ position: "absolute", right: 12, top: 12 }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
               Task
             </Typography>
-            <Typography sx={{ fontWeight: 800 }}>{shortId(command.transactionId)}</Typography>
+            <Typography component="pre" className="code-block" sx={{ whiteSpace: "pre-wrap", m: 0 }}>
+              {formatCommandDetail(command)}
+            </Typography>
           </Box>
-          <StatusBadge value={command.status} />
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ alignItems: { sm: "flex-start" } }}
+          >
+            <Field label="Source" value={formatSourceDetail(command)} />
+            <Field label="Mode" value={formatCommandMode(command.commandMode)} />
+            <Field label="Created" value={formatDate(command.createdAt)} />
+            <Field label="Claimed" value={formatDate(command.claimedAt)} />
+            <Field label="Completed" value={formatDate(command.completedAt)} />
+          </Stack>
+          <Field label="Assigned worker" value={command.workerId ?? "Unassigned"} code />
+          <Field label="Repository" value={command.repositoryUrl ?? "-"} code />
+          <Field label="Transaction ID" value={command.transactionId} code />
+          {command.errorMessage && <Field label="Error" value={command.errorMessage} />}
         </Stack>
-        <Divider />
-        <Field label="Command" value={formatCommandDetail(command)} code />
-        <Field label="Mode" value={formatCommandMode(command.commandMode)} />
-        <Field label="Created" value={formatDate(command.createdAt)} />
-        <Field label="Claimed" value={formatDate(command.claimedAt)} />
-        <Field label="Assigned worker" value={command.workerId ?? "Unassigned"} code />
-        <Field label="Repository" value={command.repositoryUrl ?? "-"} code />
-        <Field label="Transaction ID" value={command.transactionId} code />
-      </Stack>
-    </Paper>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -213,9 +269,12 @@ function formatCommandSummary(command: Command): string {
     const payload = JSON.parse(command.command) as Partial<{
       repositoryUrl: string;
       ticketNumber: string;
+      title: string;
       description: string;
     }>;
-    return `${payload.ticketNumber ?? "Gitflow"}: ${payload.description ?? payload.repositoryUrl ?? command.command}`;
+    return `${payload.ticketNumber ?? "Gitflow"}: ${
+      payload.title ?? payload.description ?? payload.repositoryUrl ?? command.command
+    }`;
   } catch {
     return command.command;
   }
@@ -230,6 +289,8 @@ function formatCommandDetail(command: Command): string {
       sourceBranch: string;
       targetBranch: string;
       ticketNumber: string;
+      ticketUrl: string;
+      title: string;
       description: string;
     }>;
 
@@ -238,6 +299,8 @@ function formatCommandDetail(command: Command): string {
       `Source branch: ${payload.sourceBranch ?? ""}`,
       `Target branch for PRs: ${payload.targetBranch ?? payload.sourceBranch ?? ""}`,
       `Ticket: ${payload.ticketNumber ?? ""}`,
+      `Ticket URL: ${payload.ticketUrl ?? ""}`,
+      `Title: ${payload.title ?? ""}`,
       "",
       payload.description ?? ""
     ].join("\n").trim();
@@ -246,14 +309,39 @@ function formatCommandDetail(command: Command): string {
   }
 }
 
+function formatSource(command: Command): { provider: string; key?: string } {
+  const provider = command.sourceProvider
+    ? titleCase(command.sourceProvider)
+    : command.commandMode === "gitflow"
+      ? "Manual"
+      : "-";
+  return { provider, key: command.sourceItemKey };
+}
+
+function formatSourceDetail(command: Command): string {
+  const source = formatSource(command);
+  if (command.sourceItemUrl) {
+    return source.key
+      ? `${source.provider} ${source.key} (${command.sourceItemUrl})`
+      : `${source.provider} (${command.sourceItemUrl})`;
+  }
+  return source.key ? `${source.provider} ${source.key}` : source.provider;
+}
+
+function titleCase(value: string): string {
+  return value.length > 0
+    ? `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`
+    : value;
+}
+
 function shortId(value: string): string {
   return value.length > 12 ? `${value.slice(0, 12)}...` : value;
 }
 
-const detailPanelSx = {
-  position: { lg: "sticky" },
-  top: { lg: 84 },
-  maxHeight: { lg: "calc(100vh - 112px)" },
-  overflow: "auto",
-  p: 2,
+const oneLineTextSx = {
+  display: "block",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  minWidth: 0,
 };
