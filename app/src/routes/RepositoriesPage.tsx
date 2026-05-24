@@ -26,6 +26,7 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { PageHeader } from "../components/PageHeader";
 import { api, ApiError } from "../lib/api";
 import { relativeTime } from "../lib/dates";
@@ -54,6 +55,8 @@ export function RepositoriesPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [repositoryToDelete, setRepositoryToDelete] =
+    useState<GitRepository | null>(null);
   const [editingRepository, setEditingRepository] =
     useState<GitRepository | null>(null);
   const [form, setForm] = useState<RepositoryForm>(emptyForm);
@@ -122,6 +125,11 @@ export function RepositoriesPage() {
     setDialogOpen(false);
   };
 
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setRepositoryToDelete(null);
+  };
+
   const saveRepository = async (event: FormEvent) => {
     event.preventDefault();
     if (!token) return;
@@ -157,17 +165,12 @@ export function RepositoriesPage() {
 
   const deleteRepository = async (repository: GitRepository) => {
     if (!token) return;
-    if (!window.confirm("Delete this repository? This cannot be undone."))
-      return;
 
     setDeleting(true);
     setError(null);
     setNotice(null);
     try {
-      await api.deleteRepository(
-        token,
-        repository.normalizedRepositoryUrl,
-      );
+      await api.deleteRepository(token, repository.normalizedRepositoryUrl);
       setRepositories((current) =>
         current.filter(
           (currentRepository) =>
@@ -176,6 +179,7 @@ export function RepositoriesPage() {
         ),
       );
       setNotice("Repository deleted.");
+      setRepositoryToDelete(null);
     } catch (caught) {
       handleAuthError(caught, logout);
       setError(
@@ -258,6 +262,18 @@ export function RepositoriesPage() {
                 </TableCell>
                 <TableCell>{relativeTime(repository.lastUsedAt)}</TableCell>
                 <TableCell align="right">
+                  <Tooltip title="Delete repository">
+                    <span>
+                      <IconButton
+                        aria-label="Delete repository"
+                        color="error"
+                        onClick={() => setRepositoryToDelete(repository)}
+                        disabled={deleting}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                   <Tooltip title="Edit repository">
                     <IconButton
                       aria-label="Edit repository"
@@ -265,18 +281,6 @@ export function RepositoriesPage() {
                     >
                       <EditIcon />
                     </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Delete repository">
-                    <span>
-                      <IconButton
-                        aria-label="Delete repository"
-                        color="error"
-                        onClick={() => void deleteRepository(repository)}
-                        disabled={deleting}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </span>
                   </Tooltip>
                 </TableCell>
               </TableRow>
@@ -377,6 +381,18 @@ export function RepositoriesPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <DeleteConfirmationDialog
+        open={Boolean(repositoryToDelete)}
+        title="Delete repository?"
+        description="This repository will be removed. This cannot be undone."
+        confirmLabel="Delete repository"
+        submitting={deleting}
+        onClose={closeDeleteDialog}
+        onConfirm={() => {
+          if (repositoryToDelete) void deleteRepository(repositoryToDelete);
+        }}
+      />
 
       <Snackbar
         open={Boolean(notice)}
