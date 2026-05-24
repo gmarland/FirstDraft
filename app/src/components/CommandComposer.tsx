@@ -48,6 +48,12 @@ export function CommandComposer({
   const [error, setError] = useState<string | null>(null);
   const normalizedSkills = useMemo(() => supportedSkills.map((skill) => skill.toLowerCase()), [supportedSkills]);
   const acceptedTaskTypes = useMemo(() => normalizeEnabledTaskTypes(enabledTaskTypes), [enabledTaskTypes]);
+  const availableCommandModes = useMemo(
+    () => (["ai", "shell", "gitflow"] as const).filter((mode): mode is CommandMode =>
+      isCommandModeSupported(mode, normalizedSkills, acceptedTaskTypes)
+    ),
+    [normalizedSkills, acceptedTaskTypes]
+  );
   const commandMode = fixedCommandMode ?? selectedCommandMode;
   const commandModeSupported = isCommandModeSupported(commandMode, normalizedSkills, acceptedTaskTypes);
   const noAcceptedTaskTypes = acceptedTaskTypes.length === 0;
@@ -112,18 +118,24 @@ export function CommandComposer({
           disabled={disabled || submitting}
           aria-label="Command mode"
         >
-          <ToggleButton value="ai" aria-label="AI command" disabled={!isCommandModeSupported("ai", normalizedSkills, acceptedTaskTypes)}>
-            <AutoAwesomeIcon fontSize="small" sx={{ mr: 0.75 }} />
-            AI
-          </ToggleButton>
-          <ToggleButton value="shell" aria-label="Shell command" disabled={!isCommandModeSupported("shell", normalizedSkills, acceptedTaskTypes)}>
-            <TerminalIcon fontSize="small" sx={{ mr: 0.75 }} />
-            Shell
-          </ToggleButton>
-          <ToggleButton value="gitflow" aria-label="Gitflow command" disabled={!isCommandModeSupported("gitflow", normalizedSkills, acceptedTaskTypes)}>
-            <AccountTreeIcon fontSize="small" sx={{ mr: 0.75 }} />
-            Gitflow
-          </ToggleButton>
+          {availableCommandModes.includes("ai") && (
+            <ToggleButton value="ai" aria-label="AI command">
+              <AutoAwesomeIcon fontSize="small" sx={{ mr: 0.75 }} />
+              AI
+            </ToggleButton>
+          )}
+          {availableCommandModes.includes("shell") && (
+            <ToggleButton value="shell" aria-label="Shell command">
+              <TerminalIcon fontSize="small" sx={{ mr: 0.75 }} />
+              Shell
+            </ToggleButton>
+          )}
+          {availableCommandModes.includes("gitflow") && (
+            <ToggleButton value="gitflow" aria-label="Gitflow command">
+              <AccountTreeIcon fontSize="small" sx={{ mr: 0.75 }} />
+              Gitflow
+            </ToggleButton>
+          )}
         </ToggleButtonGroup>
       )}
       {commandMode === "gitflow" && !gitflowContinuation ? (
