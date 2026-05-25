@@ -176,9 +176,7 @@ create index if not exists client_command_users_user_idx
 
 create table if not exists integration_intake_events (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
   provider text not null,
-  integration_id uuid not null,
   source_item_id text not null,
   source_item_key text not null,
   source_item_url text,
@@ -204,13 +202,13 @@ create table if not exists integration_intake_event_users (
 create index if not exists integration_intake_event_users_user_idx
   on integration_intake_event_users(user_id, event_id);
 
+create index if not exists integration_intake_event_users_event_user_idx
+  on integration_intake_event_users(event_id, user_id);
+
 create unique index if not exists integration_intake_events_active_source_item_idx
   on integration_intake_events(provider, source_item_url)
   where source_item_url is not null
     and status in ('queueing', 'queued', 'processing');
-
-create index if not exists integration_intake_events_user_status_idx
-  on integration_intake_events(user_id, status, updated_at desc);
 
 create index if not exists integration_intake_events_repository_idx
   on integration_intake_events(normalized_repository_url);

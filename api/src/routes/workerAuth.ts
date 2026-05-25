@@ -26,7 +26,7 @@ export function createWorkerAuthRoutes(
   router.post("/token", controller.issueToken);
   router.post("/refresh", controller.refreshToken);
   router.get("/public-key", controller.publicKey);
-  router.get("/jira-attachments/:integrationId/:issueId/:attachmentId", controller.downloadJiraAttachment);
+  router.get("/jira-attachments/:eventId/:attachmentId", controller.downloadJiraAttachment);
 
   return router;
 }

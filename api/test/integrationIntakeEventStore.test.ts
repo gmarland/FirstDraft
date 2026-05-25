@@ -78,9 +78,7 @@ class BeginExistingEventDbClient implements DbClient {
       assert.match(sql, /on conflict \(provider, source_item_url\)/);
       assert.match(sql, /source_item_url is not null/);
       assert.deepEqual(parameters, [
-        "user-2",
         "jira",
-        "integration-2",
         "10001",
         "FD-123",
         "https://example.atlassian.net/browse/FD-123",
@@ -177,9 +175,7 @@ function intakeEventRow(
 ): Record<string, unknown> {
   return {
     id: "event-1",
-    user_id: "user-1",
     provider: "jira",
-    integration_id: "integration-1",
     source_item_id: "10001",
     source_item_key: "FD-123",
     source_item_url: "https://example.atlassian.net/browse/FD-123",

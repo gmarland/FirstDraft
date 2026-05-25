@@ -13,9 +13,7 @@ export type IntegrationIntakeStatus =
 
 export type IntegrationIntakeEvent = {
   id: string;
-  userId: string;
   provider: string;
-  integrationId: string;
   sourceItemId: string;
   sourceItemKey: string;
   sourceItemUrl?: string;
@@ -28,6 +26,12 @@ export type IntegrationIntakeEvent = {
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+};
+
+export type IntegrationIntakeEventParticipant = {
+  eventId: string;
+  userId: string;
+  integrationId: string;
 };
 
 export type BeginIntegrationIntakeInput = {
@@ -50,9 +54,7 @@ export class IntegrationIntakeEventStore {
       const result = await this.pool.query(
         `
           insert into integration_intake_events (
-            user_id,
             provider,
-            integration_id,
             source_item_id,
             source_item_key,
             source_item_url,
@@ -62,7 +64,7 @@ export class IntegrationIntakeEventStore {
             status,
             updated_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'queueing', now())
+          values ($1, $2, $3, $4, $5, $6, $7, 'queueing', now())
           on conflict (provider, source_item_url)
             where source_item_url is not null
               and status in ('queueing', 'queued', 'processing')
@@ -70,9 +72,7 @@ export class IntegrationIntakeEventStore {
           returning ${returningColumns}
         `,
         [
-          input.userId,
           input.provider,
-          input.integrationId,
           input.sourceItemId,
           input.sourceItemKey,
           input.sourceItemUrl ?? null,
@@ -146,17 +146,85 @@ export class IntegrationIntakeEventStore {
     const result = await this.pool.query(
       `
         select ${returningColumns}
-        from integration_intake_events
+          from integration_intake_events
         where provider = $1
-          and integration_id = $2
-          and source_item_id = $3
+          and source_item_id = $2
         order by created_at desc
         limit 1
       `,
-      [provider, integrationId, sourceItemId]
+      [provider, sourceItemId]
     );
 
     return result.rows[0] ? mapIntegrationIntakeEvent(result.rows[0]) : undefined;
+  }
+
+  public async getByIdForWorker(
+    id: string,
+    workerId: string,
+    userId: string
+  ): Promise<{ event: IntegrationIntakeEvent; participant: IntegrationIntakeEventParticipant } | undefined> {
+    const result = await this.pool.query(
+      `
+        select
+          ${prefixedReturningColumns("events")},
+          participants.user_id as participant_user_id,
+          participants.integration_id as participant_integration_id
+        from integration_intake_events events
+        inner join integration_intake_event_users participants
+          on participants.event_id = events.id
+          and participants.user_id = $3
+        where events.id = $1
+          and events.worker_id = $2
+        order by participants.created_at asc, participants.integration_id asc
+        limit 1
+      `,
+      [id, workerId, userId]
+    );
+
+    return result.rows[0]
+      ? {
+          event: mapIntegrationIntakeEvent(result.rows[0]),
+          participant: mapIntegrationIntakeEventParticipant(result.rows[0], id),
+        }
+      : undefined;
+  }
+
+  public async getParticipantForWorker(
+    transactionId: string,
+    workerId: string
+  ): Promise<IntegrationIntakeEventParticipant | undefined> {
+    const result = await this.pool.query(
+      `
+        select
+          events.id as event_id,
+          participants.user_id,
+          participants.integration_id
+        from integration_intake_events events
+        inner join client_commands commands
+          on commands.transaction_id = events.transaction_id
+        inner join client_workers worker
+          on worker.worker_id = $2
+          and worker.worker_id = commands.worker_id
+        inner join api_keys worker_api_key
+          on worker_api_key.id = worker.api_key_id
+          and worker_api_key.revoked_at is null
+        inner join integration_intake_event_users participants
+          on participants.event_id = events.id
+          and participants.user_id = worker_api_key.user_id
+        where events.transaction_id = $1
+        order by participants.created_at asc, participants.integration_id asc
+        limit 1
+      `,
+      [transactionId, workerId]
+    );
+
+    return result.rows[0]
+      ? {
+          eventId: String(result.rows[0].event_id),
+          userId: String(result.rows[0].user_id),
+          integrationId: String(result.rows[0].integration_id),
+        }
+      : undefined;
   }
 
   private async getActiveBySourceItem(input: BeginIntegrationIntakeInput): Promise<IntegrationIntakeEvent | undefined> {
@@ -182,13 +250,12 @@ export class IntegrationIntakeEventStore {
         select ${returningColumns}
         from integration_intake_events
         where provider = $1
-          and integration_id = $2
-          and source_item_key = $3
+          and source_item_key = $2
           and status in ('queueing', 'queued', 'processing')
         order by created_at desc
         limit 1
       `,
-      [input.provider, input.integrationId, input.sourceItemKey]
+      [input.provider, input.sourceItemKey]
     );
 
     return result.rows[0] ? mapIntegrationIntakeEvent(result.rows[0]) : undefined;
@@ -279,9 +346,7 @@ export class IntegrationIntakeEventStore {
 
 const returningColumns = `
   id,
-  user_id,
   provider,
-  integration_id,
   source_item_id,
   source_item_key,
   source_item_url,
@@ -296,12 +361,19 @@ const returningColumns = `
   updated_at
 `;
 
+function prefixedReturningColumns(prefix: string): string {
+  return returningColumns
+    .split(",")
+    .map((column) => column.trim())
+    .filter(Boolean)
+    .map((column) => `${prefix}.${column}`)
+    .join(", ");
+}
+
 function mapIntegrationIntakeEvent(row: QueryResultRow): IntegrationIntakeEvent {
   return {
     id: String(row.id),
-    userId: String(row.user_id),
     provider: String(row.provider),
-    integrationId: String(row.integration_id),
     sourceItemId: String(row.source_item_id),
     sourceItemKey: String(row.source_item_key),
     sourceItemUrl: row.source_item_url ? String(row.source_item_url) : undefined,
@@ -314,6 +386,17 @@ function mapIntegrationIntakeEvent(row: QueryResultRow): IntegrationIntakeEvent 
     metadata: readMetadata(row.metadata),
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at)
+  };
+}
+
+function mapIntegrationIntakeEventParticipant(
+  row: QueryResultRow,
+  eventId: string
+): IntegrationIntakeEventParticipant {
+  return {
+    eventId,
+    userId: String(row.participant_user_id),
+    integrationId: String(row.participant_integration_id),
   };
 }
 
