@@ -1,12 +1,19 @@
 import { MouseEvent, useState } from "react";
 import {
   Box,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
   Link,
+  MenuItem,
+  OutlinedInput,
   Paper,
+  Select,
+  SelectChangeEvent,
   Stack,
   Table,
   TableBody,
@@ -21,26 +28,37 @@ import CloseIcon from "@mui/icons-material/Close";
 import { EmptyState } from "../EmptyState";
 import { StatusBadge } from "../StatusBadge";
 import { formatDate, relativeTime } from "../../lib/dates";
-import type { Command } from "../../types/api";
+import type { Command, CommandStatus } from "../../types/api";
 
 type Props = {
   commands: Command[];
   total: number;
   page: number;
   pageSize: number;
+  selectedStatuses: CommandStatus[];
   loading: boolean;
   onPageChange(page: number): void;
   onPageSizeChange(pageSize: number): void;
+  onStatusesChange(statuses: CommandStatus[]): void;
 };
+
+const statusOptions: Array<{ value: CommandStatus; label: string }> = [
+  { value: "queued", label: "Queued" },
+  { value: "in_progress", label: "In progress" },
+  { value: "completed", label: "Completed" },
+  { value: "failed", label: "Failed" },
+];
 
 export function TaskQueuePanel({
   commands,
   total,
   page,
   pageSize,
+  selectedStatuses,
   loading,
   onPageChange,
   onPageSizeChange,
+  onStatusesChange,
 }: Props) {
   const [selectedCommandId, setSelectedCommandId] = useState<string | null>(
     null,
@@ -49,20 +67,62 @@ export function TaskQueuePanel({
     commands.find((command) => command.transactionId === selectedCommandId) ?? null;
 
   const closeDetail = () => setSelectedCommandId(null);
+  const changeStatuses = (event: SelectChangeEvent<CommandStatus[]>) => {
+    const value = event.target.value;
+    const nextStatuses = typeof value === "string"
+      ? value.split(",").filter(isCommandStatus)
+      : value;
+    onStatusesChange(nextStatuses.length > 0 ? nextStatuses : ["queued", "in_progress"]);
+  };
+  const statusFilter = (
+    <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+      <FormControl size="small" sx={{ minWidth: 260 }}>
+        <InputLabel id="task-status-filter-label">Status</InputLabel>
+        <Select
+          labelId="task-status-filter-label"
+          multiple
+          value={selectedStatuses}
+          onChange={changeStatuses}
+          input={<OutlinedInput label="Status" />}
+          renderValue={(selected) => (
+            <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75 }}>
+              {selected.map((status) => (
+                <StatusBadge key={status} value={status} />
+              ))}
+            </Stack>
+          )}
+        >
+          {statusOptions.map((option) => (
+            <MenuItem key={option.value} value={option.value}>
+              <Checkbox checked={selectedStatuses.includes(option.value)} />
+              <Typography>{option.label}</Typography>
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Box>
+  );
 
   if (commands.length === 0 && !loading && total === 0) {
     return (
-      <EmptyState title="No active tasks">
-        Jira and future integration tasks will appear here after intake.
-      </EmptyState>
+      <Stack spacing={1.5}>
+        {statusFilter}
+        <EmptyState title={isDefaultStatusFilter(selectedStatuses) ? "No active tasks" : "No matching tasks"}>
+          {isDefaultStatusFilter(selectedStatuses)
+            ? "Jira and future integration tasks will appear here after intake."
+            : "No tasks match the selected statuses."}
+        </EmptyState>
+      </Stack>
     );
   }
 
   return (
     <>
-      <Paper variant="outlined">
-        <TableContainer>
-          <Table size="small" aria-label="Task queue" sx={{ tableLayout: "fixed" }}>
+      <Stack spacing={1.5}>
+        {statusFilter}
+        <Paper variant="outlined">
+          <TableContainer>
+            <Table size="small" aria-label="Task queue" sx={{ tableLayout: "fixed" }}>
             <TableHead>
               <TableRow>
                 <TableCell sx={{ width: 132 }}>Status</TableCell>
@@ -124,22 +184,31 @@ export function TaskQueuePanel({
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
-        {total > 0 && (
-          <TablePagination
-            component="div"
-            count={total}
-            page={page}
-            rowsPerPage={pageSize}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            onPageChange={(_event, nextPage) => onPageChange(nextPage)}
-            onRowsPerPageChange={(event) => onPageSizeChange(Number(event.target.value))}
-          />
-        )}
-      </Paper>
+          </TableContainer>
+          {total > 0 && (
+            <TablePagination
+              component="div"
+              count={total}
+              page={page}
+              rowsPerPage={pageSize}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              onPageChange={(_event, nextPage) => onPageChange(nextPage)}
+              onRowsPerPageChange={(event) => onPageSizeChange(Number(event.target.value))}
+            />
+          )}
+        </Paper>
+      </Stack>
       <TaskQueueDetailDialog command={selectedCommand} onClose={closeDetail} />
     </>
   );
+}
+
+function isCommandStatus(value: string): value is CommandStatus {
+  return statusOptions.some((option) => option.value === value);
+}
+
+function isDefaultStatusFilter(statuses: CommandStatus[]): boolean {
+  return statuses.length === 2 && statuses.includes("queued") && statuses.includes("in_progress");
 }
 
 function SourceLabel({ command }: { command: Command }) {

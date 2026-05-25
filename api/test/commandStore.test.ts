@@ -96,8 +96,8 @@ class TaskQueueDbClient implements DbClient {
     if (sql.includes("count(*)")) {
       assert.match(sql, /inner join client_command_users command_users/);
       assert.match(sql, /where command_users\.user_id = \$1/);
-      assert.match(sql, /client_commands\.status in \('queued', 'in_progress'\)/);
-      assert.deepEqual(parameters, ["user-1"]);
+      assert.match(sql, /client_commands\.status = any\(\$2::text\[\]\)/);
+      assert.deepEqual(parameters, ["user-1", ["queued", "in_progress", "completed", "failed"]]);
       return { rows: [{ total: "4" }], rowCount: 1 };
     }
 
@@ -106,11 +106,15 @@ class TaskQueueDbClient implements DbClient {
     assert.match(sql, /from integration_intake_events intake_events/);
     assert.match(sql, /intake\.provider as source_provider/);
     assert.match(sql, /where command_users\.user_id = \$1/);
-    assert.match(sql, /commands\.status in \('queued', 'in_progress'\)/);
-    assert.match(sql, /case when commands\.status = 'queued' then 0 else 1 end/);
-    assert.match(sql, /commands\.created_at asc/);
+    assert.match(sql, /commands\.status = any\(\$4::text\[\]\)/);
+    assert.match(sql, /when 'queued' then 0/);
+    assert.match(sql, /when 'in_progress' then 1/);
+    assert.match(sql, /when 'completed' then 2/);
+    assert.match(sql, /when 'failed' then 3/);
+    assert.match(sql, /commands\.completed_at end desc nulls last/);
+    assert.match(sql, /coalesce\(commands\.claimed_at, commands\.created_at\) end asc nulls last/);
     assert.match(sql, /limit \$2 offset \$3/);
-    assert.deepEqual(parameters, ["user-1", 2, 2]);
+    assert.deepEqual(parameters, ["user-1", 2, 2, ["queued", "in_progress", "completed", "failed"]]);
     return {
       rows: [
         commandRow("queued-unassigned", "2026-05-24T09:00:00.000Z", {
@@ -124,9 +128,17 @@ class TaskQueueDbClient implements DbClient {
         commandRow("in-progress-assigned", "2026-05-24T10:00:00.000Z", {
           status: "in_progress",
           workerId: "worker-2"
+        }),
+        commandRow("completed-assigned", "2026-05-24T11:00:00.000Z", {
+          status: "completed",
+          workerId: "worker-3"
+        }),
+        commandRow("failed-assigned", "2026-05-24T12:00:00.000Z", {
+          status: "failed",
+          workerId: "worker-4"
         })
       ],
-      rowCount: 2
+      rowCount: 4
     };
   }
 }
@@ -135,13 +147,22 @@ async function testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWork
   const db = new TaskQueueDbClient();
   const store = new CommandStore(db);
 
-  const result = await store.listTaskQueueForUser("user-1", { page: 1, pageSize: 2 });
+  const result = await store.listTaskQueueForUser("user-1", {
+    page: 1,
+    pageSize: 2,
+    statuses: ["queued", "in_progress", "completed", "failed"]
+  });
 
   assert.equal(result.total, 4);
   assert.equal(result.page, 1);
   assert.equal(result.pageSize, 2);
-  assert.deepEqual(result.commands.map((command) => command.transactionId), ["queued-unassigned", "in-progress-assigned"]);
-  assert.deepEqual(result.commands.map((command) => command.status), ["queued", "in_progress"]);
+  assert.deepEqual(result.commands.map((command) => command.transactionId), [
+    "queued-unassigned",
+    "in-progress-assigned",
+    "completed-assigned",
+    "failed-assigned"
+  ]);
+  assert.deepEqual(result.commands.map((command) => command.status), ["queued", "in_progress", "completed", "failed"]);
   assert.equal(result.commands[0].workerId, undefined);
   assert.equal(result.commands[1].workerId, "worker-2");
   assert.equal(result.commands[0].sourceProvider, "jira");

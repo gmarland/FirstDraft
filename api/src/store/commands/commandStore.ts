@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { Command, CommandMode, PaginatedCommands } from "../../types.js";
 import { DbClient } from "../../db/dbClient.js";
-import type { CancelCommandInput, CommandOutputMetadataInput, CommandPagination, CompleteCommandInput } from "../clientStore.js";
+import type { CancelCommandInput, CommandOutputMetadataInput, CommandPagination, CompleteCommandInput, TaskQueueQuery } from "../clientStore.js";
 import { mapCommand } from "./commandRowMappers.js";
 
 export type CreateQueuedCommandInput = {
@@ -207,8 +207,8 @@ export class CommandStore {
     };
   }
 
-  public async listTaskQueueForUser(userId: string, pagination: CommandPagination): Promise<PaginatedCommands> {
-    const offset = pagination.page * pagination.pageSize;
+  public async listTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<PaginatedCommands> {
+    const offset = query.page * query.pageSize;
     const [commandsResult, countResult] = await Promise.all([
       this.pool.query(
         `
@@ -235,13 +235,22 @@ export class CommandStore {
             limit 1
           ) intake on true
           where command_users.user_id = $1
-            and commands.status in ('queued', 'in_progress')
+            and commands.status = any($4::text[])
           order by
-            case when commands.status = 'queued' then 0 else 1 end,
+            case commands.status
+              when 'queued' then 0
+              when 'in_progress' then 1
+              when 'completed' then 2
+              when 'failed' then 3
+              else 4
+            end,
+            case when commands.status in ('completed', 'failed') then commands.completed_at end desc nulls last,
+            case when commands.status in ('completed', 'failed') then commands.created_at end desc,
+            case when commands.status in ('queued', 'in_progress') then coalesce(commands.claimed_at, commands.created_at) end asc nulls last,
             commands.created_at asc
           limit $2 offset $3
         `,
-        [userId, pagination.pageSize, offset]
+        [userId, query.pageSize, offset, query.statuses]
       ),
       this.pool.query(
         `
@@ -250,17 +259,17 @@ export class CommandStore {
           inner join client_command_users command_users
             on command_users.transaction_id = client_commands.transaction_id
           where command_users.user_id = $1
-            and client_commands.status in ('queued', 'in_progress')
+            and client_commands.status = any($2::text[])
         `,
-        [userId]
+        [userId, query.statuses]
       )
     ]);
 
     return {
       commands: commandsResult.rows.map(mapCommand),
       total: Number(countResult.rows[0]?.total ?? 0),
-      page: pagination.page,
-      pageSize: pagination.pageSize
+      page: query.page,
+      pageSize: query.pageSize
     };
   }
 

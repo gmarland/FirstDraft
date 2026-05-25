@@ -1,4 +1,8 @@
-import { CommandMode } from "../../types.js";
+import { CommandMode, CommandStatus } from "../../types.js";
+
+export const DEFAULT_TASK_QUEUE_STATUSES: CommandStatus[] = ["queued", "in_progress"];
+
+const commandStatuses = new Set<CommandStatus>(["queued", "in_progress", "completed", "failed"]);
 
 export function parseCommandMode(value: string | undefined): CommandMode | undefined {
   if (value === undefined) return "ai";
@@ -34,4 +38,17 @@ export function readCancelReason(body: unknown): string {
 export function readWorkerEnabled(body: unknown): boolean | undefined {
   const payload = body as { enabled?: unknown };
   return typeof payload?.enabled === "boolean" ? payload.enabled : undefined;
+}
+
+export function readTaskQueueStatuses(query: Record<string, unknown>): CommandStatus[] {
+  const rawStatus = query.status;
+  const requestedStatuses = Array.isArray(rawStatus) ? rawStatus : [rawStatus];
+  const statuses: CommandStatus[] = [];
+
+  for (const status of requestedStatuses) {
+    if (typeof status !== "string" || !commandStatuses.has(status as CommandStatus)) continue;
+    if (!statuses.includes(status as CommandStatus)) statuses.push(status as CommandStatus);
+  }
+
+  return statuses.length > 0 ? statuses : DEFAULT_TASK_QUEUE_STATUSES;
 }

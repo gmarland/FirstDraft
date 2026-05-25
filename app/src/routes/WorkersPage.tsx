@@ -26,6 +26,7 @@ import { PageHeader } from "../components/PageHeader";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useAsyncData } from "../lib/useAsyncData";
+import type { CommandStatus } from "../types/api";
 
 type Props = {
   navigate(to: string): void;
@@ -43,10 +44,14 @@ export function WorkersPage({ navigate }: Props) {
   const [disablingAll, setDisablingAll] = useState(false);
   const [queuePage, setQueuePage] = useState(0);
   const [queuePageSize, setQueuePageSize] = useState(10);
+  const [queueStatuses, setQueueStatuses] = useState<CommandStatus[]>([
+    "queued",
+    "in_progress",
+  ]);
   const load = useCallback(() => api.listWorkers(token!), [token]);
   const loadQueue = useCallback(
-    () => api.listTaskQueue(token!, { page: queuePage, pageSize: queuePageSize }),
-    [token, queuePage, queuePageSize],
+    () => api.listTaskQueue(token!, { page: queuePage, pageSize: queuePageSize, statuses: queueStatuses }),
+    [token, queuePage, queuePageSize, queueStatuses],
   );
   const {
     data: workers,
@@ -230,10 +235,15 @@ export function WorkersPage({ navigate }: Props) {
               total={taskQueue.total}
               page={queuePage}
               pageSize={queuePageSize}
+              selectedStatuses={queueStatuses}
               loading={queueLoading}
               onPageChange={setQueuePage}
               onPageSizeChange={(nextPageSize) => {
                 setQueuePageSize(nextPageSize);
+                setQueuePage(0);
+              }}
+              onStatusesChange={(nextStatuses) => {
+                setQueueStatuses(nextStatuses);
                 setQueuePage(0);
               }}
             />

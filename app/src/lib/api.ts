@@ -2,6 +2,7 @@ import type {
   WorkerRegistration,
   Command,
   CommandMode,
+  CommandStatus,
   PaginatedCommands,
   CreatedApiKey,
   LoginResponse,
@@ -180,11 +181,14 @@ export const api = {
     );
   },
 
-  listTaskQueue(token: string, pagination: { page: number; pageSize: number }) {
+  listTaskQueue(token: string, pagination: { page: number; pageSize: number; statuses: CommandStatus[] }) {
     const params = new URLSearchParams({
       page: String(pagination.page),
       pageSize: String(pagination.pageSize),
     });
+    for (const status of pagination.statuses) {
+      params.append("status", status);
+    }
 
     return request<PaginatedCommands>(
       `/api/workers/task-queue?${params.toString()}`,
