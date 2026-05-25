@@ -66,13 +66,11 @@ export class SchemaMigrator {
         skills text[] not null default '{}',
         enabled boolean not null default true,
         enabled_task_types text[] not null default '{ai,shell,gitflow}',
-        max_concurrent_tasks integer not null default 1
+        max_concurrent_tasks integer not null default 1,
+        state text not null default 'stopped',
+        state_updated_at timestamptz,
+        stopped_at timestamptz
       );
-
-      alter table client_workers
-        add column if not exists enabled boolean not null default true,
-        add column if not exists enabled_task_types text[] not null default '{ai,shell,gitflow}',
-        add column if not exists max_concurrent_tasks integer not null default 1;
 
       create index if not exists client_workers_last_seen_idx
         on client_workers(last_seen_at desc);
@@ -91,12 +89,6 @@ export class SchemaMigrator {
         updated_at timestamptz not null default now(),
         primary key (user_id, normalized_repository_url)
       );
-
-      alter table user_git_repositories
-        add column if not exists default_target_branch text not null default 'main',
-        add column if not exists enabled boolean not null default true,
-        add column if not exists created_at timestamptz not null default now(),
-        add column if not exists updated_at timestamptz not null default now();
 
       create index if not exists user_git_repositories_user_last_used_idx
         on user_git_repositories(user_id, last_used_at desc);
@@ -136,121 +128,18 @@ export class SchemaMigrator {
         updated_at timestamptz not null default now()
       );
 
-      alter table tenant_jira_integration
-        drop constraint if exists tenant_jira_integration_singleton;
-
-      do $$
-      declare
-        generated_id text;
-      begin
-        if exists (
-          select 1
-          from information_schema.columns
-          where table_name = 'tenant_jira_integration'
-            and column_name = 'id'
-            and data_type <> 'uuid'
-        ) then
-          select format(
-            '%s-%s-%s-%s-%s',
-            substr(seed, 1, 8),
-            substr(seed, 9, 4),
-            substr(seed, 13, 4),
-            substr(seed, 17, 4),
-            substr(seed, 21, 12)
-          )
-          into generated_id
-          from (select md5(random()::text || clock_timestamp()::text) as seed) generated;
-
-          alter table tenant_jira_integration
-            alter column id drop default;
-
-          update tenant_jira_integration
-          set id = generated_id
-          where id = 'default';
-
-          alter table tenant_jira_integration
-            alter column id type uuid using id::uuid;
-        end if;
-      end $$;
-
-      drop index if exists tenant_jira_integration_singleton_idx;
-
-      alter table tenant_jira_integration
-        add column if not exists user_id uuid;
-
-      update tenant_jira_integration
-      set user_id = coalesce(user_id, (select id from users order by created_at asc limit 1))
-      where user_id is null;
-
-      delete from tenant_jira_integration
-      where user_id is null;
-
-      alter table tenant_jira_integration
-        alter column user_id set not null;
-
-      do $$
-      begin
-        if not exists (
-          select 1
-          from pg_constraint
-          where conname = 'tenant_jira_integration_user_id_fkey'
-        ) then
-          alter table tenant_jira_integration
-            add constraint tenant_jira_integration_user_id_fkey
-            foreign key (user_id) references users(id) on delete cascade;
-        end if;
-      end $$;
-
       create index if not exists tenant_jira_integration_user_id_idx
         on tenant_jira_integration(user_id);
 
       create index if not exists tenant_jira_integration_user_enabled_idx
         on tenant_jira_integration(user_id, enabled);
 
-      alter table tenant_jira_integration
-        add column if not exists board_id integer;
-
-      alter table tenant_jira_integration
-        add column if not exists board_name text;
-
-      alter table tenant_jira_integration
-        add column if not exists board_type text;
-
-      alter table tenant_jira_integration
-        add column if not exists board_filter_id integer;
-
-      alter table tenant_jira_integration
-        add column if not exists ready_status_id text;
-
-      alter table tenant_jira_integration
-        add column if not exists ready_status_name text;
-
-      alter table tenant_jira_integration
-        drop column if exists ready_jql;
-
-      alter table tenant_jira_integration
-        add column if not exists processing_status_id text;
-
-      alter table tenant_jira_integration
-        add column if not exists processing_status_name text;
-
-      alter table tenant_jira_integration
-        add column if not exists processed_status_id text;
-
-      alter table tenant_jira_integration
-        add column if not exists processed_status_name text;
-
-      alter table tenant_jira_integration
-        drop column if exists processed_transition_id;
-
-      alter table tenant_jira_integration
-        drop column if exists processed_transition_name;
-
       create table if not exists client_commands (
         transaction_id text primary key,
         user_id uuid not null references users(id),
         worker_id text,
         command text not null,
+        task_summary text,
         execution_command text,
         command_mode text not null default 'ai',
         repository_url text,
@@ -268,31 +157,6 @@ export class SchemaMigrator {
         completed_at timestamptz
       );
 
-      alter table client_commands
-        alter column worker_id drop not null;
-
-      alter table client_commands
-        add column if not exists result text;
-
-      alter table client_commands
-        add column if not exists execution_command text;
-
-      alter table client_commands
-        add column if not exists repository_url text;
-
-      alter table client_commands
-        add column if not exists normalized_repository_url text;
-
-      alter table client_commands
-        add column if not exists agent_response text;
-
-      alter table client_commands
-        drop column if exists task_id;
-
-      drop table if exists client_task_gitflow_state;
-
-      drop table if exists client_tasks;
-
       create index if not exists client_commands_worker_created_idx
         on client_commands(worker_id, created_at);
 
@@ -302,8 +166,60 @@ export class SchemaMigrator {
       create index if not exists client_commands_queue_idx
         on client_commands(status, worker_id, command_mode, created_at);
 
+      create index if not exists client_commands_queue_user_idx
+        on client_commands(status, user_id, worker_id, command_mode, created_at);
+
       create index if not exists client_commands_repository_idx
         on client_commands(normalized_repository_url);
+
+      create table if not exists client_command_users (
+        transaction_id text not null references client_commands(transaction_id) on delete cascade,
+        user_id uuid not null references users(id) on delete cascade,
+        created_at timestamptz not null default now(),
+        primary key (transaction_id, user_id)
+      );
+
+      create index if not exists client_command_users_user_idx
+        on client_command_users(user_id, transaction_id);
+
+      create table if not exists integration_intake_events (
+        id uuid primary key default gen_random_uuid(),
+        provider text not null,
+        source_item_id text not null,
+        source_item_key text not null,
+        source_item_url text,
+        repository_url text not null,
+        normalized_repository_url text not null,
+        worker_id text references client_workers(worker_id) on delete set null,
+        transaction_id text references client_commands(transaction_id) on delete set null,
+        status text not null,
+        error_message text,
+        metadata jsonb not null default '{}'::jsonb,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
+
+      create table if not exists integration_intake_event_users (
+        event_id uuid not null references integration_intake_events(id) on delete cascade,
+        user_id uuid not null references users(id) on delete cascade,
+        integration_id uuid not null,
+        created_at timestamptz not null default now(),
+        primary key (event_id, user_id, integration_id)
+      );
+
+      create index if not exists integration_intake_event_users_user_idx
+        on integration_intake_event_users(user_id, event_id);
+
+      create index if not exists integration_intake_event_users_event_user_idx
+        on integration_intake_event_users(event_id, user_id);
+
+      create unique index if not exists integration_intake_events_active_source_item_idx
+        on integration_intake_events(provider, source_item_url)
+        where source_item_url is not null
+          and status in ('queueing', 'queued', 'processing');
+
+      create index if not exists integration_intake_events_repository_idx
+        on integration_intake_events(normalized_repository_url);
     `);
   }
 }
