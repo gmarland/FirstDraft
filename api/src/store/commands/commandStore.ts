@@ -34,6 +34,7 @@ export class CommandStore {
   }
 
   public async createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command> {
+    const transactionId = nanoid();
     const result = await this.pool.query(
       `
         insert into client_commands (
@@ -51,7 +52,7 @@ export class CommandStore {
         returning ${commandColumns}
       `,
       [
-        nanoid(),
+        transactionId,
         input.userId,
         input.workerId ?? null,
         input.command,
@@ -60,6 +61,15 @@ export class CommandStore {
         input.repositoryUrl ?? null,
         input.normalizedRepositoryUrl ?? null
       ]
+    );
+
+    await this.pool.query(
+      `
+        insert into client_command_users (transaction_id, user_id)
+        values ($1, $2)
+        on conflict do nothing
+      `,
+      [transactionId, input.userId]
     );
 
     return mapCommand(result.rows[0]);
@@ -99,6 +109,8 @@ export class CommandStore {
         select ${prefixedCommandColumns},
           worker_repos.normalized_repository_url is not null as worker_repository_match
         from client_commands commands
+        inner join client_command_users command_users
+          on command_users.transaction_id = commands.transaction_id
         inner join client_workers claiming_worker
           on claiming_worker.worker_id = $1
         inner join api_keys claiming_api_key
@@ -107,7 +119,7 @@ export class CommandStore {
           on worker_repos.worker_id = $1
           and worker_repos.normalized_repository_url = commands.normalized_repository_url
         where commands.status = 'queued'
-          and commands.user_id = claiming_api_key.user_id
+          and command_users.user_id = claiming_api_key.user_id
           and claiming_api_key.revoked_at is null
           and (commands.worker_id = $1 or commands.worker_id is null)
           and (
@@ -206,9 +218,23 @@ export class CommandStore {
             intake.source_item_key,
             intake.source_item_url
           from client_commands commands
-          left join integration_intake_events intake
-            on intake.transaction_id = commands.transaction_id
-          where commands.user_id = $1
+          inner join client_command_users command_users
+            on command_users.transaction_id = commands.transaction_id
+          left join lateral (
+            select
+              intake_events.provider,
+              intake_events.source_item_id,
+              intake_events.source_item_key,
+              intake_events.source_item_url
+            from integration_intake_events intake_events
+            where intake_events.transaction_id = commands.transaction_id
+            order by
+              case when intake_events.status in ('queueing', 'queued', 'processing') then 0 else 1 end,
+              intake_events.created_at asc,
+              intake_events.id asc
+            limit 1
+          ) intake on true
+          where command_users.user_id = $1
             and commands.status in ('queued', 'in_progress')
           order by
             case when commands.status = 'queued' then 0 else 1 end,
@@ -221,8 +247,10 @@ export class CommandStore {
         `
           select count(*) as total
           from client_commands
-          where user_id = $1
-            and status in ('queued', 'in_progress')
+          inner join client_command_users command_users
+            on command_users.transaction_id = client_commands.transaction_id
+          where command_users.user_id = $1
+            and client_commands.status in ('queued', 'in_progress')
         `,
         [userId]
       )
@@ -249,9 +277,11 @@ export class CommandStore {
         from client_workers claiming_worker
         inner join api_keys claiming_api_key
           on claiming_api_key.id = claiming_worker.api_key_id
+        inner join client_command_users command_users
+          on command_users.user_id = claiming_api_key.user_id
         where client_commands.transaction_id = $1
           and claiming_worker.worker_id = $2
-          and client_commands.user_id = claiming_api_key.user_id
+          and command_users.transaction_id = client_commands.transaction_id
           and claiming_api_key.revoked_at is null
           and client_commands.status = 'queued'
           and (client_commands.worker_id is null or client_commands.worker_id = $2)

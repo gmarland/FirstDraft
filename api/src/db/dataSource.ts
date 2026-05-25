@@ -12,6 +12,7 @@ import { WorkerTaskTypes1710000000007 } from "./migrations/1710000000007-WorkerT
 import { CentralCommandQueue1710000000007 } from "./migrations/1710000000007-CentralCommandQueue.js";
 import { ClientWorkerEnabled1710000000008 } from "./migrations/1710000000008-ClientWorkerEnabled.js";
 import { CommandQueueUserScope1710000000009 } from "./migrations/1710000000009-CommandQueueUserScope.js";
+import { SharedIntegrationTasks1710000000010 } from "./migrations/1710000000010-SharedIntegrationTasks.js";
 
 export function createDataSource(databaseUrl: string): DataSource {
   return new DataSource({
@@ -30,6 +31,7 @@ export function createDataSource(databaseUrl: string): DataSource {
       CentralCommandQueue1710000000007,
       ClientWorkerEnabled1710000000008,
       CommandQueueUserScope1710000000009,
+      SharedIntegrationTasks1710000000010,
     ],
     synchronize: false,
     migrationsRun: false,

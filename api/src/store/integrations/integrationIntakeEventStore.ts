@@ -63,8 +63,9 @@ export class IntegrationIntakeEventStore {
             updated_at
           )
           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'queueing', now())
-          on conflict (provider, integration_id, source_item_key)
-            where status in ('queueing', 'queued', 'processing')
+          on conflict (provider, source_item_url)
+            where source_item_url is not null
+              and status in ('queueing', 'queued', 'processing')
           do nothing
           returning ${returningColumns}
         `,
@@ -82,18 +83,25 @@ export class IntegrationIntakeEventStore {
       );
 
       if (result.rows[0]) {
-        return { event: mapIntegrationIntakeEvent(result.rows[0]), created: true };
+        const event = mapIntegrationIntakeEvent(result.rows[0]);
+        await this.addParticipant(event.id, input.userId, input.integrationId, event.transactionId);
+        return { event, created: true };
       }
 
-      const existing = await this.getActiveBySourceItem(input.provider, input.integrationId, input.sourceItemKey);
-      if (existing) return { event: existing, created: false };
+      const existing = await this.getActiveBySourceItem(input);
+      if (existing) {
+        await this.addParticipant(existing.id, input.userId, input.integrationId, existing.transactionId);
+        return { event: existing, created: false };
+      }
     }
 
     throw new Error("Integration intake event was not saved");
   }
 
   public async markQueued(id: string, transactionId: string, workerId?: string): Promise<IntegrationIntakeEvent> {
-    return this.update(id, "queued", undefined, workerId, transactionId);
+    const event = await this.update(id, "queued", undefined, workerId, transactionId);
+    await this.copyParticipantsToCommand(id, transactionId);
+    return event;
   }
 
   public async markProcessing(id: string, workerId?: string): Promise<IntegrationIntakeEvent> {
@@ -118,6 +126,11 @@ export class IntegrationIntakeEventStore {
         select ${returningColumns}
         from integration_intake_events
         where transaction_id = $1
+        order by
+          case when status in ('queueing', 'queued', 'processing') then 0 else 1 end,
+          created_at asc,
+          id asc
+        limit 1
       `,
       [transactionId]
     );
@@ -146,11 +159,24 @@ export class IntegrationIntakeEventStore {
     return result.rows[0] ? mapIntegrationIntakeEvent(result.rows[0]) : undefined;
   }
 
-  private async getActiveBySourceItem(
-    provider: string,
-    integrationId: string,
-    sourceItemKey: string
-  ): Promise<IntegrationIntakeEvent | undefined> {
+  private async getActiveBySourceItem(input: BeginIntegrationIntakeInput): Promise<IntegrationIntakeEvent | undefined> {
+    if (input.sourceItemUrl) {
+      const result = await this.pool.query(
+        `
+          select ${returningColumns}
+          from integration_intake_events
+          where provider = $1
+            and source_item_url = $2
+            and status in ('queueing', 'queued', 'processing')
+          order by created_at asc, id asc
+          limit 1
+        `,
+        [input.provider, input.sourceItemUrl]
+      );
+
+      return result.rows[0] ? mapIntegrationIntakeEvent(result.rows[0]) : undefined;
+    }
+
     const result = await this.pool.query(
       `
         select ${returningColumns}
@@ -162,10 +188,50 @@ export class IntegrationIntakeEventStore {
         order by created_at desc
         limit 1
       `,
-      [provider, integrationId, sourceItemKey]
+      [input.provider, input.integrationId, input.sourceItemKey]
     );
 
     return result.rows[0] ? mapIntegrationIntakeEvent(result.rows[0]) : undefined;
+  }
+
+  private async addParticipant(
+    eventId: string,
+    userId: string,
+    integrationId: string,
+    transactionId?: string
+  ): Promise<void> {
+    await this.pool.query(
+      `
+        insert into integration_intake_event_users (event_id, user_id, integration_id)
+        values ($1, $2, $3)
+        on conflict do nothing
+      `,
+      [eventId, userId, integrationId]
+    );
+
+    if (!transactionId) return;
+
+    await this.pool.query(
+      `
+        insert into client_command_users (transaction_id, user_id)
+        values ($1, $2)
+        on conflict do nothing
+      `,
+      [transactionId, userId]
+    );
+  }
+
+  private async copyParticipantsToCommand(eventId: string, transactionId: string): Promise<void> {
+    await this.pool.query(
+      `
+        insert into client_command_users (transaction_id, user_id)
+        select $2, user_id
+        from integration_intake_event_users
+        where event_id = $1
+        on conflict do nothing
+      `,
+      [eventId, transactionId]
+    );
   }
 
   private async update(
@@ -192,11 +258,12 @@ export class IntegrationIntakeEventStore {
               inner join client_workers assigned_worker
                 on assigned_worker.worker_id = $4
                 and assigned_worker.worker_id = commands.worker_id
+              inner join client_command_users command_users
+                on command_users.transaction_id = commands.transaction_id
               inner join api_keys assigned_api_key
                 on assigned_api_key.id = assigned_worker.api_key_id
               where commands.transaction_id = coalesce($5, integration_intake_events.transaction_id)
-                and commands.user_id = integration_intake_events.user_id
-                and commands.user_id = assigned_api_key.user_id
+                and command_users.user_id = assigned_api_key.user_id
                 and assigned_api_key.revoked_at is null
             )
           )

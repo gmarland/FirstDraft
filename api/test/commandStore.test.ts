@@ -31,6 +31,49 @@ class WorkerCommandsDbClient implements DbClient {
   }
 }
 
+class CreateQueuedCommandDbClient implements DbClient {
+  public calls: QueryCall[] = [];
+
+  public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
+    this.calls.push({ sql, parameters });
+
+    if (this.calls.length === 1) {
+      assert.match(sql, /insert into client_commands/);
+      assert.match(sql, /returning transaction_id/);
+      assert.equal(parameters?.[1], "user-1");
+      assert.equal(parameters?.[3], "echo hello");
+      return {
+        rows: [
+          commandRow(String(parameters?.[0]), "2026-05-24T09:00:00.000Z", {
+            status: "queued",
+            workerId: null
+          })
+        ],
+        rowCount: 1
+      };
+    }
+
+    assert.match(sql, /insert into client_command_users/);
+    assert.deepEqual(parameters, [this.calls[0].parameters?.[0], "user-1"]);
+    return { rows: [], rowCount: 0 };
+  }
+}
+
+async function testCreateQueuedCommandAddsOwnerMembership(): Promise<void> {
+  const db = new CreateQueuedCommandDbClient();
+  const store = new CommandStore(db);
+
+  const result = await store.createQueuedCommand({
+    userId: "user-1",
+    command: "echo hello",
+    commandMode: "shell"
+  });
+
+  assert.equal(result.userId, "user-1");
+  assert.equal(result.status, "queued");
+  assert.equal(db.calls.length, 2);
+}
+
 async function testListWorkerCommandsPaginatesAndCounts(): Promise<void> {
   const db = new WorkerCommandsDbClient();
   const store = new CommandStore(db);
@@ -51,15 +94,18 @@ class TaskQueueDbClient implements DbClient {
     this.calls.push({ sql, parameters });
 
     if (sql.includes("count(*)")) {
-      assert.match(sql, /where user_id = \$1/);
-      assert.match(sql, /status in \('queued', 'in_progress'\)/);
+      assert.match(sql, /inner join client_command_users command_users/);
+      assert.match(sql, /where command_users\.user_id = \$1/);
+      assert.match(sql, /client_commands\.status in \('queued', 'in_progress'\)/);
       assert.deepEqual(parameters, ["user-1"]);
       return { rows: [{ total: "4" }], rowCount: 1 };
     }
 
-    assert.match(sql, /left join integration_intake_events intake/);
+    assert.match(sql, /inner join client_command_users command_users/);
+    assert.match(sql, /left join lateral/);
+    assert.match(sql, /from integration_intake_events intake_events/);
     assert.match(sql, /intake\.provider as source_provider/);
-    assert.match(sql, /where commands\.user_id = \$1/);
+    assert.match(sql, /where command_users\.user_id = \$1/);
     assert.match(sql, /commands\.status in \('queued', 'in_progress'\)/);
     assert.match(sql, /case when commands\.status = 'queued' then 0 else 1 end/);
     assert.match(sql, /commands\.created_at asc/);
@@ -113,9 +159,10 @@ class DispatchableQueueDbClient implements DbClient {
 
     assert.match(sql, /inner join client_workers claiming_worker/);
     assert.match(sql, /claiming_worker\.worker_id = \$1/);
+    assert.match(sql, /inner join client_command_users command_users/);
     assert.match(sql, /inner join api_keys claiming_api_key/);
     assert.match(sql, /claiming_api_key\.id = claiming_worker\.api_key_id/);
-    assert.match(sql, /commands\.user_id = claiming_api_key\.user_id/);
+    assert.match(sql, /command_users\.user_id = claiming_api_key\.user_id/);
     assert.match(sql, /claiming_api_key\.revoked_at is null/);
     assert.match(sql, /commands\.worker_id = \$1 or commands\.worker_id is null/);
     assert.deepEqual(parameters, ["worker-1", true]);
@@ -153,9 +200,11 @@ class ClaimCommandDbClient implements DbClient {
     assert.match(sql, /from client_workers claiming_worker/);
     assert.match(sql, /inner join api_keys claiming_api_key/);
     assert.match(sql, /claiming_api_key\.id = claiming_worker\.api_key_id/);
+    assert.match(sql, /inner join client_command_users command_users/);
+    assert.match(sql, /command_users\.transaction_id = client_commands\.transaction_id/);
+    assert.match(sql, /command_users\.user_id = claiming_api_key\.user_id/);
     assert.match(sql, /where client_commands\.transaction_id = \$1/);
     assert.match(sql, /claiming_worker\.worker_id = \$2/);
-    assert.match(sql, /client_commands\.user_id = claiming_api_key\.user_id/);
     assert.match(sql, /claiming_api_key\.revoked_at is null/);
     assert.match(sql, /client_commands\.status = 'queued'/);
     assert.match(sql, /client_commands\.worker_id is null or client_commands\.worker_id = \$2/);
@@ -234,6 +283,7 @@ function commandRow(
   };
 }
 
+await testCreateQueuedCommandAddsOwnerMembership();
 await testListWorkerCommandsPaginatesAndCounts();
 await testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWorker();
 await testGetDispatchableQueuedCommandsScopesUnassignedCommandsToApiKeyOwner();

@@ -164,6 +164,16 @@ create index if not exists client_commands_queue_user_idx
 create index if not exists client_commands_repository_idx
   on client_commands(normalized_repository_url);
 
+create table if not exists client_command_users (
+  transaction_id text not null references client_commands(transaction_id) on delete cascade,
+  user_id uuid not null references users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (transaction_id, user_id)
+);
+
+create index if not exists client_command_users_user_idx
+  on client_command_users(user_id, transaction_id);
+
 create table if not exists integration_intake_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references users(id) on delete cascade,
@@ -183,9 +193,21 @@ create table if not exists integration_intake_events (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists integration_intake_event_users (
+  event_id uuid not null references integration_intake_events(id) on delete cascade,
+  user_id uuid not null references users(id) on delete cascade,
+  integration_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (event_id, user_id, integration_id)
+);
+
+create index if not exists integration_intake_event_users_user_idx
+  on integration_intake_event_users(user_id, event_id);
+
 create unique index if not exists integration_intake_events_active_source_item_idx
-  on integration_intake_events(provider, integration_id, source_item_key)
-  where status in ('queueing', 'queued', 'processing');
+  on integration_intake_events(provider, source_item_url)
+  where source_item_url is not null
+    and status in ('queueing', 'queued', 'processing');
 
 create index if not exists integration_intake_events_user_status_idx
   on integration_intake_events(user_id, status, updated_at desc);

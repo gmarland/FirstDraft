@@ -117,6 +117,25 @@ async function testMissingRepositoryWithoutProcessedStatusReturnsFailed(): Promi
   assert.equal(calls.some((call) => call.url.includes("/transitions")), false);
 }
 
+async function testDuplicateIssueAcrossIntegrationsQueuesOneCommand(): Promise<void> {
+  const { service, stores } = setupDuplicateIssueService();
+
+  const result = await service.run({ maxIssues: 1 });
+
+  assert.equal(result.processed, 2);
+  assert.equal(result.queued, 1);
+  assert.equal(result.skipped, 1);
+  assert.equal(stores.intakeEvents.beginCalls.length, 2);
+  assert.equal(stores.workers.commands.length, 1);
+  assert.equal(stores.intakeEvents.markQueuedCalls.length, 1);
+  assert.equal(stores.dispatcher.dispatchCalls, 1);
+  assert.equal(result.items[0].status, "queued");
+  assert.equal(result.items[0].transactionId, "transaction-1");
+  assert.equal(result.items[1].status, "skipped");
+  assert.equal(result.items[1].transactionId, "transaction-1");
+  assert.equal(result.items[1].reason, "already queued");
+}
+
 function setupService(options: FetchOptions & { integration?: Partial<JiraIntegrationCredentials> } = {}) {
   const calls = installFetchMock(options);
   const integration: JiraIntegrationCredentials = {
@@ -194,6 +213,171 @@ function setupService(options: FetchOptions & { integration?: Partial<JiraIntegr
       intakeEvents,
       workers,
     },
+  };
+}
+
+function setupDuplicateIssueService() {
+  installRepositoryIssueFetchMock();
+  const integrations: JiraIntegrationCredentials[] = [
+    buildIntegration({ id: "integration-1", userId: "user-1" }),
+    buildIntegration({ id: "integration-2", userId: "user-2" }),
+  ];
+  const intakeEvent = {
+    id: "event-1",
+    userId: "user-1",
+    provider: "jira",
+    integrationId: "integration-1",
+    sourceItemId: "issue-1",
+    sourceItemKey: "SCRUM-7",
+    sourceItemUrl: "https://example.atlassian.net/browse/SCRUM-7",
+    repositoryUrl: "https://github.com/example/repo.git",
+    normalizedRepositoryUrl: "github.com/example/repo",
+    status: "queueing",
+    metadata: {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const intakeEvents = {
+    beginCalls: [] as unknown[],
+    markQueuedCalls: [] as unknown[],
+    async begin(input: unknown) {
+      this.beginCalls.push(input);
+      if (this.beginCalls.length === 1) {
+        return {
+          event: intakeEvent,
+          created: true,
+        };
+      }
+      return {
+        event: {
+          ...intakeEvent,
+          status: "queued",
+          transactionId: "transaction-1",
+        },
+        created: false,
+      };
+    },
+    async markQueued(id: string, transactionId: string) {
+      this.markQueuedCalls.push({ id, transactionId });
+      return {
+        ...intakeEvent,
+        status: "queued",
+        transactionId,
+      };
+    },
+    async markFailed() {
+      throw new Error("markFailed should not be called");
+    },
+  };
+  const workers = {
+    commands: [] as unknown[],
+    async createQueuedCommand(input: { userId: string; command: string; commandMode?: CommandMode }) {
+      this.commands.push(input);
+      return {
+        transactionId: "transaction-1",
+        userId: input.userId,
+        command: input.command,
+        commandMode: input.commandMode ?? "ai",
+        status: "queued",
+        createdAt: new Date().toISOString(),
+      } satisfies Command;
+    },
+    async listWorkers(): Promise<WorkerRegistration[]> {
+      return [];
+    },
+    async listWorkersForUser(): Promise<WorkerRegistration[]> {
+      return [];
+    },
+  };
+  const gitRepositories = {
+    async getRepository() {
+      return undefined;
+    },
+    async recordUserGitflowUsage() {},
+  };
+  const dispatcher = {
+    dispatchCalls: 0,
+    async dispatchQueuedCommands() {
+      this.dispatchCalls += 1;
+    },
+  };
+  const jiraIntegrations = {
+    listEnabledCredentials: async () => integrations,
+    listAllEnabledCredentials: async () => integrations,
+  };
+
+  return {
+    service: new JiraIntakeService(
+      jiraIntegrations as never,
+      intakeEvents as never,
+      workers as never,
+      gitRepositories as never,
+      dispatcher,
+    ),
+    stores: {
+      intakeEvents,
+      workers,
+      dispatcher,
+    },
+  };
+}
+
+function buildIntegration(overrides: Partial<JiraIntegrationCredentials>): JiraIntegrationCredentials {
+  return {
+    id: "integration-1",
+    userId: "user-1",
+    connected: true,
+    enabled: true,
+    siteUrl: "https://example.atlassian.net",
+    email: "user@example.com",
+    apiToken: "api-token",
+    boardId: 1,
+    boardName: "Board",
+    boardType: "scrum",
+    boardFilterId: 10,
+    readyStatusId: "ready-id",
+    readyStatusName: "Ready",
+    processingStatusId: "doing-id",
+    processingStatusName: "Doing",
+    processedStatusId: "done-id",
+    processedStatusName: "Done",
+    ...overrides,
+  };
+}
+
+function installRepositoryIssueFetchMock(): void {
+  globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+
+    if (url.endsWith("/rest/api/3/field")) {
+      return jsonResponse([
+        {
+          id: "customfield_10001",
+          key: "customfield_10001",
+          name: "Repository",
+        },
+      ]);
+    }
+
+    if (url.endsWith("/rest/api/3/search/jql")) {
+      return jsonResponse({
+        issues: [
+          {
+            id: "issue-1",
+            key: "SCRUM-7",
+            fields: {
+              summary: "Build shared intake",
+              status: {
+                name: "Ready",
+              },
+              customfield_10001: "https://github.com/example/repo.git",
+            },
+          },
+        ],
+      });
+    }
+
+    return jsonResponse({ errorMessages: [`Unexpected Jira URL: ${url}`] }, 404);
   };
 }
 
@@ -287,6 +471,7 @@ try {
   await testMissingRepositoryCommentFailureReturnsFailed();
   await testMissingRepositoryTransitionFailureReturnsFailed();
   await testMissingRepositoryWithoutProcessedStatusReturnsFailed();
+  await testDuplicateIssueAcrossIntegrationsQueuesOneCommand();
 } finally {
   globalThis.fetch = originalFetch;
 }
