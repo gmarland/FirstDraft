@@ -2,6 +2,9 @@ import type {
   WorkerRegistration,
   Command,
   CommandMode,
+  CommandStatus,
+  TaskQueueSortBy,
+  TaskQueueSortDirection,
   PaginatedCommands,
   CreatedApiKey,
   LoginResponse,
@@ -180,11 +183,24 @@ export const api = {
     );
   },
 
-  listTaskQueue(token: string, pagination: { page: number; pageSize: number }) {
+  listTaskQueue(token: string, pagination: {
+    page: number;
+    pageSize: number;
+    statuses: CommandStatus[];
+    sortBy?: TaskQueueSortBy;
+    sortDirection?: TaskQueueSortDirection;
+  }) {
     const params = new URLSearchParams({
       page: String(pagination.page),
       pageSize: String(pagination.pageSize),
     });
+    for (const status of pagination.statuses) {
+      params.append("status", status);
+    }
+    if (pagination.sortBy && pagination.sortDirection) {
+      params.set("sortBy", pagination.sortBy);
+      params.set("sortDirection", pagination.sortDirection);
+    }
 
     return request<PaginatedCommands>(
       `/api/workers/task-queue?${params.toString()}`,

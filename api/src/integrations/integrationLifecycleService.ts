@@ -3,9 +3,11 @@ import { JiraClient } from "./jira/jiraClient.js";
 import { JiraIntegrationStore } from "../store/integrations/jiraIntegrationStore.js";
 import {
   IntegrationIntakeEvent,
+  IntegrationIntakeEventParticipant,
   IntegrationIntakeEventStore,
 } from "../store/integrations/integrationIntakeEventStore.js";
 import { GitRepositoryStore } from "../store/gitRepositories/gitRepositoryStore.js";
+import { JiraIntegrationCredentials } from "../store/integrations/jiraIntegrationStore.js";
 
 type JiraLifecycleStage = "processing" | "processed";
 
@@ -50,18 +52,19 @@ export class IntegrationLifecycleService {
       await this.intakeEvents.markProcessing(event.id, command?.workerId);
     }
 
-    const credentials = await this.jiraIntegrations.getCredentials(
-      event.userId,
-      event.integrationId,
-    );
+    const context = command
+      ? await this.getJiraContext(command)
+      : undefined;
+    const credentials = context?.credentials;
     if (!credentials) {
       console.warn("[integration-lifecycle] skipping Jira transition without credentials", {
         eventId: event.id,
         transactionId,
-        integrationId: event.integrationId,
+        integrationId: context?.participant.integrationId,
         issueKey: event.sourceItemKey,
         stage,
       });
+      await this.markEventStage(event, stage, command);
       return;
     }
 
@@ -78,10 +81,11 @@ export class IntegrationLifecycleService {
       console.warn("[integration-lifecycle] skipping Jira transition without configured status", {
         eventId: event.id,
         transactionId,
-        integrationId: event.integrationId,
+        integrationId: context?.participant.integrationId,
         issueKey: event.sourceItemKey,
         stage,
       });
+      await this.markEventStage(event, stage, command);
       return;
     }
 
@@ -95,7 +99,7 @@ export class IntegrationLifecycleService {
       console.log("[integration-lifecycle] Jira issue transitioned", {
         eventId: event.id,
         transactionId,
-        integrationId: event.integrationId,
+        integrationId: context?.participant.integrationId,
         issueKey: event.sourceItemKey,
         stage,
         transitionId: transition.id,
@@ -108,7 +112,7 @@ export class IntegrationLifecycleService {
       console.error("[integration-lifecycle] Jira transition failed", {
         eventId: event.id,
         transactionId,
-        integrationId: event.integrationId,
+        integrationId: context?.participant.integrationId,
         issueKey: event.sourceItemKey,
         stage,
         targetStatusId,
@@ -137,15 +141,13 @@ export class IntegrationLifecycleService {
     );
     if (!event || event.provider !== "jira") return;
 
-    const credentials = await this.jiraIntegrations.getCredentials(
-      event.userId,
-      event.integrationId,
-    );
+    const context = await this.getJiraContext(command);
+    const credentials = context?.credentials;
     if (!credentials) {
       console.warn("[integration-lifecycle] skipping Jira completion without credentials", {
         eventId: event.id,
         transactionId: command.transactionId,
-        integrationId: event.integrationId,
+        integrationId: context?.participant.integrationId,
         issueKey: event.sourceItemKey,
         status: command.status,
       });
@@ -154,6 +156,8 @@ export class IntegrationLifecycleService {
           event.id,
           command.errorMessage ?? "Gitflow command failed.",
         );
+      } else if (command.status === "completed") {
+        await this.intakeEvents.markProcessed(event.id);
       }
       return;
     }
@@ -161,7 +165,7 @@ export class IntegrationLifecycleService {
     const jira = new JiraClient(credentials);
     if (command.status === "completed") {
       await this.addJiraCompletionComment(jira, event, command);
-      await this.transitionJiraIssue(command.transactionId, "processed");
+      await this.transitionJiraIssue(command.transactionId, "processed", command);
       return;
     }
 
@@ -179,6 +183,32 @@ export class IntegrationLifecycleService {
     if (!event || event.provider !== "jira") return;
 
     await this.intakeEvents.markProcessing(event.id, command.workerId);
+  }
+
+  private async getJiraContext(
+    command: Command,
+  ): Promise<
+    | {
+        participant: IntegrationIntakeEventParticipant;
+        credentials?: JiraIntegrationCredentials;
+      }
+    | undefined
+  > {
+    if (!command.workerId) return undefined;
+
+    const participant = await this.intakeEvents.getParticipantForWorker(
+      command.transactionId,
+      command.workerId,
+    );
+    if (!participant) return undefined;
+
+    return {
+      participant,
+      credentials: await this.jiraIntegrations.getCredentials(
+        participant.userId,
+        participant.integrationId,
+      ),
+    };
   }
 
   private async recordAssignedRepositoryUsage(command: Command): Promise<void> {
@@ -256,7 +286,6 @@ export class IntegrationLifecycleService {
       console.log("[integration-lifecycle] Jira issue commented", {
         eventId: event.id,
         transactionId: command.transactionId,
-        integrationId: event.integrationId,
         issueKey: event.sourceItemKey,
         status: command.status,
       });
@@ -264,7 +293,6 @@ export class IntegrationLifecycleService {
       console.error("[integration-lifecycle] Jira comment failed", {
         eventId: event.id,
         transactionId: command.transactionId,
-        integrationId: event.integrationId,
         issueKey: event.sourceItemKey,
         status: command.status,
         reason: error instanceof Error ? error.message : String(error),

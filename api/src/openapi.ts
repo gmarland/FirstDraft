@@ -188,11 +188,24 @@ export const openApiDocument = {
     "/api/workers/task-queue": {
       get: {
         tags: ["Workers"],
-        summary: "List active queued and in-progress tasks for the current user",
+        summary: "List task queue entries for the current user",
         security: bearerSecurity(),
         parameters: [
           queryParam("page", "Zero-based page index", { type: "integer", minimum: 0, default: 0 }),
-          queryParam("pageSize", "Rows per page", { type: "integer", enum: [5, 10, 25, 50], default: 10 })
+          queryParam("pageSize", "Rows per page", { type: "integer", enum: [5, 10, 25, 50], default: 10 }),
+          queryParam("status", "Command statuses to include. Repeat this parameter to select multiple statuses. Defaults to queued and in_progress.", {
+            type: "array",
+            items: { type: "string", enum: ["queued", "in_progress", "completed", "failed"] },
+            default: ["queued", "in_progress"]
+          }),
+          queryParam("sortBy", "Task queue column to sort by. Defaults to queue priority ordering when omitted.", {
+            type: "string",
+            enum: ["status", "source", "task", "worker", "repository", "created"]
+          }),
+          queryParam("sortDirection", "Sort direction. Used only with sortBy.", {
+            type: "string",
+            enum: ["asc", "desc"]
+          })
         ],
         responses: {
           "200": jsonResponse("Task queue", ref("PaginatedCommands")),
@@ -462,6 +475,7 @@ export const openApiDocument = {
         userId: { type: "string" },
         workerId: { type: "string" },
         command: { type: "string" },
+        taskSummary: { type: "string" },
         executionCommand: nullable({ type: "string" }),
         commandMode: { type: "string", enum: ["ai", "shell", "gitflow"] },
         repositoryUrl: { type: "string" },

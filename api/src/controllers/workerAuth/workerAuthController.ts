@@ -76,15 +76,20 @@ export class WorkerAuthController {
       const worker = await this.tokens.verifyAccessToken(token);
       if (!worker) return res.status(401).json({ error: "invalid worker token" });
 
-      const event = await this.intakeEvents.getBySourceItemId("jira", req.params.integrationId, req.params.issueId);
-      if (!event || event.userId !== worker.userId || event.workerId !== worker.workerId) {
+      const resolved = await this.intakeEvents.getByIdForWorker(
+        req.params.eventId,
+        worker.workerId,
+        worker.userId,
+      );
+      if (!resolved) {
         return res.status(404).json({ error: "attachment not found" });
       }
 
+      const { event, participant } = resolved;
       const attachment = readImageAttachmentMetadata(event.metadata, req.params.attachmentId);
       if (!attachment) return res.status(404).json({ error: "attachment not found" });
 
-      const credentials = await this.jiraIntegrations.getCredentials(event.userId, event.integrationId);
+      const credentials = await this.jiraIntegrations.getCredentials(participant.userId, participant.integrationId);
       if (!credentials) return res.status(404).json({ error: "Jira integration not found" });
 
       const content = await new JiraClient(credentials).downloadAttachmentContent(attachment.contentUrl);

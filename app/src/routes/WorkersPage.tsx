@@ -26,6 +26,7 @@ import { PageHeader } from "../components/PageHeader";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useAsyncData } from "../lib/useAsyncData";
+import type { CommandStatus, TaskQueueSortBy, TaskQueueSortDirection } from "../types/api";
 
 type Props = {
   navigate(to: string): void;
@@ -33,8 +34,13 @@ type Props = {
 
 type WorkersTab = "workers" | "taskQueue";
 
+type TaskQueueSort = {
+  sortBy?: TaskQueueSortBy;
+  sortDirection?: TaskQueueSortDirection;
+};
+
 export function WorkersPage({ navigate }: Props) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<WorkersTab>("workers");
   const [actionsMenuAnchor, setActionsMenuAnchor] =
     useState<HTMLElement | null>(null);
@@ -43,10 +49,23 @@ export function WorkersPage({ navigate }: Props) {
   const [disablingAll, setDisablingAll] = useState(false);
   const [queuePage, setQueuePage] = useState(0);
   const [queuePageSize, setQueuePageSize] = useState(10);
+  const [queueStatuses, setQueueStatuses] = useState<CommandStatus[]>([
+    "queued",
+    "in_progress",
+  ]);
+  const [queueSort, setQueueSort] = useState<TaskQueueSort>({
+    sortDirection: "asc",
+  });
   const load = useCallback(() => api.listWorkers(token!), [token]);
   const loadQueue = useCallback(
-    () => api.listTaskQueue(token!, { page: queuePage, pageSize: queuePageSize }),
-    [token, queuePage, queuePageSize],
+    () => api.listTaskQueue(token!, {
+      page: queuePage,
+      pageSize: queuePageSize,
+      statuses: queueStatuses,
+      sortBy: queueSort.sortBy,
+      sortDirection: queueSort.sortDirection,
+    }),
+    [token, queuePage, queuePageSize, queueStatuses, queueSort],
   );
   const {
     data: workers,
@@ -226,14 +245,26 @@ export function WorkersPage({ navigate }: Props) {
           {queueLoading && !taskQueue && <Skeleton variant="rounded" height={260} />}
           {taskQueue && (
             <TaskQueuePanel
+              currentUserId={user?.userId}
               commands={taskQueue.commands}
               total={taskQueue.total}
               page={queuePage}
               pageSize={queuePageSize}
+              selectedStatuses={queueStatuses}
+              sortBy={queueSort.sortBy}
+              sortDirection={queueSort.sortDirection}
               loading={queueLoading}
               onPageChange={setQueuePage}
               onPageSizeChange={(nextPageSize) => {
                 setQueuePageSize(nextPageSize);
+                setQueuePage(0);
+              }}
+              onStatusesChange={(nextStatuses) => {
+                setQueueStatuses(nextStatuses);
+                setQueuePage(0);
+              }}
+              onSortChange={(sortBy, sortDirection) => {
+                setQueueSort({ sortBy, sortDirection });
                 setQueuePage(0);
               }}
             />

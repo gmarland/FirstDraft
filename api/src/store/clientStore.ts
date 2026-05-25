@@ -1,4 +1,4 @@
-import { WorkerRegistration, Command, CommandMode, PaginatedCommands } from "../types.js";
+import { WorkerRegistration, Command, CommandMode, CommandStatus, PaginatedCommands } from "../types.js";
 import { CommandStore, CreateQueuedCommandInput } from "./commands/commandStore.js";
 import { WorkerRecord, WorkerRecordStore } from "./workers/workerRecordStore.js";
 import { normalizeMaxConcurrentTasks } from "../workers/workerState.js";
@@ -42,6 +42,16 @@ export type CommandPagination = {
   pageSize: number;
 };
 
+export type TaskQueueQuery = CommandPagination & {
+  statuses: CommandStatus[];
+  sortBy?: TaskQueueSortBy;
+  sortDirection?: TaskQueueSortDirection;
+};
+
+export type TaskQueueSortBy = "status" | "source" | "task" | "worker" | "repository" | "created";
+
+export type TaskQueueSortDirection = "asc" | "desc";
+
 export type WorkerStore = {
   listWorkers(): Promise<WorkerRegistration[]>;
   listWorkersForUser(userId: string): Promise<WorkerRegistration[]>;
@@ -55,7 +65,7 @@ export type WorkerStore = {
   createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
   getWorkerCommand(transactionId: string): Promise<Command | undefined>;
   listWorkerCommands(workerId: string, pagination: CommandPagination): Promise<PaginatedCommands>;
-  listTaskQueueForUser(userId: string, pagination: CommandPagination): Promise<PaginatedCommands>;
+  listTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<PaginatedCommands>;
   getQueuedWorkerCommands(workerId: string): Promise<Command[]>;
   getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]>;
   getInProgressWorkerCommands(workerId: string): Promise<Command[]>;
@@ -142,8 +152,8 @@ export function createWorkerStore(
       return commands.listWorkerCommands(workerId, pagination);
     },
 
-    listTaskQueueForUser(userId: string, pagination: CommandPagination): Promise<PaginatedCommands> {
-      return commands.listTaskQueueForUser(userId, pagination);
+    listTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<PaginatedCommands> {
+      return commands.listTaskQueueForUser(userId, query);
     },
 
     async getQueuedWorkerCommands(workerId: string): Promise<Command[]> {

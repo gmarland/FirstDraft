@@ -4,6 +4,10 @@ export type CommandStatus = "queued" | "in_progress" | "completed" | "failed";
 
 export type CommandMode = "ai" | "shell" | "gitflow";
 
+export type TaskQueueSortBy = "status" | "source" | "task" | "worker" | "repository" | "created";
+
+export type TaskQueueSortDirection = "asc" | "desc";
+
 export type WorkerRegistration = {
   workerId: string;
   apiKeyId?: string;
@@ -29,7 +33,11 @@ export type Command = {
   transactionId: string;
   userId: string;
   workerId?: string;
+  workerOwnerUserId?: string;
+  workerOwnerName?: string;
+  workerOwnerEmail?: string;
   command: string;
+  taskSummary?: string;
   executionCommand?: string | null;
   commandMode: CommandMode;
   repositoryUrl?: string;

@@ -4,7 +4,7 @@ import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { Command, User } from "../../types.js";
 import { isTaskTypeEnabled } from "../../commandModes.js";
-import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason, readWorkerEnabled } from "./workerRequests.js";
+import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "./workerRequests.js";
 import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from "./workerResponses.js";
 
 const DEFAULT_COMMAND_PAGE = 0;
@@ -96,7 +96,11 @@ export class WorkerController {
   public readonly listTaskQueue: RequestHandler = async (req, res, next) => {
     try {
       const user = req.user as User;
-      res.json(await this.store.listTaskQueueForUser(user.userId, readCommandPagination(req.query)));
+      res.json(await this.store.listTaskQueueForUser(user.userId, {
+        ...readCommandPagination(req.query),
+        statuses: readTaskQueueStatuses(req.query),
+        ...readTaskQueueSort(req.query)
+      }));
     } catch (error) {
       next(error);
     }
