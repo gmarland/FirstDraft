@@ -33,6 +33,9 @@ export type Command = {
   transactionId: string;
   userId: string;
   workerId?: string;
+  workerOwnerUserId?: string;
+  workerOwnerName?: string;
+  workerOwnerEmail?: string;
   command: string;
   taskSummary?: string;
   executionCommand?: string | null;

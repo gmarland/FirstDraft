@@ -216,6 +216,9 @@ export class CommandStore {
       this.pool.query(
         `
           select ${prefixedCommandColumns},
+            worker_owner.id as worker_owner_user_id,
+            worker_owner.name as worker_owner_name,
+            worker_owner.email as worker_owner_email,
             intake.provider as source_provider,
             intake.source_item_id,
             intake.source_item_key,
@@ -223,6 +226,12 @@ export class CommandStore {
           from client_commands commands
           inner join client_command_users command_users
             on command_users.transaction_id = commands.transaction_id
+          left join client_workers assigned_worker
+            on assigned_worker.worker_id = commands.worker_id
+          left join api_keys assigned_worker_api_key
+            on assigned_worker_api_key.id = assigned_worker.api_key_id
+          left join users worker_owner
+            on worker_owner.id = assigned_worker_api_key.user_id
           left join lateral (
             select
               intake_events.provider,
@@ -467,7 +476,14 @@ function taskQueueOrderBy(query: TaskQueueQuery): string {
   }
 
   if (query.sortBy === "worker") {
-    return `lower(coalesce(commands.worker_id, 'Unassigned')) ${direction}${tieBreakers}`;
+    return `lower(coalesce(
+      case
+        when worker_owner.id is not null and worker_owner.id <> command_users.user_id
+          then coalesce(worker_owner.name, worker_owner.email, commands.worker_id)
+        else commands.worker_id
+      end,
+      'Unassigned'
+    )) ${direction}${tieBreakers}`;
   }
 
   if (query.sortBy === "repository") {

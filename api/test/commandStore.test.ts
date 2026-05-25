@@ -129,8 +129,17 @@ class TaskQueueDbClient implements DbClient {
     }
 
     assert.match(sql, /inner join client_command_users command_users/);
+    assert.match(sql, /left join client_workers assigned_worker/);
+    assert.match(sql, /assigned_worker\.worker_id = commands\.worker_id/);
+    assert.match(sql, /left join api_keys assigned_worker_api_key/);
+    assert.match(sql, /assigned_worker_api_key\.id = assigned_worker\.api_key_id/);
+    assert.match(sql, /left join users worker_owner/);
+    assert.match(sql, /worker_owner\.id = assigned_worker_api_key\.user_id/);
     assert.match(sql, /left join lateral/);
     assert.match(sql, /from integration_intake_events intake_events/);
+    assert.match(sql, /worker_owner\.id as worker_owner_user_id/);
+    assert.match(sql, /worker_owner\.name as worker_owner_name/);
+    assert.match(sql, /worker_owner\.email as worker_owner_email/);
     assert.match(sql, /intake\.provider as source_provider/);
     assert.match(sql, /where command_users\.user_id = \$1/);
     assert.match(sql, /commands\.status = any\(\$4::text\[\]\)/);
@@ -149,7 +158,10 @@ class TaskQueueDbClient implements DbClient {
         }),
         commandRow("in-progress-assigned", "2026-05-24T10:00:00.000Z", {
           status: "in_progress",
-          workerId: "worker-2"
+          workerId: "worker-2",
+          workerOwnerUserId: "user-2",
+          workerOwnerName: "Worker Owner",
+          workerOwnerEmail: "owner@example.com"
         }),
         commandRow("completed-assigned", "2026-05-24T11:00:00.000Z", {
           status: "completed",
@@ -187,6 +199,12 @@ async function testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWork
   assert.deepEqual(result.commands.map((command) => command.status), ["queued", "in_progress", "completed", "failed"]);
   assert.equal(result.commands[0].workerId, undefined);
   assert.equal(result.commands[1].workerId, "worker-2");
+  assert.equal(result.commands[0].workerOwnerUserId, undefined);
+  assert.equal(result.commands[0].workerOwnerName, undefined);
+  assert.equal(result.commands[0].workerOwnerEmail, undefined);
+  assert.equal(result.commands[1].workerOwnerUserId, "user-2");
+  assert.equal(result.commands[1].workerOwnerName, "Worker Owner");
+  assert.equal(result.commands[1].workerOwnerEmail, "owner@example.com");
   assert.equal(result.commands[0].sourceProvider, "jira");
   assert.equal(result.commands[0].sourceItemId, "10001");
   assert.equal(result.commands[0].sourceItemKey, "FD-123");
@@ -203,7 +221,7 @@ async function testListTaskQueueForUserSortsByAllowlistedColumns(): Promise<void
     { sortBy: "status", sortDirection: "desc", expectedOrderPattern: /case commands\.status[\s\S]*end desc, commands\.created_at asc/ },
     { sortBy: "source", sortDirection: "asc", expectedOrderPattern: /lower\(trim\(concat\([\s\S]*intake\.provider[\s\S]*commands\.command_mode = 'gitflow'[\s\S]*intake\.source_item_key[\s\S]*\)\)\) asc nulls first/ },
     { sortBy: "task", sortDirection: "asc", expectedOrderPattern: /lower\(coalesce\(commands\.task_summary, commands\.command, ''\)\) asc/ },
-    { sortBy: "worker", sortDirection: "asc", expectedOrderPattern: /lower\(coalesce\(commands\.worker_id, 'Unassigned'\)\) asc/ },
+    { sortBy: "worker", sortDirection: "asc", expectedOrderPattern: /lower\(coalesce\([\s\S]*worker_owner\.id <> command_users\.user_id[\s\S]*coalesce\(worker_owner\.name, worker_owner\.email, commands\.worker_id\)[\s\S]*'Unassigned'[\s\S]*\)\) asc/ },
     { sortBy: "repository", sortDirection: "asc", expectedOrderPattern: /lower\(coalesce\(commands\.repository_url, ''\)\) asc nulls first/ },
     { sortBy: "created", sortDirection: "desc", expectedOrderPattern: /commands\.created_at desc, commands\.transaction_id asc/ }
   ];
@@ -324,6 +342,9 @@ function commandRow(
     workerId?: string | null;
     userId?: string;
     taskSummary?: string;
+    workerOwnerUserId?: string;
+    workerOwnerName?: string;
+    workerOwnerEmail?: string;
     sourceProvider?: string;
     sourceItemId?: string;
     sourceItemKey?: string;
@@ -334,6 +355,9 @@ function commandRow(
     transaction_id: transactionId,
     user_id: overrides.userId ?? "user-1",
     worker_id: overrides.workerId === undefined ? "worker-1" : overrides.workerId,
+    worker_owner_user_id: overrides.workerOwnerUserId ?? null,
+    worker_owner_name: overrides.workerOwnerName ?? null,
+    worker_owner_email: overrides.workerOwnerEmail ?? null,
     command: "echo hello",
     task_summary: overrides.taskSummary ?? "echo hello",
     execution_command: null,

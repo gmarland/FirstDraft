@@ -32,6 +32,7 @@ import { formatDate, relativeTime } from "../../lib/dates";
 import type { Command, CommandStatus, TaskQueueSortBy, TaskQueueSortDirection } from "../../types/api";
 
 type Props = {
+  currentUserId?: string;
   commands: Command[];
   total: number;
   page: number;
@@ -70,6 +71,7 @@ const sortableColumns: SortableColumn[] = [
 ];
 
 export function TaskQueuePanel({
+  currentUserId,
   commands,
   total,
   page,
@@ -168,14 +170,17 @@ export function TaskQueuePanel({
               </TableRow>
             </TableHead>
             <TableBody>
-              {commands.map((command) => (
-                <TableRow
-                  hover
-                  selected={selectedCommand?.transactionId === command.transactionId}
-                  key={command.transactionId}
-                  onClick={() => setSelectedCommandId(command.transactionId)}
-                  sx={{ cursor: "pointer" }}
-                >
+              {commands.map((command) => {
+                const workerLabel = formatWorkerLabel(command, currentUserId);
+
+                return (
+                  <TableRow
+                    hover
+                    selected={selectedCommand?.transactionId === command.transactionId}
+                    key={command.transactionId}
+                    onClick={() => setSelectedCommandId(command.transactionId)}
+                    sx={{ cursor: "pointer" }}
+                  >
                   <TableCell>
                     <StatusBadge value={command.status} />
                   </TableCell>
@@ -194,10 +199,10 @@ export function TaskQueuePanel({
                   <TableCell>
                     <Typography
                       variant="body2"
-                      title={command.workerId ?? "Unassigned"}
+                      title={workerLabel}
                       sx={oneLineTextSx}
                     >
-                      {command.workerId ?? "Unassigned"}
+                      {workerLabel}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -214,8 +219,9 @@ export function TaskQueuePanel({
                       {relativeTime(command.createdAt)}
                     </Typography>
                   </TableCell>
-                </TableRow>
-              ))}
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           </TableContainer>
@@ -232,7 +238,7 @@ export function TaskQueuePanel({
           )}
         </Paper>
       </Stack>
-      <TaskQueueDetailDialog command={selectedCommand} onClose={closeDetail} />
+      <TaskQueueDetailDialog command={selectedCommand} currentUserId={currentUserId} onClose={closeDetail} />
     </>
   );
 }
@@ -277,9 +283,11 @@ function SourceLabel({ command }: { command: Command }) {
 
 function TaskQueueDetailDialog({
   command,
+  currentUserId,
   onClose,
 }: {
   command: Command | null;
+  currentUserId?: string;
   onClose(): void;
 }) {
   if (!command) {
@@ -324,7 +332,7 @@ function TaskQueueDetailDialog({
             <Field label="Claimed" value={formatDate(command.claimedAt)} />
             <Field label="Completed" value={formatDate(command.completedAt)} />
           </Stack>
-          <Field label="Assigned worker" value={command.workerId ?? "Unassigned"} code />
+          <Field label="Assigned worker" value={formatWorkerLabel(command, currentUserId)} code />
           <Field label="Repository" value={command.repositoryUrl ?? "-"} code />
           <Field label="Transaction ID" value={command.transactionId} code />
           {command.errorMessage && <Field label="Error" value={command.errorMessage} />}
@@ -430,6 +438,14 @@ function formatSourceDetail(command: Command): string {
       : `${source.provider} (${command.sourceItemUrl})`;
   }
   return source.key ? `${source.provider} ${source.key}` : source.provider;
+}
+
+function formatWorkerLabel(command: Command, currentUserId?: string): string {
+  if (!command.workerId) return "Unassigned";
+  if (currentUserId && command.workerOwnerUserId && command.workerOwnerUserId !== currentUserId) {
+    return command.workerOwnerName ?? command.workerOwnerEmail ?? command.workerId;
+  }
+  return command.workerId;
 }
 
 function titleCase(value: string): string {

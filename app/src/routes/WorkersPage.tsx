@@ -40,7 +40,7 @@ type TaskQueueSort = {
 };
 
 export function WorkersPage({ navigate }: Props) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<WorkersTab>("workers");
   const [actionsMenuAnchor, setActionsMenuAnchor] =
     useState<HTMLElement | null>(null);
@@ -245,6 +245,7 @@ export function WorkersPage({ navigate }: Props) {
           {queueLoading && !taskQueue && <Skeleton variant="rounded" height={260} />}
           {taskQueue && (
             <TaskQueuePanel
+              currentUserId={user?.userId}
               commands={taskQueue.commands}
               total={taskQueue.total}
               page={queuePage}
