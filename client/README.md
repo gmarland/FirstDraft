@@ -2,6 +2,8 @@
 
 .NET worker that connects to the FirstDraft API, registers its identity and capabilities, and executes remote commands on the machine where it is running. Workers should be installed next to the repositories, credentials, toolchains, and network access needed for the jobs they accept.
 
+The project targets `net10.0` and builds the `firstdraft` assembly. At runtime the worker uses a SignalR client connection to the API's `/WorkerHub` endpoint.
+
 ## Prerequisites
 
 - .NET SDK 10.
@@ -20,9 +22,10 @@ dotnet run -- init
 dotnet run -- skills
 dotnet run -- capacity
 dotnet run -- taskTypes
+dotnet run -- task-types
 dotnet run -- enablePlanning
 dotnet run -- run
-dotnet run -- run --task-types ai,gitflow
+dotnet run -- run --task-types ai,shell,gitflow
 dotnet run -- help
 ```
 
@@ -31,9 +34,10 @@ Command details:
 - `init`: create or update the local worker configuration interactively.
 - `skills`: update advertised worker skills.
 - `capacity`: update the maximum number of concurrent gitflow tasks.
-- `taskTypes`: update which task types this worker accepts.
+- `taskTypes` or `task-types`: update which task types this worker accepts.
 - `enablePlanning`: configure whether AI commands use a planning pass.
-- `run`: start the worker and connect it to the API. Use `--task-types ai,gitflow` to override enabled task types for this run only.
+- `run`: start the worker and connect it to the API.
+- `run --task-types ai,shell,gitflow`: override enabled task types for this run only without changing saved configuration.
 - `help`: print command help.
 
 Running with no command defaults to `run`.
@@ -46,6 +50,14 @@ Running with no command defaults to `run`.
 
 `gitflow` requires the worker to advertise the `git` skill. Configured skills are validated against executables on `PATH` before registration.
 Workers accept all command modes by default. Configure `EnabledTaskTypes` to restrict a worker to specific modes.
+
+## Gitflow Workspaces
+
+Gitflow tasks use `GitWorkspaceDirectory` as the workspace root when configured, otherwise they fall back to the worker's application workspace. The worker clones missing repositories into that workspace and reuses existing repository workspaces for later tasks.
+
+Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker API credentials and a reachable `ExternalAPI` URL.
+
+`MaxConcurrentTasks` controls concurrent gitflow execution and must be between `1` and `8`.
 
 ## Configuration
 
@@ -65,7 +77,7 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `PlanningEnabled`: whether AI execution performs a planning pass before implementation.
 - `AIWorkingDirectory`: base working directory for AI commands.
 - `GitWorkspaceDirectory`: workspace root for gitflow repository work.
-- `MaxConcurrentTasks`: maximum concurrent gitflow tasks.
+- `MaxConcurrentTasks`: maximum concurrent gitflow tasks, from `1` to `8`.
 
 Credentials can be encrypted in the config. Keep the worker configuration private and run workers only on machines trusted to access the configured repositories, credentials, tools, and networks.
 
