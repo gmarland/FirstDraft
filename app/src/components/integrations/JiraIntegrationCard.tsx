@@ -6,12 +6,10 @@ import {
   CardContent,
   Chip,
   Divider,
-  FormControlLabel,
   Stack,
   Step,
   StepLabel,
   Stepper,
-  Switch,
   Typography,
 } from "@mui/material";
 import CableIcon from "@mui/icons-material/Cable";
@@ -36,7 +34,6 @@ type Props = {
   workflowSelectionsComplete: boolean;
   jiraIntakeEnabled: boolean;
   onFormChange(update: Partial<JiraFormState>): void;
-  onEnabledChange(enabled: boolean): void;
   onSaveConnection(event: FormEvent): void;
   onTestConnection(): void;
   onBoardChange(boardId: number): void;
@@ -64,7 +61,6 @@ export function JiraIntegrationCard({
   workflowSelectionsComplete,
   jiraIntakeEnabled,
   onFormChange,
-  onEnabledChange,
   onSaveConnection,
   onTestConnection,
   onBoardChange,
@@ -82,7 +78,10 @@ export function JiraIntegrationCard({
           <Stack
             direction={{ xs: "column", md: "row" }}
             spacing={1.5}
-            sx={{ justifyContent: "space-between" }}
+            sx={{
+              alignItems: { xs: "flex-start", md: "center" },
+              justifyContent: "space-between",
+            }}
           >
             <Box>
               <Stack
@@ -101,22 +100,6 @@ export function JiraIntegrationCard({
                 ticket intake.
               </Typography>
             </Box>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1}
-              sx={{ alignItems: { xs: "flex-start", sm: "center" } }}
-            >
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={jiraIntakeEnabled}
-                    onChange={(event) => onEnabledChange(event.target.checked)}
-                    disabled={!jiraIntakeConfigured || saving}
-                  />
-                }
-                label="Enable Jira ticket intake"
-              />
-            </Stack>
           </Stack>
 
           <Stepper activeStep={activeStep} alternativeLabel>

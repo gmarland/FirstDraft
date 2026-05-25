@@ -163,7 +163,12 @@ export function JiraWorkflowSection({
           </span>
         </Tooltip>
       </Stack>
-      <Stack direction="row" sx={{ justifyContent: "flex-end" }}>
+      <Stack
+        direction="row"
+        sx={{
+          justifyContent: "flex-end",
+        }}
+      >
         <Button
           variant="contained"
           onClick={onSaveWorkflow}
