@@ -99,10 +99,16 @@ export class CommandStore {
         select ${prefixedCommandColumns},
           worker_repos.normalized_repository_url is not null as worker_repository_match
         from client_commands commands
+        inner join client_workers claiming_worker
+          on claiming_worker.worker_id = $1
+        inner join api_keys claiming_api_key
+          on claiming_api_key.id = claiming_worker.api_key_id
         left join worker_git_repositories worker_repos
           on worker_repos.worker_id = $1
           and worker_repos.normalized_repository_url = commands.normalized_repository_url
         where commands.status = 'queued'
+          and commands.user_id = claiming_api_key.user_id
+          and claiming_api_key.revoked_at is null
           and (commands.worker_id = $1 or commands.worker_id is null)
           and (
             commands.command_mode in ('ai', 'shell')
@@ -240,10 +246,16 @@ export class CommandStore {
         set worker_id = $2,
           status = 'in_progress',
           claimed_at = now()
-        where transaction_id = $1
-          and status = 'queued'
-          and (worker_id is null or worker_id = $2)
-        returning ${commandColumns}
+        from client_workers claiming_worker
+        inner join api_keys claiming_api_key
+          on claiming_api_key.id = claiming_worker.api_key_id
+        where client_commands.transaction_id = $1
+          and claiming_worker.worker_id = $2
+          and client_commands.user_id = claiming_api_key.user_id
+          and claiming_api_key.revoked_at is null
+          and client_commands.status = 'queued'
+          and (client_commands.worker_id is null or client_commands.worker_id = $2)
+        returning ${clientCommandColumns}
       `,
       [command.transactionId, assignedWorkerId]
     );
@@ -398,4 +410,7 @@ const commandColumnNames = [
 const commandColumns = commandColumnNames.join(", ");
 const prefixedCommandColumns = commandColumnNames
   .map((column) => `commands.${column}`)
+  .join(", ");
+const clientCommandColumns = commandColumnNames
+  .map((column) => `client_commands.${column}`)
   .join(", ");

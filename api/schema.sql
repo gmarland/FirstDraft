@@ -158,6 +158,9 @@ create index if not exists client_commands_status_idx
 create index if not exists client_commands_queue_idx
   on client_commands(status, worker_id, command_mode, created_at);
 
+create index if not exists client_commands_queue_user_idx
+  on client_commands(status, user_id, worker_id, command_mode, created_at);
+
 create index if not exists client_commands_repository_idx
   on client_commands(normalized_repository_url);
 

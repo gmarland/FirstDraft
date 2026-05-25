@@ -184,6 +184,22 @@ export class IntegrationIntakeEventStore {
           transaction_id = coalesce($5, transaction_id),
           updated_at = now()
         where id = $1
+          and (
+            $4::text is null
+            or exists (
+              select 1
+              from client_commands commands
+              inner join client_workers assigned_worker
+                on assigned_worker.worker_id = $4
+                and assigned_worker.worker_id = commands.worker_id
+              inner join api_keys assigned_api_key
+                on assigned_api_key.id = assigned_worker.api_key_id
+              where commands.transaction_id = coalesce($5, integration_intake_events.transaction_id)
+                and commands.user_id = integration_intake_events.user_id
+                and commands.user_id = assigned_api_key.user_id
+                and assigned_api_key.revoked_at is null
+            )
+          )
         returning ${returningColumns}
       `,
       [id, status, errorMessage ?? null, workerId ?? null, transactionId ?? null]
