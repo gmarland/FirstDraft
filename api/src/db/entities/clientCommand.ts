@@ -5,6 +5,7 @@ export type ClientCommandEntity = {
   userId: string;
   workerId?: string | null;
   command: string;
+  taskSummary?: string | null;
   executionCommand?: string | null;
   commandMode: string;
   repositoryUrl?: string | null;
@@ -30,6 +31,7 @@ export const ClientCommandSchema = new EntitySchema<ClientCommandEntity>({
     userId: { type: "uuid", name: "user_id" },
     workerId: { type: "text", name: "worker_id", nullable: true },
     command: { type: "text" },
+    taskSummary: { type: "text", name: "task_summary", nullable: true },
     executionCommand: { type: "text", name: "execution_command", nullable: true },
     commandMode: { type: "text", name: "command_mode", default: "'ai'" },
     repositoryUrl: { type: "text", name: "repository_url", nullable: true },

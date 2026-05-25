@@ -3,7 +3,7 @@ import { normalizeEnabledTaskTypes } from "../src/commandModes.js";
 import { readUpdateProfileInput, validateUpdateProfileInput, validateUserInput } from "../src/controllers/auth/authValidation.js";
 import { validateConnectionInput, validateWorkflowInput } from "../src/controllers/integrations/integrationRequests.js";
 import { parseRepositoryInput, validateRepositoryInput } from "../src/controllers/repositories/repositoryRequests.js";
-import { getMissingSkills, parseCommandMode, parseGitflowPayload, readTaskQueueStatuses, readWorkerEnabled } from "../src/controllers/workers/workerRequests.js";
+import { getMissingSkills, parseCommandMode, parseGitflowPayload, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "../src/controllers/workers/workerRequests.js";
 
 function testAuthValidation(): void {
   assert.equal(validateUserInput("", "password123"), "email is required");
@@ -54,6 +54,11 @@ function testWorkerRequests(): void {
   assert.deepEqual(readTaskQueueStatuses({ status: ["completed", "failed"] }), ["completed", "failed"]);
   assert.deepEqual(readTaskQueueStatuses({ status: ["queued", "invalid", "queued", "completed"] }), ["queued", "completed"]);
   assert.deepEqual(readTaskQueueStatuses({ status: ["invalid"] }), ["queued", "in_progress"]);
+  assert.deepEqual(readTaskQueueSort({}), {});
+  assert.deepEqual(readTaskQueueSort({ sortBy: "task", sortDirection: "asc" }), { sortBy: "task", sortDirection: "asc" });
+  assert.deepEqual(readTaskQueueSort({ sortBy: "created", sortDirection: "desc" }), { sortBy: "created", sortDirection: "desc" });
+  assert.deepEqual(readTaskQueueSort({ sortBy: "invalid", sortDirection: "desc" }), {});
+  assert.deepEqual(readTaskQueueSort({ sortBy: "task", sortDirection: "invalid" }), {});
 }
 
 function testIntegrationRequests(): void {

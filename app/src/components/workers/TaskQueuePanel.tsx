@@ -22,13 +22,14 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  TableSortLabel,
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { EmptyState } from "../EmptyState";
 import { StatusBadge } from "../StatusBadge";
 import { formatDate, relativeTime } from "../../lib/dates";
-import type { Command, CommandStatus } from "../../types/api";
+import type { Command, CommandStatus, TaskQueueSortBy, TaskQueueSortDirection } from "../../types/api";
 
 type Props = {
   commands: Command[];
@@ -36,10 +37,20 @@ type Props = {
   page: number;
   pageSize: number;
   selectedStatuses: CommandStatus[];
+  sortBy?: TaskQueueSortBy;
+  sortDirection?: TaskQueueSortDirection;
   loading: boolean;
   onPageChange(page: number): void;
   onPageSizeChange(pageSize: number): void;
   onStatusesChange(statuses: CommandStatus[]): void;
+  onSortChange(sortBy: TaskQueueSortBy, sortDirection: TaskQueueSortDirection): void;
+};
+
+type SortableColumn = {
+  key: TaskQueueSortBy;
+  label: string;
+  width?: number;
+  firstDirection: TaskQueueSortDirection;
 };
 
 const statusOptions: Array<{ value: CommandStatus; label: string }> = [
@@ -49,16 +60,28 @@ const statusOptions: Array<{ value: CommandStatus; label: string }> = [
   { value: "failed", label: "Failed" },
 ];
 
+const sortableColumns: SortableColumn[] = [
+  { key: "status", label: "Status", width: 132, firstDirection: "asc" },
+  { key: "source", label: "Source", width: 132, firstDirection: "asc" },
+  { key: "task", label: "Task", firstDirection: "asc" },
+  { key: "worker", label: "Worker", width: 180, firstDirection: "asc" },
+  { key: "repository", label: "Repository", width: 220, firstDirection: "asc" },
+  { key: "created", label: "Created", width: 132, firstDirection: "desc" },
+];
+
 export function TaskQueuePanel({
   commands,
   total,
   page,
   pageSize,
   selectedStatuses,
+  sortBy,
+  sortDirection = "asc",
   loading,
   onPageChange,
   onPageSizeChange,
   onStatusesChange,
+  onSortChange,
 }: Props) {
   const [selectedCommandId, setSelectedCommandId] = useState<string | null>(
     null,
@@ -67,6 +90,12 @@ export function TaskQueuePanel({
     commands.find((command) => command.transactionId === selectedCommandId) ?? null;
 
   const closeDetail = () => setSelectedCommandId(null);
+  const changeSort = (column: SortableColumn) => {
+    const nextDirection = sortBy === column.key
+      ? sortDirection === "asc" ? "desc" : "asc"
+      : column.firstDirection;
+    onSortChange(column.key, nextDirection);
+  };
   const changeStatuses = (event: SelectChangeEvent<CommandStatus[]>) => {
     const value = event.target.value;
     const nextStatuses = typeof value === "string"
@@ -125,12 +154,17 @@ export function TaskQueuePanel({
             <Table size="small" aria-label="Task queue" sx={{ tableLayout: "fixed" }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ width: 132 }}>Status</TableCell>
-                <TableCell sx={{ width: 132 }}>Source</TableCell>
-                <TableCell>Task</TableCell>
-                <TableCell sx={{ width: 180 }}>Worker</TableCell>
-                <TableCell sx={{ width: 220 }}>Repository</TableCell>
-                <TableCell sx={{ width: 132 }}>Created</TableCell>
+                {sortableColumns.map((column) => (
+                  <TableCell key={column.key} sx={{ width: column.width }}>
+                    <TableSortLabel
+                      active={sortBy === column.key}
+                      direction={sortBy === column.key ? sortDirection : column.firstDirection}
+                      onClick={() => changeSort(column)}
+                    >
+                      {column.label}
+                    </TableSortLabel>
+                  </TableCell>
+                ))}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -332,6 +366,7 @@ function formatCommandMode(mode: Command["commandMode"]): string {
 }
 
 function formatCommandSummary(command: Command): string {
+  if (command.taskSummary) return command.taskSummary;
   if (command.commandMode !== "gitflow") return command.command;
 
   try {

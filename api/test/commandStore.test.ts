@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { CommandStore } from "../src/store/commands/commandStore.js";
+import { buildTaskSummary } from "../src/store/commands/commandSummary.js";
+import type { TaskQueueSortBy, TaskQueueSortDirection } from "../src/store/clientStore.js";
 import type { DbClient, DbQueryResult } from "../src/db/dbClient.js";
 
 type QueryCall = {
@@ -33,15 +35,18 @@ class WorkerCommandsDbClient implements DbClient {
 
 class CreateQueuedCommandDbClient implements DbClient {
   public calls: QueryCall[] = [];
+  public insertedTaskSummary: unknown;
 
   public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
     this.calls.push({ sql, parameters });
 
     if (this.calls.length === 1) {
       assert.match(sql, /insert into client_commands/);
+      assert.match(sql, /task_summary/);
       assert.match(sql, /returning transaction_id/);
       assert.equal(parameters?.[1], "user-1");
       assert.equal(parameters?.[3], "echo hello");
+      this.insertedTaskSummary = parameters?.[4];
       return {
         rows: [
           commandRow(String(parameters?.[0]), "2026-05-24T09:00:00.000Z", {
@@ -71,7 +76,25 @@ async function testCreateQueuedCommandAddsOwnerMembership(): Promise<void> {
 
   assert.equal(result.userId, "user-1");
   assert.equal(result.status, "queued");
+  assert.equal(db.insertedTaskSummary, "echo hello");
   assert.equal(db.calls.length, 2);
+}
+
+function testBuildTaskSummary(): void {
+  assert.equal(buildTaskSummary("echo hello", "shell"), "echo hello");
+  assert.equal(
+    buildTaskSummary(
+      JSON.stringify({
+        repositoryUrl: "https://github.com/example/repo.git",
+        ticketNumber: "FD-123",
+        title: "Build sortable queue",
+        description: "Fallback description"
+      }),
+      "gitflow"
+    ),
+    "FD-123: Build sortable queue"
+  );
+  assert.equal(buildTaskSummary("{", "gitflow"), "{");
 }
 
 async function testListWorkerCommandsPaginatesAndCounts(): Promise<void> {
@@ -90,6 +113,10 @@ async function testListWorkerCommandsPaginatesAndCounts(): Promise<void> {
 class TaskQueueDbClient implements DbClient {
   public calls: QueryCall[] = [];
 
+  public constructor(
+    private readonly expectedOrderPattern = /case when commands\.status in \('completed', 'failed'\) then commands\.completed_at end desc nulls last/
+  ) {}
+
   public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
     this.calls.push({ sql, parameters });
 
@@ -107,12 +134,7 @@ class TaskQueueDbClient implements DbClient {
     assert.match(sql, /intake\.provider as source_provider/);
     assert.match(sql, /where command_users\.user_id = \$1/);
     assert.match(sql, /commands\.status = any\(\$4::text\[\]\)/);
-    assert.match(sql, /when 'queued' then 0/);
-    assert.match(sql, /when 'in_progress' then 1/);
-    assert.match(sql, /when 'completed' then 2/);
-    assert.match(sql, /when 'failed' then 3/);
-    assert.match(sql, /commands\.completed_at end desc nulls last/);
-    assert.match(sql, /coalesce\(commands\.claimed_at, commands\.created_at\) end asc nulls last/);
+    assert.match(sql, this.expectedOrderPattern);
     assert.match(sql, /limit \$2 offset \$3/);
     assert.deepEqual(parameters, ["user-1", 2, 2, ["queued", "in_progress", "completed", "failed"]]);
     return {
@@ -170,6 +192,36 @@ async function testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWork
   assert.equal(result.commands[0].sourceItemKey, "FD-123");
   assert.equal(result.commands[0].sourceItemUrl, "https://example.atlassian.net/browse/FD-123");
   assert.equal(db.calls.length, 2);
+}
+
+async function testListTaskQueueForUserSortsByAllowlistedColumns(): Promise<void> {
+  const cases: Array<{
+    sortBy: TaskQueueSortBy;
+    sortDirection: TaskQueueSortDirection;
+    expectedOrderPattern: RegExp;
+  }> = [
+    { sortBy: "status", sortDirection: "desc", expectedOrderPattern: /case commands\.status[\s\S]*end desc, commands\.created_at asc/ },
+    { sortBy: "source", sortDirection: "asc", expectedOrderPattern: /lower\(trim\(concat\([\s\S]*intake\.provider[\s\S]*commands\.command_mode = 'gitflow'[\s\S]*intake\.source_item_key[\s\S]*\)\)\) asc nulls first/ },
+    { sortBy: "task", sortDirection: "asc", expectedOrderPattern: /lower\(coalesce\(commands\.task_summary, commands\.command, ''\)\) asc/ },
+    { sortBy: "worker", sortDirection: "asc", expectedOrderPattern: /lower\(coalesce\(commands\.worker_id, 'Unassigned'\)\) asc/ },
+    { sortBy: "repository", sortDirection: "asc", expectedOrderPattern: /lower\(coalesce\(commands\.repository_url, ''\)\) asc nulls first/ },
+    { sortBy: "created", sortDirection: "desc", expectedOrderPattern: /commands\.created_at desc, commands\.transaction_id asc/ }
+  ];
+
+  for (const sortCase of cases) {
+    const db = new TaskQueueDbClient(sortCase.expectedOrderPattern);
+    const store = new CommandStore(db);
+
+    await store.listTaskQueueForUser("user-1", {
+      page: 1,
+      pageSize: 2,
+      statuses: ["queued", "in_progress", "completed", "failed"],
+      sortBy: sortCase.sortBy,
+      sortDirection: sortCase.sortDirection
+    });
+
+    assert.equal(db.calls.length, 2);
+  }
 }
 
 class DispatchableQueueDbClient implements DbClient {
@@ -271,6 +323,7 @@ function commandRow(
     status?: string;
     workerId?: string | null;
     userId?: string;
+    taskSummary?: string;
     sourceProvider?: string;
     sourceItemId?: string;
     sourceItemKey?: string;
@@ -282,6 +335,7 @@ function commandRow(
     user_id: overrides.userId ?? "user-1",
     worker_id: overrides.workerId === undefined ? "worker-1" : overrides.workerId,
     command: "echo hello",
+    task_summary: overrides.taskSummary ?? "echo hello",
     execution_command: null,
     command_mode: "shell",
     repository_url: null,
@@ -305,8 +359,10 @@ function commandRow(
 }
 
 await testCreateQueuedCommandAddsOwnerMembership();
+testBuildTaskSummary();
 await testListWorkerCommandsPaginatesAndCounts();
 await testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWorker();
+await testListTaskQueueForUserSortsByAllowlistedColumns();
 await testGetDispatchableQueuedCommandsScopesUnassignedCommandsToApiKeyOwner();
 await testMarkWorkerCommandInProgressScopesClaimToApiKeyOwner();
 

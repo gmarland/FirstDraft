@@ -44,7 +44,13 @@ export type CommandPagination = {
 
 export type TaskQueueQuery = CommandPagination & {
   statuses: CommandStatus[];
+  sortBy?: TaskQueueSortBy;
+  sortDirection?: TaskQueueSortDirection;
 };
+
+export type TaskQueueSortBy = "status" | "source" | "task" | "worker" | "repository" | "created";
+
+export type TaskQueueSortDirection = "asc" | "desc";
 
 export type WorkerStore = {
   listWorkers(): Promise<WorkerRegistration[]>;

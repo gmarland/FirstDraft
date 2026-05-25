@@ -197,6 +197,14 @@ export const openApiDocument = {
             type: "array",
             items: { type: "string", enum: ["queued", "in_progress", "completed", "failed"] },
             default: ["queued", "in_progress"]
+          }),
+          queryParam("sortBy", "Task queue column to sort by. Defaults to queue priority ordering when omitted.", {
+            type: "string",
+            enum: ["status", "source", "task", "worker", "repository", "created"]
+          }),
+          queryParam("sortDirection", "Sort direction. Used only with sortBy.", {
+            type: "string",
+            enum: ["asc", "desc"]
           })
         ],
         responses: {
@@ -467,6 +475,7 @@ export const openApiDocument = {
         userId: { type: "string" },
         workerId: { type: "string" },
         command: { type: "string" },
+        taskSummary: { type: "string" },
         executionCommand: nullable({ type: "string" }),
         commandMode: { type: "string", enum: ["ai", "shell", "gitflow"] },
         repositoryUrl: { type: "string" },

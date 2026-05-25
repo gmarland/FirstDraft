@@ -3,6 +3,7 @@ import { Command, CommandMode, PaginatedCommands } from "../../types.js";
 import { DbClient } from "../../db/dbClient.js";
 import type { CancelCommandInput, CommandOutputMetadataInput, CommandPagination, CompleteCommandInput, TaskQueueQuery } from "../clientStore.js";
 import { mapCommand } from "./commandRowMappers.js";
+import { buildTaskSummary } from "./commandSummary.js";
 
 export type CreateQueuedCommandInput = {
   userId: string;
@@ -42,13 +43,14 @@ export class CommandStore {
           user_id,
           worker_id,
           command,
+          task_summary,
           execution_command,
           command_mode,
           repository_url,
           normalized_repository_url,
           status
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, 'queued')
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'queued')
         returning ${commandColumns}
       `,
       [
@@ -56,6 +58,7 @@ export class CommandStore {
         input.userId,
         input.workerId ?? null,
         input.command,
+        buildTaskSummary(input.command, input.commandMode ?? "ai"),
         input.executionCommand ?? null,
         input.commandMode ?? "ai",
         input.repositoryUrl ?? null,
@@ -236,18 +239,7 @@ export class CommandStore {
           ) intake on true
           where command_users.user_id = $1
             and commands.status = any($4::text[])
-          order by
-            case commands.status
-              when 'queued' then 0
-              when 'in_progress' then 1
-              when 'completed' then 2
-              when 'failed' then 3
-              else 4
-            end,
-            case when commands.status in ('completed', 'failed') then commands.completed_at end desc nulls last,
-            case when commands.status in ('completed', 'failed') then commands.created_at end desc,
-            case when commands.status in ('queued', 'in_progress') then coalesce(commands.claimed_at, commands.created_at) end asc nulls last,
-            commands.created_at asc
+          order by ${taskQueueOrderBy(query)}
           limit $2 offset $3
         `,
         [userId, query.pageSize, offset, query.statuses]
@@ -429,6 +421,7 @@ const commandColumnNames = [
   "user_id",
   "worker_id",
   "command",
+  "task_summary",
   "execution_command",
   "command_mode",
   "repository_url",
@@ -453,3 +446,61 @@ const prefixedCommandColumns = commandColumnNames
 const clientCommandColumns = commandColumnNames
   .map((column) => `client_commands.${column}`)
   .join(", ");
+
+function taskQueueOrderBy(query: TaskQueueQuery): string {
+  if (!query.sortBy) return defaultTaskQueueOrderBy();
+
+  const direction = query.sortDirection === "desc" ? "desc" : "asc";
+  const nulls = direction === "desc" ? "nulls last" : "nulls first";
+  const tieBreakers = ", commands.created_at asc, commands.transaction_id asc";
+
+  if (query.sortBy === "status") {
+    return `${statusPriorityExpression()} ${direction}${tieBreakers}`;
+  }
+
+  if (query.sortBy === "source") {
+    return `${sourceSortExpression()} ${direction} ${nulls}${tieBreakers}`;
+  }
+
+  if (query.sortBy === "task") {
+    return `lower(coalesce(commands.task_summary, commands.command, '')) ${direction}${tieBreakers}`;
+  }
+
+  if (query.sortBy === "worker") {
+    return `lower(coalesce(commands.worker_id, 'Unassigned')) ${direction}${tieBreakers}`;
+  }
+
+  if (query.sortBy === "repository") {
+    return `lower(coalesce(commands.repository_url, '')) ${direction} ${nulls}${tieBreakers}`;
+  }
+
+  return `commands.created_at ${direction}, commands.transaction_id asc`;
+}
+
+function defaultTaskQueueOrderBy(): string {
+  return `
+            ${statusPriorityExpression()} asc,
+            case when commands.status in ('completed', 'failed') then commands.completed_at end desc nulls last,
+            case when commands.status in ('completed', 'failed') then commands.created_at end desc,
+            case when commands.status in ('queued', 'in_progress') then coalesce(commands.claimed_at, commands.created_at) end asc nulls last,
+            commands.created_at asc,
+            commands.transaction_id asc`;
+}
+
+function statusPriorityExpression(): string {
+  return `case commands.status
+              when 'queued' then 0
+              when 'in_progress' then 1
+              when 'completed' then 2
+              when 'failed' then 3
+              else 4
+            end`;
+}
+
+function sourceSortExpression(): string {
+  return `lower(trim(concat(
+              coalesce(initcap(intake.provider), case when commands.command_mode = 'gitflow' then 'Manual' else '-' end),
+              ' ',
+              coalesce(intake.source_item_key, '')
+            )))`;
+}

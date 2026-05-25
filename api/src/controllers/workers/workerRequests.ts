@@ -1,8 +1,10 @@
 import { CommandMode, CommandStatus } from "../../types.js";
+import type { TaskQueueSortBy, TaskQueueSortDirection } from "../../store/clientStore.js";
 
 export const DEFAULT_TASK_QUEUE_STATUSES: CommandStatus[] = ["queued", "in_progress"];
 
 const commandStatuses = new Set<CommandStatus>(["queued", "in_progress", "completed", "failed"]);
+const taskQueueSortFields = new Set<TaskQueueSortBy>(["status", "source", "task", "worker", "repository", "created"]);
 
 export function parseCommandMode(value: string | undefined): CommandMode | undefined {
   if (value === undefined) return "ai";
@@ -51,4 +53,14 @@ export function readTaskQueueStatuses(query: Record<string, unknown>): CommandSt
   }
 
   return statuses.length > 0 ? statuses : DEFAULT_TASK_QUEUE_STATUSES;
+}
+
+export function readTaskQueueSort(query: Record<string, unknown>): { sortBy?: TaskQueueSortBy; sortDirection?: TaskQueueSortDirection } {
+  const sortBy = typeof query.sortBy === "string" && taskQueueSortFields.has(query.sortBy as TaskQueueSortBy)
+    ? query.sortBy as TaskQueueSortBy
+    : undefined;
+  const sortDirection = query.sortDirection === "desc" ? "desc" : query.sortDirection === "asc" ? "asc" : undefined;
+
+  if (!sortBy || !sortDirection) return {};
+  return { sortBy, sortDirection };
 }

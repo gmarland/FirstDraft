@@ -26,13 +26,18 @@ import { PageHeader } from "../components/PageHeader";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useAsyncData } from "../lib/useAsyncData";
-import type { CommandStatus } from "../types/api";
+import type { CommandStatus, TaskQueueSortBy, TaskQueueSortDirection } from "../types/api";
 
 type Props = {
   navigate(to: string): void;
 };
 
 type WorkersTab = "workers" | "taskQueue";
+
+type TaskQueueSort = {
+  sortBy?: TaskQueueSortBy;
+  sortDirection?: TaskQueueSortDirection;
+};
 
 export function WorkersPage({ navigate }: Props) {
   const { token } = useAuth();
@@ -48,10 +53,19 @@ export function WorkersPage({ navigate }: Props) {
     "queued",
     "in_progress",
   ]);
+  const [queueSort, setQueueSort] = useState<TaskQueueSort>({
+    sortDirection: "asc",
+  });
   const load = useCallback(() => api.listWorkers(token!), [token]);
   const loadQueue = useCallback(
-    () => api.listTaskQueue(token!, { page: queuePage, pageSize: queuePageSize, statuses: queueStatuses }),
-    [token, queuePage, queuePageSize, queueStatuses],
+    () => api.listTaskQueue(token!, {
+      page: queuePage,
+      pageSize: queuePageSize,
+      statuses: queueStatuses,
+      sortBy: queueSort.sortBy,
+      sortDirection: queueSort.sortDirection,
+    }),
+    [token, queuePage, queuePageSize, queueStatuses, queueSort],
   );
   const {
     data: workers,
@@ -236,6 +250,8 @@ export function WorkersPage({ navigate }: Props) {
               page={queuePage}
               pageSize={queuePageSize}
               selectedStatuses={queueStatuses}
+              sortBy={queueSort.sortBy}
+              sortDirection={queueSort.sortDirection}
               loading={queueLoading}
               onPageChange={setQueuePage}
               onPageSizeChange={(nextPageSize) => {
@@ -244,6 +260,10 @@ export function WorkersPage({ navigate }: Props) {
               }}
               onStatusesChange={(nextStatuses) => {
                 setQueueStatuses(nextStatuses);
+                setQueuePage(0);
+              }}
+              onSortChange={(sortBy, sortDirection) => {
+                setQueueSort({ sortBy, sortDirection });
                 setQueuePage(0);
               }}
             />

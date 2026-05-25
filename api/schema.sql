@@ -132,6 +132,7 @@ create table if not exists client_commands (
   user_id uuid not null references users(id),
   worker_id text,
   command text not null,
+  task_summary text,
   execution_command text,
   command_mode text not null default 'ai',
   repository_url text,

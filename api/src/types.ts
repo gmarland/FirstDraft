@@ -30,6 +30,7 @@ export type Command = {
   userId: string;
   workerId?: string;
   command: string;
+  taskSummary?: string;
   executionCommand?: string | null;
   commandMode: CommandMode;
   repositoryUrl?: string;
