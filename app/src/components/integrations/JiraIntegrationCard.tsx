@@ -6,12 +6,10 @@ import {
   CardContent,
   Chip,
   Divider,
-  FormControlLabel,
   Stack,
   Step,
   StepLabel,
   Stepper,
-  Switch,
   Typography,
 } from "@mui/material";
 import CableIcon from "@mui/icons-material/Cable";
@@ -101,22 +99,6 @@ export function JiraIntegrationCard({
                 ticket intake.
               </Typography>
             </Box>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1}
-              sx={{ alignItems: { xs: "flex-start", sm: "center" } }}
-            >
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={jiraIntakeEnabled}
-                    onChange={(event) => onEnabledChange(event.target.checked)}
-                    disabled={!jiraIntakeConfigured || saving}
-                  />
-                }
-                label="Enable Jira ticket intake"
-              />
-            </Stack>
           </Stack>
 
           <Stepper activeStep={activeStep} alternativeLabel>
@@ -156,10 +138,12 @@ export function JiraIntegrationCard({
                 saving={saving}
                 jiraIntakeConfigured={jiraIntakeConfigured}
                 workflowSelectionsComplete={workflowSelectionsComplete}
+                jiraIntakeEnabled={jiraIntakeEnabled}
                 onBoardChange={onBoardChange}
                 onReadyStatusChange={onReadyStatusChange}
                 onProcessingStatusChange={onProcessingStatusChange}
                 onProcessedStatusChange={onProcessedStatusChange}
+                onEnabledChange={onEnabledChange}
                 onRefreshBoards={onRefreshBoards}
                 onRefreshStatuses={onRefreshStatuses}
                 onSaveWorkflow={onSaveWorkflow}
