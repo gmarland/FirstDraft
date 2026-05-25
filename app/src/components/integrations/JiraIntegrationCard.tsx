@@ -34,7 +34,6 @@ type Props = {
   workflowSelectionsComplete: boolean;
   jiraIntakeEnabled: boolean;
   onFormChange(update: Partial<JiraFormState>): void;
-  onEnabledChange(enabled: boolean): void;
   onSaveConnection(event: FormEvent): void;
   onTestConnection(): void;
   onBoardChange(boardId: number): void;
@@ -62,7 +61,6 @@ export function JiraIntegrationCard({
   workflowSelectionsComplete,
   jiraIntakeEnabled,
   onFormChange,
-  onEnabledChange,
   onSaveConnection,
   onTestConnection,
   onBoardChange,
@@ -80,7 +78,10 @@ export function JiraIntegrationCard({
           <Stack
             direction={{ xs: "column", md: "row" }}
             spacing={1.5}
-            sx={{ justifyContent: "space-between" }}
+            sx={{
+              alignItems: { xs: "flex-start", md: "center" },
+              justifyContent: "space-between",
+            }}
           >
             <Box>
               <Stack
@@ -138,12 +139,10 @@ export function JiraIntegrationCard({
                 saving={saving}
                 jiraIntakeConfigured={jiraIntakeConfigured}
                 workflowSelectionsComplete={workflowSelectionsComplete}
-                jiraIntakeEnabled={jiraIntakeEnabled}
                 onBoardChange={onBoardChange}
                 onReadyStatusChange={onReadyStatusChange}
                 onProcessingStatusChange={onProcessingStatusChange}
                 onProcessedStatusChange={onProcessedStatusChange}
-                onEnabledChange={onEnabledChange}
                 onRefreshBoards={onRefreshBoards}
                 onRefreshStatuses={onRefreshStatuses}
                 onSaveWorkflow={onSaveWorkflow}

@@ -11,9 +11,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Snackbar,
   Stack,
+  Switch,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -367,7 +369,7 @@ export function IntegrationsPage() {
         processingStatusName: form.processingStatusName,
         processedStatusId: form.processedStatusId,
         processedStatusName: form.processedStatusName,
-        enabled: form.enabled,
+        enabled: true,
       });
       setIntegrations((current) => upsertIntegration(current, saved));
       setForm({ ...emptyForm, ...saved, apiToken: "" });
@@ -542,7 +544,34 @@ export function IntegrationsPage() {
       </Stack>
       <Dialog open={dialogOpen} onClose={closeDialog} maxWidth="lg" fullWidth>
         <DialogTitle>
-          {form.id ? "Edit Jira Integration" : "Add Jira Integration"}
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.5}
+            sx={{
+              alignItems: { xs: "stretch", sm: "center" },
+              justifyContent: "space-between",
+            }}
+          >
+            <Typography component="span" variant="inherit">
+              {form.id ? "Edit Jira Integration" : "Add Jira Integration"}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={jiraIntakeEnabled}
+                  onChange={(event) => setIntakeEnabled(event.target.checked)}
+                  disabled={!form.connected || !jiraIntakeConfigured || saving}
+                />
+              }
+              label="Enable Jira ticket intake"
+              labelPlacement="start"
+              sx={{
+                justifyContent: { xs: "space-between", sm: "flex-end" },
+                ml: 0,
+                whiteSpace: "nowrap",
+              }}
+            />
+          </Stack>
         </DialogTitle>
         <DialogContent>
           <JiraIntegrationCard
@@ -561,7 +590,6 @@ export function IntegrationsPage() {
             workflowSelectionsComplete={workflowSelectionsComplete}
             jiraIntakeEnabled={jiraIntakeEnabled}
             onFormChange={updateForm}
-            onEnabledChange={setIntakeEnabled}
             onSaveConnection={saveConnection}
             onTestConnection={testConnection}
             onBoardChange={selectBoard}

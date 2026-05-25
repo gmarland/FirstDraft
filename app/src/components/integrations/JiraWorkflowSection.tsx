@@ -1,11 +1,9 @@
 import {
   Box,
   Button,
-  FormControlLabel,
   IconButton,
   MenuItem,
   Stack,
-  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -25,12 +23,10 @@ type Props = {
   saving: boolean;
   jiraIntakeConfigured: boolean;
   workflowSelectionsComplete: boolean;
-  jiraIntakeEnabled: boolean;
   onBoardChange(boardId: number): void;
   onReadyStatusChange(statusId: string): void;
   onProcessingStatusChange(statusId: string): void;
   onProcessedStatusChange(statusId: string): void;
-  onEnabledChange(enabled: boolean): void;
   onRefreshBoards(): void;
   onRefreshStatuses(): void;
   onSaveWorkflow(): void;
@@ -45,12 +41,10 @@ export function JiraWorkflowSection({
   saving,
   jiraIntakeConfigured,
   workflowSelectionsComplete,
-  jiraIntakeEnabled,
   onBoardChange,
   onReadyStatusChange,
   onProcessingStatusChange,
   onProcessedStatusChange,
-  onEnabledChange,
   onRefreshBoards,
   onRefreshStatuses,
   onSaveWorkflow,
@@ -170,23 +164,11 @@ export function JiraWorkflowSection({
         </Tooltip>
       </Stack>
       <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={1}
+        direction="row"
         sx={{
-          alignItems: { xs: "flex-start", sm: "center" },
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
         }}
       >
-        <FormControlLabel
-          control={
-            <Switch
-              checked={jiraIntakeEnabled}
-              onChange={(event) => onEnabledChange(event.target.checked)}
-              disabled={!jiraIntakeConfigured || saving}
-            />
-          }
-          label="Enable Jira ticket intake"
-        />
         <Button
           variant="contained"
           onClick={onSaveWorkflow}
