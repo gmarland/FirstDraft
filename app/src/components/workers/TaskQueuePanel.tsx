@@ -29,7 +29,12 @@ import CloseIcon from "@mui/icons-material/Close";
 import { EmptyState } from "../EmptyState";
 import { StatusBadge } from "../StatusBadge";
 import { formatDate, relativeTime } from "../../lib/dates";
-import type { Command, CommandStatus, TaskQueueSortBy, TaskQueueSortDirection } from "../../types/api";
+import type {
+  Command,
+  CommandStatus,
+  TaskQueueSortBy,
+  TaskQueueSortDirection,
+} from "../../types/api";
 
 type Props = {
   currentUserId?: string;
@@ -44,7 +49,10 @@ type Props = {
   onPageChange(page: number): void;
   onPageSizeChange(pageSize: number): void;
   onStatusesChange(statuses: CommandStatus[]): void;
-  onSortChange(sortBy: TaskQueueSortBy, sortDirection: TaskQueueSortDirection): void;
+  onSortChange(
+    sortBy: TaskQueueSortBy,
+    sortDirection: TaskQueueSortDirection,
+  ): void;
 };
 
 type SortableColumn = {
@@ -89,21 +97,28 @@ export function TaskQueuePanel({
     null,
   );
   const selectedCommand =
-    commands.find((command) => command.transactionId === selectedCommandId) ?? null;
+    commands.find((command) => command.transactionId === selectedCommandId) ??
+    null;
 
   const closeDetail = () => setSelectedCommandId(null);
   const changeSort = (column: SortableColumn) => {
-    const nextDirection = sortBy === column.key
-      ? sortDirection === "asc" ? "desc" : "asc"
-      : column.firstDirection;
+    const nextDirection =
+      sortBy === column.key
+        ? sortDirection === "asc"
+          ? "desc"
+          : "asc"
+        : column.firstDirection;
     onSortChange(column.key, nextDirection);
   };
   const changeStatuses = (event: SelectChangeEvent<CommandStatus[]>) => {
     const value = event.target.value;
-    const nextStatuses = typeof value === "string"
-      ? value.split(",").filter(isCommandStatus)
-      : value;
-    onStatusesChange(nextStatuses.length > 0 ? nextStatuses : ["queued", "in_progress"]);
+    const nextStatuses =
+      typeof value === "string"
+        ? value.split(",").filter(isCommandStatus)
+        : value;
+    onStatusesChange(
+      nextStatuses.length > 0 ? nextStatuses : ["queued", "in_progress"],
+    );
   };
   const statusFilter = (
     <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -116,7 +131,11 @@ export function TaskQueuePanel({
           onChange={changeStatuses}
           input={<OutlinedInput label="Status" />}
           renderValue={(selected) => (
-            <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75 }}>
+            <Stack
+              direction="row"
+              spacing={0.75}
+              sx={{ flexWrap: "wrap", gap: 0.75 }}
+            >
               {selected.map((status) => (
                 <StatusBadge key={status} value={status} />
               ))}
@@ -138,9 +157,15 @@ export function TaskQueuePanel({
     return (
       <Stack spacing={1.5}>
         {statusFilter}
-        <EmptyState title={isDefaultStatusFilter(selectedStatuses) ? "No active tasks" : "No matching tasks"}>
+        <EmptyState
+          title={
+            isDefaultStatusFilter(selectedStatuses)
+              ? "No active tasks"
+              : "No matching tasks"
+          }
+        >
           {isDefaultStatusFilter(selectedStatuses)
-            ? "Jira and future integration tasks will appear here after intake."
+            ? "Tasks will appear here after intake."
             : "No tasks match the selected statuses."}
         </EmptyState>
       </Stack>
@@ -153,77 +178,92 @@ export function TaskQueuePanel({
         {statusFilter}
         <Paper variant="outlined">
           <TableContainer>
-            <Table size="small" aria-label="Task queue" sx={{ tableLayout: "fixed" }}>
-            <TableHead>
-              <TableRow>
-                {sortableColumns.map((column) => (
-                  <TableCell key={column.key} sx={{ width: column.width }}>
-                    <TableSortLabel
-                      active={sortBy === column.key}
-                      direction={sortBy === column.key ? sortDirection : column.firstDirection}
-                      onClick={() => changeSort(column)}
-                    >
-                      {column.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {commands.map((command) => {
-                const workerLabel = formatWorkerLabel(command, currentUserId);
+            <Table
+              size="small"
+              aria-label="Task queue"
+              sx={{ tableLayout: "fixed" }}
+            >
+              <TableHead>
+                <TableRow>
+                  {sortableColumns.map((column) => (
+                    <TableCell key={column.key} sx={{ width: column.width }}>
+                      <TableSortLabel
+                        active={sortBy === column.key}
+                        direction={
+                          sortBy === column.key
+                            ? sortDirection
+                            : column.firstDirection
+                        }
+                        onClick={() => changeSort(column)}
+                      >
+                        {column.label}
+                      </TableSortLabel>
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {commands.map((command) => {
+                  const workerLabel = formatWorkerLabel(command, currentUserId);
 
-                return (
-                  <TableRow
-                    hover
-                    selected={selectedCommand?.transactionId === command.transactionId}
-                    key={command.transactionId}
-                    onClick={() => setSelectedCommandId(command.transactionId)}
-                    sx={{ cursor: "pointer" }}
-                  >
-                  <TableCell>
-                    <StatusBadge value={command.status} />
-                  </TableCell>
-                  <TableCell>
-                    <SourceLabel command={command} />
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      title={formatCommandSummary(command)}
-                      sx={oneLineTextSx}
+                  return (
+                    <TableRow
+                      hover
+                      selected={
+                        selectedCommand?.transactionId === command.transactionId
+                      }
+                      key={command.transactionId}
+                      onClick={() =>
+                        setSelectedCommandId(command.transactionId)
+                      }
+                      sx={{ cursor: "pointer" }}
                     >
-                      {formatCommandSummary(command)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      title={workerLabel}
-                      sx={oneLineTextSx}
-                    >
-                      {workerLabel}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      title={command.repositoryUrl ?? "-"}
-                      sx={oneLineTextSx}
-                    >
-                      {command.repositoryUrl ?? "-"}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" title={formatDate(command.createdAt)}>
-                      {relativeTime(command.createdAt)}
-                    </Typography>
-                  </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      <TableCell>
+                        <StatusBadge value={command.status} />
+                      </TableCell>
+                      <TableCell>
+                        <SourceLabel command={command} />
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          title={formatCommandSummary(command)}
+                          sx={oneLineTextSx}
+                        >
+                          {formatCommandSummary(command)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          title={workerLabel}
+                          sx={oneLineTextSx}
+                        >
+                          {workerLabel}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          title={command.repositoryUrl ?? "-"}
+                          sx={oneLineTextSx}
+                        >
+                          {command.repositoryUrl ?? "-"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          title={formatDate(command.createdAt)}
+                        >
+                          {relativeTime(command.createdAt)}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </TableContainer>
           {total > 0 && (
             <TablePagination
@@ -233,12 +273,18 @@ export function TaskQueuePanel({
               rowsPerPage={pageSize}
               rowsPerPageOptions={[5, 10, 25, 50]}
               onPageChange={(_event, nextPage) => onPageChange(nextPage)}
-              onRowsPerPageChange={(event) => onPageSizeChange(Number(event.target.value))}
+              onRowsPerPageChange={(event) =>
+                onPageSizeChange(Number(event.target.value))
+              }
             />
           )}
         </Paper>
       </Stack>
-      <TaskQueueDetailDialog command={selectedCommand} currentUserId={currentUserId} onClose={closeDetail} />
+      <TaskQueueDetailDialog
+        command={selectedCommand}
+        currentUserId={currentUserId}
+        onClose={closeDetail}
+      />
     </>
   );
 }
@@ -248,12 +294,18 @@ function isCommandStatus(value: string): value is CommandStatus {
 }
 
 function isDefaultStatusFilter(statuses: CommandStatus[]): boolean {
-  return statuses.length === 2 && statuses.includes("queued") && statuses.includes("in_progress");
+  return (
+    statuses.length === 2 &&
+    statuses.includes("queued") &&
+    statuses.includes("in_progress")
+  );
 }
 
 function SourceLabel({ command }: { command: Command }) {
   const source = formatSource(command);
-  const label = source.key ? `${source.provider} ${source.key}` : source.provider;
+  const label = source.key
+    ? `${source.provider} ${source.key}`
+    : source.provider;
 
   const stopRowClick = (event: MouseEvent<HTMLAnchorElement>) => {
     event.stopPropagation();
@@ -314,10 +366,18 @@ function TaskQueueDetailDialog({
       <DialogContent dividers>
         <Stack spacing={2}>
           <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontWeight: 800 }}
+            >
               Task
             </Typography>
-            <Typography component="pre" className="code-block" sx={{ whiteSpace: "pre-wrap", m: 0 }}>
+            <Typography
+              component="pre"
+              className="code-block"
+              sx={{ whiteSpace: "pre-wrap", m: 0 }}
+            >
               {formatCommandDetail(command)}
             </Typography>
           </Box>
@@ -327,15 +387,24 @@ function TaskQueueDetailDialog({
             sx={{ alignItems: { sm: "flex-start" } }}
           >
             <Field label="Source" value={formatSourceDetail(command)} />
-            <Field label="Mode" value={formatCommandMode(command.commandMode)} />
+            <Field
+              label="Mode"
+              value={formatCommandMode(command.commandMode)}
+            />
             <Field label="Created" value={formatDate(command.createdAt)} />
             <Field label="Claimed" value={formatDate(command.claimedAt)} />
             <Field label="Completed" value={formatDate(command.completedAt)} />
           </Stack>
-          <Field label="Assigned worker" value={formatWorkerLabel(command, currentUserId)} code />
+          <Field
+            label="Assigned worker"
+            value={formatWorkerLabel(command, currentUserId)}
+            code
+          />
           <Field label="Repository" value={command.repositoryUrl ?? "-"} code />
           <Field label="Transaction ID" value={command.transactionId} code />
-          {command.errorMessage && <Field label="Error" value={command.errorMessage} />}
+          {command.errorMessage && (
+            <Field label="Error" value={command.errorMessage} />
+          )}
         </Stack>
       </DialogContent>
     </Dialog>
@@ -385,7 +454,10 @@ function formatCommandSummary(command: Command): string {
       description: string;
     }>;
     return `${payload.ticketNumber ?? "Gitflow"}: ${
-      payload.title ?? payload.description ?? payload.repositoryUrl ?? command.command
+      payload.title ??
+      payload.description ??
+      payload.repositoryUrl ??
+      command.command
     }`;
   } catch {
     return command.command;
@@ -414,8 +486,10 @@ function formatCommandDetail(command: Command): string {
       `Ticket URL: ${payload.ticketUrl ?? ""}`,
       `Title: ${payload.title ?? ""}`,
       "",
-      payload.description ?? ""
-    ].join("\n").trim();
+      payload.description ?? "",
+    ]
+      .join("\n")
+      .trim();
   } catch {
     return command.command;
   }
@@ -442,8 +516,14 @@ function formatSourceDetail(command: Command): string {
 
 function formatWorkerLabel(command: Command, currentUserId?: string): string {
   if (!command.workerId) return "Unassigned";
-  if (currentUserId && command.workerOwnerUserId && command.workerOwnerUserId !== currentUserId) {
-    return command.workerOwnerName ?? command.workerOwnerEmail ?? command.workerId;
+  if (
+    currentUserId &&
+    command.workerOwnerUserId &&
+    command.workerOwnerUserId !== currentUserId
+  ) {
+    return (
+      command.workerOwnerName ?? command.workerOwnerEmail ?? command.workerId
+    );
   }
   return command.workerId;
 }

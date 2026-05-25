@@ -212,66 +212,74 @@ export class CommandStore {
 
   public async listTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<PaginatedCommands> {
     const offset = query.page * query.pageSize;
-    const [commandsResult, countResult] = await Promise.all([
-      this.pool.query(
-        `
-          select ${prefixedCommandColumns},
-            worker_owner.id as worker_owner_user_id,
-            worker_owner.name as worker_owner_name,
-            worker_owner.email as worker_owner_email,
-            intake.provider as source_provider,
-            intake.source_item_id,
-            intake.source_item_key,
-            intake.source_item_url
-          from client_commands commands
-          inner join client_command_users command_users
-            on command_users.transaction_id = commands.transaction_id
-          left join client_workers assigned_worker
-            on assigned_worker.worker_id = commands.worker_id
-          left join api_keys assigned_worker_api_key
-            on assigned_worker_api_key.id = assigned_worker.api_key_id
-          left join users worker_owner
-            on worker_owner.id = assigned_worker_api_key.user_id
-          left join lateral (
-            select
-              intake_events.provider,
-              intake_events.source_item_id,
-              intake_events.source_item_key,
-              intake_events.source_item_url
-            from integration_intake_events intake_events
-            where intake_events.transaction_id = commands.transaction_id
-            order by
-              case when intake_events.status in ('queueing', 'queued', 'processing') then 0 else 1 end,
-              intake_events.created_at asc,
-              intake_events.id asc
-            limit 1
-          ) intake on true
-          where command_users.user_id = $1
-            and commands.status = any($4::text[])
-          order by ${taskQueueOrderBy(query)}
-          limit $2 offset $3
-        `,
-        [userId, query.pageSize, offset, query.statuses]
-      ),
-      this.pool.query(
-        `
-          select count(*) as total
-          from client_commands
-          inner join client_command_users command_users
-            on command_users.transaction_id = client_commands.transaction_id
-          where command_users.user_id = $1
-            and client_commands.status = any($2::text[])
-        `,
-        [userId, query.statuses]
-      )
-    ]);
+    const commandsResult = await this.pool.query(
+      `
+        select ${prefixedCommandColumns},
+          worker_owner.id as worker_owner_user_id,
+          worker_owner.name as worker_owner_name,
+          worker_owner.email as worker_owner_email,
+          intake.provider as source_provider,
+          intake.source_item_id,
+          intake.source_item_key,
+          intake.source_item_url,
+          count(*) over() as task_queue_total
+        from client_commands commands
+        inner join client_command_users command_users
+          on command_users.transaction_id = commands.transaction_id
+        left join client_workers assigned_worker
+          on assigned_worker.worker_id = commands.worker_id
+        left join api_keys assigned_worker_api_key
+          on assigned_worker_api_key.id = assigned_worker.api_key_id
+        left join users worker_owner
+          on worker_owner.id = assigned_worker_api_key.user_id
+        left join lateral (
+          select
+            intake_events.provider,
+            intake_events.source_item_id,
+            intake_events.source_item_key,
+            intake_events.source_item_url
+          from integration_intake_events intake_events
+          where intake_events.transaction_id = commands.transaction_id
+          order by
+            case when intake_events.status in ('queueing', 'queued', 'processing') then 0 else 1 end,
+            intake_events.created_at asc,
+            intake_events.id asc
+          limit 1
+        ) intake on true
+        where command_users.user_id = $1
+          and commands.status = any($4::text[])
+        order by ${taskQueueOrderBy(query)}
+        limit $2 offset $3
+      `,
+      [userId, query.pageSize, offset, query.statuses]
+    );
+
+    const total = commandsResult.rows[0]
+      ? Number(commandsResult.rows[0].task_queue_total ?? 0)
+      : await this.countTaskQueueForUser(userId, query);
 
     return {
       commands: commandsResult.rows.map(mapCommand),
-      total: Number(countResult.rows[0]?.total ?? 0),
+      total,
       page: query.page,
       pageSize: query.pageSize
     };
+  }
+
+  private async countTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<number> {
+    const countResult = await this.pool.query(
+      `
+        select count(*) as total
+        from client_commands
+        inner join client_command_users command_users
+          on command_users.transaction_id = client_commands.transaction_id
+        where command_users.user_id = $1
+          and client_commands.status = any($2::text[])
+      `,
+      [userId, query.statuses]
+    );
+
+    return Number(countResult.rows[0]?.total ?? 0);
   }
 
   public async markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined> {

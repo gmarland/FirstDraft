@@ -114,13 +114,14 @@ class TaskQueueDbClient implements DbClient {
   public calls: QueryCall[] = [];
 
   public constructor(
-    private readonly expectedOrderPattern = /case when commands\.status in \('completed', 'failed'\) then commands\.completed_at end desc nulls last/
+    private readonly expectedOrderPattern = /case when commands\.status in \('completed', 'failed'\) then commands\.completed_at end desc nulls last/,
+    private readonly rows: Array<Record<string, unknown>> = taskQueueRows()
   ) {}
 
   public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
     this.calls.push({ sql, parameters });
 
-    if (sql.includes("count(*)")) {
+    if (sql.includes("select count(*) as total")) {
       assert.match(sql, /inner join client_command_users command_users/);
       assert.match(sql, /where command_users\.user_id = \$1/);
       assert.match(sql, /client_commands\.status = any\(\$2::text\[\]\)/);
@@ -141,38 +142,16 @@ class TaskQueueDbClient implements DbClient {
     assert.match(sql, /worker_owner\.name as worker_owner_name/);
     assert.match(sql, /worker_owner\.email as worker_owner_email/);
     assert.match(sql, /intake\.provider as source_provider/);
+    assert.match(sql, /count\(\*\) over\(\) as task_queue_total/);
     assert.match(sql, /where command_users\.user_id = \$1/);
     assert.match(sql, /commands\.status = any\(\$4::text\[\]\)/);
     assert.match(sql, this.expectedOrderPattern);
     assert.match(sql, /limit \$2 offset \$3/);
-    assert.deepEqual(parameters, ["user-1", 2, 2, ["queued", "in_progress", "completed", "failed"]]);
+    assert.deepEqual(parameters?.slice(0, 2), ["user-1", 2]);
+    assert.deepEqual(parameters?.[3], ["queued", "in_progress", "completed", "failed"]);
     return {
-      rows: [
-        commandRow("queued-unassigned", "2026-05-24T09:00:00.000Z", {
-          status: "queued",
-          workerId: null,
-          sourceProvider: "jira",
-          sourceItemId: "10001",
-          sourceItemKey: "FD-123",
-          sourceItemUrl: "https://example.atlassian.net/browse/FD-123"
-        }),
-        commandRow("in-progress-assigned", "2026-05-24T10:00:00.000Z", {
-          status: "in_progress",
-          workerId: "worker-2",
-          workerOwnerUserId: "user-2",
-          workerOwnerName: "Worker Owner",
-          workerOwnerEmail: "owner@example.com"
-        }),
-        commandRow("completed-assigned", "2026-05-24T11:00:00.000Z", {
-          status: "completed",
-          workerId: "worker-3"
-        }),
-        commandRow("failed-assigned", "2026-05-24T12:00:00.000Z", {
-          status: "failed",
-          workerId: "worker-4"
-        })
-      ],
-      rowCount: 4
+      rows: this.rows,
+      rowCount: this.rows.length
     };
   }
 }
@@ -209,7 +188,7 @@ async function testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWork
   assert.equal(result.commands[0].sourceItemId, "10001");
   assert.equal(result.commands[0].sourceItemKey, "FD-123");
   assert.equal(result.commands[0].sourceItemUrl, "https://example.atlassian.net/browse/FD-123");
-  assert.equal(db.calls.length, 2);
+  assert.equal(db.calls.length, 1);
 }
 
 async function testListTaskQueueForUserSortsByAllowlistedColumns(): Promise<void> {
@@ -238,8 +217,23 @@ async function testListTaskQueueForUserSortsByAllowlistedColumns(): Promise<void
       sortDirection: sortCase.sortDirection
     });
 
-    assert.equal(db.calls.length, 2);
+    assert.equal(db.calls.length, 1);
   }
+}
+
+async function testListTaskQueueForUserCountsEmptyPage(): Promise<void> {
+  const db = new TaskQueueDbClient(undefined, []);
+  const store = new CommandStore(db);
+
+  const result = await store.listTaskQueueForUser("user-1", {
+    page: 99,
+    pageSize: 2,
+    statuses: ["queued", "in_progress", "completed", "failed"]
+  });
+
+  assert.equal(result.total, 4);
+  assert.deepEqual(result.commands, []);
+  assert.equal(db.calls.length, 2);
 }
 
 class DispatchableQueueDbClient implements DbClient {
@@ -382,11 +376,40 @@ function commandRow(
   };
 }
 
+function taskQueueRows(): Array<Record<string, unknown>> {
+  return [
+    commandRow("queued-unassigned", "2026-05-24T09:00:00.000Z", {
+      status: "queued",
+      workerId: null,
+      sourceProvider: "jira",
+      sourceItemId: "10001",
+      sourceItemKey: "FD-123",
+      sourceItemUrl: "https://example.atlassian.net/browse/FD-123"
+    }),
+    commandRow("in-progress-assigned", "2026-05-24T10:00:00.000Z", {
+      status: "in_progress",
+      workerId: "worker-2",
+      workerOwnerUserId: "user-2",
+      workerOwnerName: "Worker Owner",
+      workerOwnerEmail: "owner@example.com"
+    }),
+    commandRow("completed-assigned", "2026-05-24T11:00:00.000Z", {
+      status: "completed",
+      workerId: "worker-3"
+    }),
+    commandRow("failed-assigned", "2026-05-24T12:00:00.000Z", {
+      status: "failed",
+      workerId: "worker-4"
+    })
+  ].map((row) => ({ ...row, task_queue_total: "4" }));
+}
+
 await testCreateQueuedCommandAddsOwnerMembership();
 testBuildTaskSummary();
 await testListWorkerCommandsPaginatesAndCounts();
 await testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWorker();
 await testListTaskQueueForUserSortsByAllowlistedColumns();
+await testListTaskQueueForUserCountsEmptyPage();
 await testGetDispatchableQueuedCommandsScopesUnassignedCommandsToApiKeyOwner();
 await testMarkWorkerCommandInProgressScopesClaimToApiKeyOwner();
 

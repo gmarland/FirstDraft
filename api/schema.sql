@@ -213,3 +213,7 @@ create unique index if not exists integration_intake_events_active_source_item_i
 
 create index if not exists integration_intake_events_repository_idx
   on integration_intake_events(normalized_repository_url);
+
+create index if not exists integration_intake_events_transaction_created_idx
+  on integration_intake_events(transaction_id, created_at, id)
+  where transaction_id is not null;

@@ -1,8 +1,7 @@
-import { Button, Stack, Typography } from "@mui/material";
+import { Button, Stack } from "@mui/material";
 import { AuthHeader } from "../components/auth/AuthHeader";
 import { AuthPageLayout } from "../components/auth/AuthPageLayout";
 import { LoginForm } from "../components/auth/LoginForm";
-import { api } from "../lib/api";
 
 type Props = {
   onCreateUser(): void;
@@ -18,9 +17,6 @@ export function LoginPage({ onCreateUser, onLoggedIn }: Props) {
         <Button variant="outlined" onClick={onCreateUser} fullWidth>
           Create user
         </Button>
-        <Typography variant="body2" color="text.secondary">
-          API: {api.baseUrl}
-        </Typography>
       </Stack>
     </AuthPageLayout>
   );
