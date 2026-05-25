@@ -72,13 +72,13 @@ export function WorkersPage({ navigate }: Props) {
     error,
     loading,
     refresh,
-  } = useAsyncData(load, [load], 4000);
+  } = useAsyncData(load, [load]);
   const {
     data: taskQueue,
     error: queueError,
     loading: queueLoading,
     refresh: refreshQueue,
-  } = useAsyncData(loadQueue, [loadQueue], 4000);
+  } = useAsyncData(loadQueue, [loadQueue]);
   const hasEnabledWorkers = workers?.some((worker) => worker.enabled) ?? false;
   const actionsMenuOpen = Boolean(actionsMenuAnchor);
 
