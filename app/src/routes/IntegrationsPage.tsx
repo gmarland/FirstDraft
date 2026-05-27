@@ -54,8 +54,8 @@ const emptyForm: JiraFormState = {
 export function IntegrationsPage() {
   const token = useAuthStore((state) => state.token);
   const logout = useAuthStore((state) => state.logout);
-  const selectedBoardIdRef = useRef<number | undefined>();
-  const statusLoadBoardIdRef = useRef<number | undefined>();
+  const selectedBoardIdRef = useRef<number | undefined>(undefined);
+  const statusLoadBoardIdRef = useRef<number | undefined>(undefined);
   const [integrations, setIntegrations] = useState<JiraIntegrationSettings[]>(
     [],
   );

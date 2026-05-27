@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import { GitRepositoryStore } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { User } from "../../types.js";
+import { routeParam } from "../routeParams.js";
 import { parseRepositoryInput, validateRepositoryInput } from "./repositoryRequests.js";
 
 export class RepositoryController {
@@ -35,7 +36,7 @@ export class RepositoryController {
       const validationError = validateRepositoryInput(input, true);
       if (validationError) return res.status(400).json({ error: validationError });
 
-      const saved = await this.gitRepositories.updateRepository(user.userId, req.params.normalizedRepositoryUrl, input);
+      const saved = await this.gitRepositories.updateRepository(user.userId, routeParam(req.params, "normalizedRepositoryUrl"), input);
       if (!saved) return res.status(404).json({ error: "Repository not found" });
       res.json(saved);
     } catch (error) {
@@ -46,7 +47,7 @@ export class RepositoryController {
   public readonly deleteRepository: RequestHandler = async (req, res, next) => {
     try {
       const user = currentUser(req);
-      const deleted = await this.gitRepositories.deleteRepository(user.userId, req.params.normalizedRepositoryUrl);
+      const deleted = await this.gitRepositories.deleteRepository(user.userId, routeParam(req.params, "normalizedRepositoryUrl"));
       if (!deleted) return res.status(404).json({ error: "Repository not found" });
       res.status(204).send();
     } catch (error) {
