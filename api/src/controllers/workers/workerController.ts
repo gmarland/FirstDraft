@@ -4,6 +4,7 @@ import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { Command, User } from "../../types.js";
 import { isTaskTypeEnabled } from "../../commandModes.js";
+import { routeParam } from "../routeParams.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "./workerRequests.js";
 import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from "./workerResponses.js";
 
@@ -36,7 +37,7 @@ export class WorkerController {
   public readonly getWorkerState: RequestHandler = async (req, res, next) => {
     try {
       const user = req.user as User;
-      const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
+      const client = await this.store.getWorkerForUser(user.userId, routeParam(req, "workerId"));
       if (!client) {
         return res.status(404).json({ error: "worker is not registered" });
       }
@@ -55,7 +56,7 @@ export class WorkerController {
         return res.status(400).json({ error: "enabled must be a boolean" });
       }
 
-      const client = await this.store.setWorkerEnabledForUser(user.userId, req.params.workerId, enabled);
+      const client = await this.store.setWorkerEnabledForUser(user.userId, routeParam(req, "workerId"), enabled);
       if (!client) {
         return res.status(404).json({ error: "worker is not registered" });
       }
@@ -82,7 +83,7 @@ export class WorkerController {
   public readonly listWorkerCommands: RequestHandler = async (req, res, next) => {
     try {
       const user = req.user as User;
-      const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
+      const client = await this.store.getWorkerForUser(user.userId, routeParam(req, "workerId"));
       if (!client) {
         return res.status(404).json({ error: "worker is not registered" });
       }
@@ -113,7 +114,7 @@ export class WorkerController {
         return res.status(401).json({ error: "authentication required" });
       }
 
-      const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
+      const client = await this.store.getWorkerForUser(user.userId, routeParam(req, "workerId"));
       if (!client) {
         return res.status(404).json({ error: "worker is not registered" });
       }
@@ -135,7 +136,7 @@ export class WorkerController {
         return res.status(401).json({ error: "authentication required" });
       }
 
-      const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
+      const client = await this.store.getWorkerForUser(user.userId, routeParam(req, "workerId"));
       if (!client) {
         return res.status(404).json({ error: "worker is not registered" });
       }
@@ -183,7 +184,7 @@ export class WorkerController {
 
   public readonly getWorkerCommand: RequestHandler = async (req, res, next) => {
     try {
-      const command = await this.getVisibleCommand(req.user as User, req.params.workerId, req.params.transactionId);
+      const command = await this.getVisibleCommand(req.user as User, routeParam(req, "workerId"), routeParam(req, "transactionId"));
       if (!command) return res.status(404).json({ error: "command not found" });
       res.json(command);
     } catch (error) {
@@ -193,16 +194,17 @@ export class WorkerController {
 
   public readonly cancelWorkerCommand: RequestHandler = async (req, res, next) => {
     try {
-      const command = await this.getVisibleCommand(req.user as User, req.params.workerId, req.params.transactionId);
+      const workerId = routeParam(req, "workerId");
+      const command = await this.getVisibleCommand(req.user as User, workerId, routeParam(req, "transactionId"));
       if (!command) return res.status(404).json({ error: "command not found" });
 
       const cancelled = await this.store.cancelWorkerCommand({
         transactionId: command.transactionId,
-        workerId: req.params.workerId,
+        workerId,
         reason: readCancelReason(req.body)
       });
 
-      await (this.dispatcher.dispatchQueuedCommands?.(req.params.workerId) ?? Promise.resolve());
+      await (this.dispatcher.dispatchQueuedCommands?.(workerId) ?? Promise.resolve());
       res.json(cancelled);
     } catch (error) {
       next(error);
@@ -211,7 +213,7 @@ export class WorkerController {
 
   public readonly streamWorkerCommandOutput: RequestHandler = async (req, res, next) => {
     try {
-      const command = await this.getVisibleCommand(req.user as User, req.params.workerId, req.params.transactionId);
+      const command = await this.getVisibleCommand(req.user as User, routeParam(req, "workerId"), routeParam(req, "transactionId"));
       if (!command) return res.status(404).json({ error: "command not found" });
       await streamCommandOutput(command, res, this.outputStorage);
     } catch (error) {
@@ -221,7 +223,7 @@ export class WorkerController {
 
   public readonly getWorkerCommandResponses: RequestHandler = async (req, res, next) => {
     try {
-      const command = await this.getVisibleCommand(req.user as User, req.params.workerId, req.params.transactionId);
+      const command = await this.getVisibleCommand(req.user as User, routeParam(req, "workerId"), routeParam(req, "transactionId"));
       if (!command) return res.status(404).json({ error: "command not found" });
       await sendCommandResponses(command, res, this.outputStorage);
     } catch (error) {

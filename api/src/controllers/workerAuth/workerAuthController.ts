@@ -12,6 +12,7 @@ import {
   validateWorkerTokenRequest
 } from "./workerAuthRequests.js";
 import { sendJiraAttachment } from "./workerAuthResponses.js";
+import { routeParam } from "../routeParams.js";
 
 export class WorkerAuthController {
   public constructor(
@@ -77,7 +78,7 @@ export class WorkerAuthController {
       if (!worker) return res.status(401).json({ error: "invalid worker token" });
 
       const resolved = await this.intakeEvents.getByIdForWorker(
-        req.params.eventId,
+        routeParam(req, "eventId"),
         worker.workerId,
         worker.userId,
       );
@@ -86,7 +87,7 @@ export class WorkerAuthController {
       }
 
       const { event, participant } = resolved;
-      const attachment = readImageAttachmentMetadata(event.metadata, req.params.attachmentId);
+      const attachment = readImageAttachmentMetadata(event.metadata, routeParam(req, "attachmentId"));
       if (!attachment) return res.status(404).json({ error: "attachment not found" });
 
       const credentials = await this.jiraIntegrations.getCredentials(participant.userId, participant.integrationId);

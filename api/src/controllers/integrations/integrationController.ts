@@ -3,6 +3,7 @@ import { JiraClient } from "../../integrations/jira/jiraClient.js";
 import { JiraIntakeService } from "../../integrations/jira/jiraIntakeService.js";
 import { JiraIntegrationStore } from "../../store/integrations/jiraIntegrationStore.js";
 import { User } from "../../types.js";
+import { routeParam } from "../routeParams.js";
 import {
   hasCompleteWorkflow,
   parseBoardInput,
@@ -108,7 +109,7 @@ export class IntegrationController {
   public readonly getJiraIntegration: RequestHandler = async (req, res, next) => {
     try {
       const user = currentUser(req);
-      res.json(await this.jiraIntegrations.getSettingsForUser(user.userId, req.params.integrationId));
+      res.json(await this.jiraIntegrations.getSettingsForUser(user.userId, routeParam(req, "integrationId")));
     } catch (error) {
       next(error);
     }
@@ -134,12 +135,12 @@ export class IntegrationController {
       const input = parseConnectionInput(req.body);
       const validationError = validateConnectionInput(input);
       if (validationError) return res.status(400).json({ error: validationError });
-      const existing = await this.jiraIntegrations.getSettingsForUser(user.userId, req.params.integrationId);
+      const existing = await this.jiraIntegrations.getSettingsForUser(user.userId, routeParam(req, "integrationId"));
       if (!input.apiToken && !existing.connected) {
         return res.status(400).json({ error: "apiToken is required when connecting Jira for the first time" });
       }
 
-      res.json(await this.jiraIntegrations.saveConnection(user.userId, input, req.params.integrationId));
+      res.json(await this.jiraIntegrations.saveConnection(user.userId, input, routeParam(req, "integrationId")));
     } catch (error) {
       next(error);
     }
@@ -148,7 +149,7 @@ export class IntegrationController {
   public readonly testJiraConnection: RequestHandler = async (req, res) => {
     try {
       const user = currentUser(req);
-      const client = await getClient(this.jiraIntegrations, user.userId, req.params.integrationId);
+      const client = await getClient(this.jiraIntegrations, user.userId, routeParam(req, "integrationId"));
       await client.testConnection();
       res.json({ ok: true });
     } catch (error) {
@@ -165,14 +166,14 @@ export class IntegrationController {
         route: "/jira/:integrationId/intake",
         userId: user?.userId,
         authenticated: Boolean(user),
-        integrationId: req.params.integrationId,
+        integrationId: routeParam(req, "integrationId"),
         bodyIntegrationId: input.integrationId,
         maxIssues: input.maxIssues,
         dryRun: input.dryRun
       });
       const result = await this.jiraIntake.run({
         userId: user?.userId,
-        integrationId: req.params.integrationId,
+        integrationId: routeParam(req, "integrationId"),
         maxIssues: input.maxIssues,
         dryRun: input.dryRun
       });
@@ -180,7 +181,7 @@ export class IntegrationController {
         route: "/jira/:integrationId/intake",
         userId: user?.userId,
         authenticated: Boolean(user),
-        integrationId: req.params.integrationId,
+        integrationId: routeParam(req, "integrationId"),
         statusCode: input.dryRun ? 200 : 202,
         processed: result.processed,
         queued: result.queued,
@@ -192,7 +193,7 @@ export class IntegrationController {
     } catch (error) {
       console.error("[jira-intake:route] failed", {
         route: "/jira/:integrationId/intake",
-        integrationId: req.params.integrationId,
+        integrationId: routeParam(req, "integrationId"),
         error: error instanceof Error ? error.message : String(error)
       });
       next(error);
@@ -202,7 +203,7 @@ export class IntegrationController {
   public readonly listJiraBoards: RequestHandler = async (req, res) => {
     try {
       const user = currentUser(req);
-      const client = await getClient(this.jiraIntegrations, user.userId, req.params.integrationId);
+      const client = await getClient(this.jiraIntegrations, user.userId, routeParam(req, "integrationId"));
       res.json({ boards: await client.listBoards() });
     } catch (error) {
       res.status(502).json({ error: error instanceof Error ? error.message : "Unable to load Jira boards" });
@@ -216,7 +217,7 @@ export class IntegrationController {
       const validationError = validateBoardInput(input);
       if (validationError) return res.status(400).json({ error: validationError });
 
-      res.json(await this.jiraIntegrations.saveBoard(user.userId, req.params.integrationId, input));
+      res.json(await this.jiraIntegrations.saveBoard(user.userId, routeParam(req, "integrationId"), input));
     } catch (error) {
       next(error);
     }
@@ -225,10 +226,10 @@ export class IntegrationController {
   public readonly listJiraBoardStatuses: RequestHandler = async (req, res) => {
     try {
       const user = currentUser(req);
-      const boardId = Number(req.params.boardId);
+      const boardId = Number(routeParam(req, "boardId"));
       if (!Number.isInteger(boardId)) return res.status(400).json({ error: "boardId must be an integer" });
 
-      const client = await getClient(this.jiraIntegrations, user.userId, req.params.integrationId);
+      const client = await getClient(this.jiraIntegrations, user.userId, routeParam(req, "integrationId"));
       res.json({ statuses: await client.getBoardStatuses(boardId) });
     } catch (error) {
       res.status(502).json({ error: error instanceof Error ? error.message : "Unable to load Jira board statuses" });
@@ -238,14 +239,14 @@ export class IntegrationController {
   public readonly saveJiraReadyStatus: RequestHandler = async (req, res, next) => {
     try {
       const user = currentUser(req);
-      const settings = await this.jiraIntegrations.getSettingsForUser(user.userId, req.params.integrationId);
+      const settings = await this.jiraIntegrations.getSettingsForUser(user.userId, routeParam(req, "integrationId"));
       if (!settings.boardId) return res.status(400).json({ error: "Select a Jira board before choosing a ready status" });
 
       const input = parseReadyStatusInput(req.body);
       const validationError = validateReadyStatusInput(input);
       if (validationError) return res.status(400).json({ error: validationError });
 
-      res.json(await this.jiraIntegrations.saveReadyStatus(user.userId, req.params.integrationId, input));
+      res.json(await this.jiraIntegrations.saveReadyStatus(user.userId, routeParam(req, "integrationId"), input));
     } catch (error) {
       next(error);
     }
@@ -258,7 +259,7 @@ export class IntegrationController {
       const validationError = validateWorkflowInput(input);
       if (validationError) return res.status(400).json({ error: validationError });
 
-      res.json(await this.jiraIntegrations.saveWorkflow(user.userId, req.params.integrationId, input));
+      res.json(await this.jiraIntegrations.saveWorkflow(user.userId, routeParam(req, "integrationId"), input));
     } catch (error) {
       next(error);
     }
@@ -270,13 +271,13 @@ export class IntegrationController {
       const enabled = readEnabled(req.body);
       if (enabled === undefined) return res.status(400).json({ error: "enabled must be a boolean" });
 
-      const settings = await this.jiraIntegrations.getSettingsForUser(user.userId, req.params.integrationId);
+      const settings = await this.jiraIntegrations.getSettingsForUser(user.userId, routeParam(req, "integrationId"));
       if (!settings.id) return res.status(404).json({ error: "Jira integration not found" });
       if (enabled && !hasCompleteWorkflow(settings)) {
         return res.status(400).json({ error: "Jira workflow must be saved before enabling intake" });
       }
 
-      const saved = await this.jiraIntegrations.setEnabled(user.userId, req.params.integrationId, enabled);
+      const saved = await this.jiraIntegrations.setEnabled(user.userId, routeParam(req, "integrationId"), enabled);
       if (!saved) return res.status(404).json({ error: "Jira integration not found" });
       res.json(saved);
     } catch (error) {
@@ -287,7 +288,7 @@ export class IntegrationController {
   public readonly sampleReadyJiraIssue: RequestHandler = async (req, res) => {
     try {
       const user = currentUser(req);
-      const credentials = await this.jiraIntegrations.getCredentials(user.userId, req.params.integrationId);
+      const credentials = await this.jiraIntegrations.getCredentials(user.userId, routeParam(req, "integrationId"));
       if (!credentials) return res.status(400).json({ error: "Jira credentials are not configured" });
       if (!credentials.readyStatusName) return res.status(400).json({ error: "Ready status is not configured" });
 
@@ -302,8 +303,8 @@ export class IntegrationController {
   public readonly listJiraIssueTransitions: RequestHandler = async (req, res) => {
     try {
       const user = currentUser(req);
-      const client = await getClient(this.jiraIntegrations, user.userId, req.params.integrationId);
-      res.json({ transitions: await client.getTransitions(req.params.issueKey) });
+      const client = await getClient(this.jiraIntegrations, user.userId, routeParam(req, "integrationId"));
+      res.json({ transitions: await client.getTransitions(routeParam(req, "issueKey")) });
     } catch (error) {
       res.status(502).json({ error: error instanceof Error ? error.message : "Unable to load Jira transitions" });
     }
@@ -313,11 +314,11 @@ export class IntegrationController {
     try {
       const user = currentUser(req);
       const input = parseProcessedStatusInput(req.body);
-      const settings = await this.jiraIntegrations.getSettingsForUser(user.userId, req.params.integrationId);
+      const settings = await this.jiraIntegrations.getSettingsForUser(user.userId, routeParam(req, "integrationId"));
       const validationError = validateProcessedStatusInput(input, settings);
       if (validationError) return res.status(400).json({ error: validationError });
 
-      res.json(await this.jiraIntegrations.saveProcessedStatus(user.userId, req.params.integrationId, input));
+      res.json(await this.jiraIntegrations.saveProcessedStatus(user.userId, routeParam(req, "integrationId"), input));
     } catch (error) {
       next(error);
     }
@@ -327,11 +328,11 @@ export class IntegrationController {
     try {
       const user = currentUser(req);
       const input = parseProcessedStatusInput(req.body);
-      const settings = await this.jiraIntegrations.getSettingsForUser(user.userId, req.params.integrationId);
+      const settings = await this.jiraIntegrations.getSettingsForUser(user.userId, routeParam(req, "integrationId"));
       const validationError = validateProcessedStatusInput(input, settings);
       if (validationError) return res.status(400).json({ error: validationError });
 
-      res.json(await this.jiraIntegrations.saveProcessedStatus(user.userId, req.params.integrationId, input));
+      res.json(await this.jiraIntegrations.saveProcessedStatus(user.userId, routeParam(req, "integrationId"), input));
     } catch (error) {
       next(error);
     }
@@ -344,13 +345,13 @@ export class IntegrationController {
       const connectionError = validateConnectionInput(connectionInput);
       if (connectionError) return res.status(400).json({ error: connectionError });
 
-      const existing = await this.jiraIntegrations.getSettingsForUser(user.userId, req.params.integrationId);
+      const existing = await this.jiraIntegrations.getSettingsForUser(user.userId, routeParam(req, "integrationId"));
       if (!connectionInput.apiToken && !existing.connected) {
         return res.status(400).json({ error: "apiToken is required when enabling Jira for the first time" });
       }
 
-      await this.jiraIntegrations.saveConnection(user.userId, connectionInput, req.params.integrationId);
-      res.json(await this.jiraIntegrations.saveProcessedStatus(user.userId, req.params.integrationId, parseProcessedStatusInput(req.body)));
+      await this.jiraIntegrations.saveConnection(user.userId, connectionInput, routeParam(req, "integrationId"));
+      res.json(await this.jiraIntegrations.saveProcessedStatus(user.userId, routeParam(req, "integrationId"), parseProcessedStatusInput(req.body)));
     } catch (error) {
       next(error);
     }
@@ -359,7 +360,7 @@ export class IntegrationController {
   public readonly deleteJiraIntegration: RequestHandler = async (req, res, next) => {
     try {
       const user = currentUser(req);
-      const deleted = await this.jiraIntegrations.delete(user.userId, req.params.integrationId);
+      const deleted = await this.jiraIntegrations.delete(user.userId, routeParam(req, "integrationId"));
       if (!deleted) return res.status(404).json({ error: "Jira integration not found" });
       res.json(deleted);
     } catch (error) {
@@ -370,7 +371,7 @@ export class IntegrationController {
   public readonly testJiraWorkflow: RequestHandler = async (req, res) => {
     try {
       const user = currentUser(req);
-      const credentials = await this.jiraIntegrations.getCredentials(user.userId, req.params.integrationId);
+      const credentials = await this.jiraIntegrations.getCredentials(user.userId, routeParam(req, "integrationId"));
       if (!credentials) {
         return res.status(400).json({ error: "Jira credentials are not configured" });
       }
@@ -405,8 +406,8 @@ export class IntegrationController {
   public readonly listJiraTransitions: RequestHandler = async (req, res) => {
     try {
       const user = currentUser(req);
-      const client = await getClient(this.jiraIntegrations, user.userId, req.params.integrationId);
-      res.json({ transitions: await client.getTransitions(req.params.issueKey) });
+      const client = await getClient(this.jiraIntegrations, user.userId, routeParam(req, "integrationId"));
+      res.json({ transitions: await client.getTransitions(routeParam(req, "issueKey")) });
     } catch (error) {
       res.status(502).json({ error: error instanceof Error ? error.message : "Unable to reach Jira" });
     }

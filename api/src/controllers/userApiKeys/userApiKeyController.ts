@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import { AppStore } from "../../store/tenantStore.js";
 import { User } from "../../types.js";
+import { routeParam } from "../routeParams.js";
 import { readApiKeyName } from "./userApiKeyRequests.js";
 
 export class UserApiKeyController {
@@ -37,10 +38,11 @@ export class UserApiKeyController {
   public readonly revokeApiKey: RequestHandler = async (req, res, next) => {
     try {
       const user = req.user as User;
+      const keyId = routeParam(req, "keyId");
       const revoked =
         user.role === "admin"
-          ? await this.tenants.revokeApiKey(req.params.keyId)
-          : await this.tenants.revokeApiKeyForUser(user.userId, req.params.keyId);
+          ? await this.tenants.revokeApiKey(keyId)
+          : await this.tenants.revokeApiKeyForUser(user.userId, keyId);
 
       if (!revoked) {
         return res.status(404).json({ error: "API key not found" });
