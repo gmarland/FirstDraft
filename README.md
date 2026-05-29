@@ -6,7 +6,7 @@ Put workers next to the repositories, credentials, build tools, and internal net
 
 ## Interactive Demo
 
-[![FirstDraft Overview](https://demo.arcade.software/xvCA6UuGer9a8t01MOWQ)
+[FirstDraft Overview](https://demo.arcade.software/xvCA6UuGer9a8t01MOWQ)
 
 Click the image above to launch the full interactive walkthrough.
 
