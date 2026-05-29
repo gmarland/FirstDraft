@@ -2,6 +2,8 @@
 
 FirstDraft is a control plane for running AI-assisted engineering work on remote machines you control.
 
+<!--ARCADE EMBED START--><div style="position: relative; padding-bottom: calc(50.6614% + 41px); height: 0px; width: 100%;"><iframe src="https://demo.arcade.software/xvCA6UuGer9a8t01MOWQ?embed&embed_mobile=tab&embed_desktop=inline&show_copy_link=true" title="FirstDraft Overview" frameborder="0" loading="lazy" webkitallowfullscreen mozallowfullscreen allowfullscreen allow="clipboard-write" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; color-scheme: light;" ></iframe></div><!--ARCADE EMBED END-->
+
 Put workers next to the repositories, credentials, build tools, and internal networks they need, then turn those sandboxed workers on from a browser or from Jira. FirstDraft is built for teams who want more than a single local coding agent: a fleet of addressable workers can sit on remote machines, advertise what they can do, and pick up operational work as soon as the UI or an enabled Jira workflow sends it their way.
 
 ## Why FirstDraft
