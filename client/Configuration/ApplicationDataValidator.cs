@@ -8,9 +8,7 @@ namespace FirstDraft.Configuration
 
             ValidateWorkerId(applicationData.WorkerId);
 
-            if (string.IsNullOrEmpty(applicationData.GetApiKey())) throw new Exception("You must provide a valid ApiKey");
-
-            if (string.IsNullOrEmpty(applicationData.GetApiSecret())) throw new Exception("You must provide a valid ApiSecret");
+            if (string.IsNullOrEmpty(applicationData.GetWorkerRefreshToken())) throw new Exception("You must authenticate this worker with firstdraft init");
 
             if (string.IsNullOrEmpty(applicationData.ApplicationFolder)) throw new Exception("You must provide a valid ApplicationFolder");
 

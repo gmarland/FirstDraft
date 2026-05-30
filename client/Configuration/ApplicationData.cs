@@ -30,6 +30,8 @@ namespace FirstDraft.Configuration
 
             ApiSecret = string.Empty;
 
+            WorkerRefreshToken = string.Empty;
+
             ApplicationFolder = "App";
 
             LogsFolder = "Logs";
@@ -41,11 +43,21 @@ namespace FirstDraft.Configuration
 
         public string ApiSecret { get; set; }
 
+        public string WorkerRefreshToken { get; set; }
+
         public string? ConfigEncryptionKey { get; set; }
 
         public EncryptedConfigValue? EncryptedApiKey { get; set; }
 
         public EncryptedConfigValue? EncryptedApiSecret { get; set; }
+
+        public EncryptedConfigValue? EncryptedWorkerRefreshToken { get; set; }
+
+        public string? AuthUserId { get; set; }
+
+        public string? AuthEmail { get; set; }
+
+        public string? AuthName { get; set; }
 
         public string? Name { get; set; }
 
@@ -96,22 +108,44 @@ namespace FirstDraft.Configuration
             return DecryptConfigValue(EncryptedApiSecret);
         }
 
+        public string GetWorkerRefreshToken()
+        {
+            if (!string.IsNullOrEmpty(WorkerRefreshToken)) return WorkerRefreshToken;
+            return DecryptConfigValue(EncryptedWorkerRefreshToken);
+        }
+
         public bool HasPlaintextCredentials()
         {
-            return !string.IsNullOrEmpty(ApiKey) || !string.IsNullOrEmpty(ApiSecret);
+            return !string.IsNullOrEmpty(ApiKey) || !string.IsNullOrEmpty(ApiSecret) || !string.IsNullOrEmpty(WorkerRefreshToken);
         }
 
         public void EncryptCredentials(string configEncryptionKey)
         {
             string apiKey = GetApiKey();
             string apiSecret = GetApiSecret();
-            if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiSecret)) return;
+            string workerRefreshToken = GetWorkerRefreshToken();
 
             ConfigEncryptionKey = configEncryptionKey;
-            EncryptedApiKey = EncryptConfigValue(apiKey);
-            EncryptedApiSecret = EncryptConfigValue(apiSecret);
+            if (!string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(apiSecret))
+            {
+                EncryptedApiKey = EncryptConfigValue(apiKey);
+                EncryptedApiSecret = EncryptConfigValue(apiSecret);
+            }
+            if (!string.IsNullOrEmpty(workerRefreshToken))
+            {
+                EncryptedWorkerRefreshToken = EncryptConfigValue(workerRefreshToken);
+            }
             ApiKey = string.Empty;
             ApiSecret = string.Empty;
+            WorkerRefreshToken = string.Empty;
+        }
+
+        public void StoreWorkerRefreshToken(string refreshToken, string configEncryptionKey)
+        {
+            ConfigEncryptionKey = configEncryptionKey;
+            WorkerRefreshToken = refreshToken;
+            EncryptedWorkerRefreshToken = EncryptConfigValue(refreshToken);
+            WorkerRefreshToken = string.Empty;
         }
 
         private string DecryptConfigValue(EncryptedConfigValue? value)

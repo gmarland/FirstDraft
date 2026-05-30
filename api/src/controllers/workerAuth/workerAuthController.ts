@@ -4,6 +4,7 @@ import { JiraClient } from "../../integrations/jira/jiraClient.js";
 import { IntegrationIntakeEventStore } from "../../store/integrations/integrationIntakeEventStore.js";
 import { JiraIntegrationStore } from "../../store/integrations/jiraIntegrationStore.js";
 import { AppStore } from "../../store/tenantStore.js";
+import { User } from "../../types.js";
 import {
   parseWorkerTokenRequest,
   readBearerToken,
@@ -29,13 +30,11 @@ export class WorkerAuthController {
       const validationError = validateWorkerTokenRequest(input);
       if (validationError) return res.status(400).json({ error: validationError });
 
-      const authenticated = await this.tenants.authenticateApiKey(input.apiKey!, input.apiSecret!);
-      if (!authenticated) {
-        return res.status(401).json({ error: "invalid API credentials" });
-      }
+      const user = req.user as User | undefined;
+      if (!user) return res.status(401).json({ error: "authentication required" });
 
       res.json({
-        ...(await this.tokens.issue(input.workerId!.trim(), authenticated)),
+        ...(await this.tokens.issue(input.workerId!.trim(), user)),
         configEncryptionKey: this.workerConfigEncryptionKey
       });
     } catch (error) {

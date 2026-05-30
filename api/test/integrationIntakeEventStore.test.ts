@@ -19,13 +19,10 @@ class MarkProcessingDbClient implements DbClient {
     assert.match(sql, /inner join client_workers assigned_worker/);
     assert.match(sql, /assigned_worker\.worker_id = \$4/);
     assert.match(sql, /assigned_worker\.worker_id = commands\.worker_id/);
-    assert.match(sql, /inner join api_keys assigned_api_key/);
-    assert.match(sql, /assigned_api_key\.id = assigned_worker\.api_key_id/);
     assert.match(sql, /commands\.transaction_id = coalesce\(\$5, integration_intake_events\.transaction_id\)/);
     assert.match(sql, /inner join client_command_users command_users/);
     assert.match(sql, /command_users\.transaction_id = commands\.transaction_id/);
-    assert.match(sql, /command_users\.user_id = assigned_api_key\.user_id/);
-    assert.match(sql, /assigned_api_key\.revoked_at is null/);
+    assert.match(sql, /command_users\.user_id = assigned_worker\.user_id/);
     assert.deepEqual(parameters, ["event-1", "processing", null, "worker-1", null]);
 
     return {
@@ -51,7 +48,7 @@ class RejectedWorkerAssignmentDbClient implements DbClient {
 
   public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
     this.calls.push({ sql, parameters });
-    assert.match(sql, /command_users\.user_id = assigned_api_key\.user_id/);
+    assert.match(sql, /command_users\.user_id = assigned_worker\.user_id/);
     assert.deepEqual(parameters, ["event-1", "processing", null, "worker-2", null]);
     return { rows: [], rowCount: 0 };
   }

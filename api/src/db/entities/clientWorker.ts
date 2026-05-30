@@ -2,6 +2,7 @@ import { EntitySchema } from "typeorm";
 
 export type ClientWorkerEntity = {
   workerId: string;
+  userId: string;
   apiKeyId?: string | null;
   firstRegisteredAt: Date;
   lastRegisteredAt: Date;
@@ -22,6 +23,7 @@ export const ClientWorkerSchema = new EntitySchema<ClientWorkerEntity>({
   tableName: "client_workers",
   columns: {
     workerId: { type: "text", name: "worker_id", primary: true },
+    userId: { type: "uuid", name: "user_id" },
     apiKeyId: { type: "uuid", name: "api_key_id", nullable: true },
     firstRegisteredAt: { type: "timestamptz", name: "first_registered_at", createDate: true },
     lastRegisteredAt: { type: "timestamptz", name: "last_registered_at", createDate: true },

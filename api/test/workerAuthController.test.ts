@@ -3,6 +3,86 @@ import { WorkerAuthController } from "../src/controllers/workerAuth/workerAuthCo
 
 const originalFetch = globalThis.fetch;
 
+async function testIssueTokenRequiresAuthenticatedUser(): Promise<void> {
+  const controller = new WorkerAuthController(
+    {} as never,
+    {
+      async issue() {
+        throw new Error("issue should not be called");
+      },
+    } as never,
+    {} as never,
+    "config-key",
+  );
+  const response = createResponse();
+
+  await controller.issueToken(
+    {
+      body: {
+        workerId: "worker-1",
+      },
+    } as never,
+    response as never,
+    (error?: unknown) => {
+      if (error) throw error;
+    },
+  );
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.body, { error: "authentication required" });
+}
+
+async function testIssueTokenUsesAuthenticatedUser(): Promise<void> {
+  const issuedFor: Array<{ workerId: string; userId: string }> = [];
+  const controller = new WorkerAuthController(
+    {} as never,
+    {
+      async issue(workerId: string, user: { userId: string }) {
+        issuedFor.push({ workerId, userId: user.userId });
+        return {
+          accessToken: "worker-access",
+          accessTokenExpiresIn: 3600,
+          refreshToken: "worker-refresh",
+          refreshTokenExpiresIn: 604800,
+          tokenType: "Bearer",
+        };
+      },
+    } as never,
+    {} as never,
+    "config-key",
+  );
+  const response = createResponse();
+
+  await controller.issueToken(
+    {
+      user: {
+        userId: "user-1",
+        email: "user@example.com",
+        role: "user",
+        createdAt: new Date().toISOString(),
+      },
+      body: {
+        workerId: " worker-1 ",
+      },
+    } as never,
+    response as never,
+    (error?: unknown) => {
+      if (error) throw error;
+    },
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(issuedFor, [{ workerId: "worker-1", userId: "user-1" }]);
+  assert.deepEqual(response.body, {
+    accessToken: "worker-access",
+    accessTokenExpiresIn: 3600,
+    refreshToken: "worker-refresh",
+    refreshTokenExpiresIn: 604800,
+    tokenType: "Bearer",
+    configEncryptionKey: "config-key",
+  });
+}
+
 async function testJiraAttachmentUsesWorkerParticipantIntegration(): Promise<void> {
   const intakeEvents = {
     calls: [] as Array<{ eventId: string; workerId: string; userId: string }>,
@@ -60,7 +140,6 @@ async function testJiraAttachmentUsesWorkerParticipantIntegration(): Promise<voi
         return {
           workerId: "worker-b",
           userId: "user-b",
-          apiKeyId: "api-key-b",
         };
       },
     } as never,
@@ -145,6 +224,8 @@ function createResponse(): {
 }
 
 try {
+  await testIssueTokenRequiresAuthenticatedUser();
+  await testIssueTokenUsesAuthenticatedUser();
   await testJiraAttachmentUsesWorkerParticipantIntegration();
 } finally {
   globalThis.fetch = originalFetch;

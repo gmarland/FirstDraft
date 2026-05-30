@@ -54,14 +54,9 @@ export class PostgresAppStore implements AppStore {
   public async deleteUser(userId: string): Promise<boolean> {
     const result = await this.db.query<{ deleted_user_id: string }>(
       `
-        with user_api_keys as (
-          select id
-          from api_keys
-          where user_id = $1
-        ),
-        deleted_workers as (
+        with deleted_workers as (
           delete from client_workers
-          where api_key_id in (select id from user_api_keys)
+          where user_id = $1
           returning worker_id
         ),
         deleted_commands as (

@@ -10,6 +10,7 @@ export type TaskQueueSortDirection = "asc" | "desc";
 
 export type WorkerRegistration = {
   workerId: string;
+  userId: string;
   apiKeyId?: string;
   connectionId: string;
   paths: string[];

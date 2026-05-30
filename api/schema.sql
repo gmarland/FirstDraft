@@ -34,7 +34,8 @@ create index if not exists api_keys_user_id_idx
 create table if not exists worker_refresh_tokens (
   id uuid primary key,
   worker_id text not null,
-  api_key_id uuid not null references api_keys(id) on delete cascade,
+  user_id uuid not null references users(id) on delete cascade,
+  api_key_id uuid references api_keys(id) on delete set null,
   refresh_token_hash text not null unique,
   issued_at timestamptz not null default now(),
   expires_at timestamptz not null,
@@ -45,11 +46,15 @@ create table if not exists worker_refresh_tokens (
 create index if not exists worker_refresh_tokens_api_key_idx
   on worker_refresh_tokens(api_key_id);
 
+create index if not exists worker_refresh_tokens_user_idx
+  on worker_refresh_tokens(user_id);
+
 create index if not exists worker_refresh_tokens_worker_idx
   on worker_refresh_tokens(worker_id);
 
 create table if not exists client_workers (
   worker_id text primary key,
+  user_id uuid not null references users(id) on delete cascade,
   api_key_id uuid references api_keys(id) on delete set null,
   first_registered_at timestamptz not null default now(),
   last_registered_at timestamptz not null default now(),
@@ -67,6 +72,9 @@ create table if not exists client_workers (
 
 create index if not exists client_workers_last_seen_idx
   on client_workers(last_seen_at desc);
+
+create index if not exists client_workers_user_idx
+  on client_workers(user_id);
 
 create table if not exists user_git_repositories (
   user_id uuid not null references users(id) on delete cascade,

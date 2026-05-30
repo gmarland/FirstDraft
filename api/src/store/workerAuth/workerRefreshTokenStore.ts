@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, createHash } from "crypto";
 import { IsNull, Repository } from "typeorm";
-import { ApiKeyEntity, ApiKeySchema } from "../../db/entities/apiKey.js";
+import { UserEntity, UserSchema } from "../../db/entities/user.js";
 import { WorkerRefreshTokenEntity, WorkerRefreshTokenSchema } from "../../db/entities/workerRefreshToken.js";
 import { TypeOrmStoreContext } from "../../db/typeOrmStoreContext.js";
 
@@ -8,35 +8,34 @@ export type IssuedRefreshToken = {
   id: string;
   refreshToken: string;
   workerId: string;
-  apiKeyId: string;
+  userId: string;
   expiresAt: Date;
 };
 
 export type ConsumedRefreshToken = {
   id: string;
   workerId: string;
-  apiKeyId: string;
   userId: string;
 };
 
 export class WorkerRefreshTokenStore {
-  private readonly apiKeys: Repository<ApiKeyEntity>;
+  private readonly users: Repository<UserEntity>;
   private readonly refreshTokens: Repository<WorkerRefreshTokenEntity>;
 
   public constructor(db: TypeOrmStoreContext) {
-    this.apiKeys = db.repository(ApiKeySchema);
+    this.users = db.repository(UserSchema);
     this.refreshTokens = db.repository(WorkerRefreshTokenSchema);
   }
 
-  public async issue(workerId: string, apiKeyId: string, ttlSeconds: number): Promise<IssuedRefreshToken> {
+  public async issue(workerId: string, userId: string, ttlSeconds: number): Promise<IssuedRefreshToken> {
     const id = randomUUID();
     const refreshToken = `swr_${randomBytes(48).toString("base64url")}`;
     const refreshTokenHash = hashRefreshToken(refreshToken);
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
-    await this.refreshTokens.insert({ id, workerId, apiKeyId, refreshTokenHash, expiresAt });
+    await this.refreshTokens.insert({ id, workerId, userId, refreshTokenHash, expiresAt });
 
-    return { id, refreshToken, workerId, apiKeyId, expiresAt };
+    return { id, refreshToken, workerId, userId, expiresAt };
   }
 
   public async consume(refreshToken: string): Promise<ConsumedRefreshToken | undefined> {
@@ -50,26 +49,25 @@ export class WorkerRefreshTokenStore {
       .andWhere(`
         exists (
           select 1
-          from api_keys
-          where api_keys.id = api_key_id
-            and api_keys.revoked_at is null
+          from users
+          where users.id = user_id
+            and users.disabled_at is null
         )
       `)
-      .returning(["id", "worker_id", "api_key_id"])
+      .returning(["id", "worker_id", "user_id"])
       .execute();
 
-    const row = result.raw[0] as { id?: unknown; worker_id?: unknown; api_key_id?: unknown } | undefined;
+    const row = result.raw[0] as { id?: unknown; worker_id?: unknown; user_id?: unknown } | undefined;
     if (!row) return undefined;
 
-    const apiKeyId = String(row.api_key_id);
-    const apiKey = await this.apiKeys.findOneBy({ id: apiKeyId });
-    if (!apiKey) return undefined;
+    const userId = String(row.user_id);
+    const user = await this.users.findOneBy({ id: userId, disabledAt: IsNull() });
+    if (!user) return undefined;
 
     return {
       id: String(row.id),
       workerId: String(row.worker_id),
-      apiKeyId,
-      userId: apiKey.userId
+      userId
     };
   }
 
@@ -77,8 +75,8 @@ export class WorkerRefreshTokenStore {
     await this.refreshTokens.update({ id }, { replacedBy: replacementId });
   }
 
-  public async isActiveApiKey(apiKeyId: string): Promise<boolean> {
-    return await this.apiKeys.existsBy({ id: apiKeyId, revokedAt: IsNull() });
+  public async isActiveUser(userId: string): Promise<boolean> {
+    return await this.users.existsBy({ id: userId, disabledAt: IsNull() });
   }
 }
 

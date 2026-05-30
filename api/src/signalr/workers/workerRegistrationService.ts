@@ -38,7 +38,7 @@ export class WorkerRegistrationService {
 
     await this.store.registerWorker({
       workerId,
-      apiKeyId: access.apiKeyId,
+      userId: access.userId,
       connectionId,
       paths,
       skills,

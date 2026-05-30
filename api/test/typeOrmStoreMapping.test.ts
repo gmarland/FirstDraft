@@ -51,6 +51,7 @@ function testApiKeyEntityMapping(): void {
 function testWorkerRecordMappingIncludesRuntimeState(): void {
   const row = {
     worker_id: "worker-1",
+    user_id: "00000000-0000-0000-0000-000000000001",
     api_key_id: "00000000-0000-0000-0000-000000000002",
     first_registered_at: new Date("2026-01-01T00:00:00.000Z"),
     last_registered_at: new Date("2026-01-02T00:00:00.000Z"),
@@ -68,6 +69,7 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
 
   assert.deepEqual(mapWorkerRecord(row), {
     workerId: "worker-1",
+    userId: "00000000-0000-0000-0000-000000000001",
     apiKeyId: "00000000-0000-0000-0000-000000000002",
     firstRegisteredAt: "2026-01-01T00:00:00.000Z",
     lastRegisteredAt: "2026-01-02T00:00:00.000Z",
@@ -87,6 +89,7 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
 function testWorkerRecordMappingDefaultsEnabled(): void {
   const worker = mapWorkerRecord({
     worker_id: "worker-1",
+    user_id: "user-1",
     api_key_id: "api-key-1",
     first_registered_at: "2026-01-01T00:00:00.000Z",
     last_registered_at: "2026-01-02T00:00:00.000Z",
@@ -107,6 +110,7 @@ function testWorkerRecordMappingDefaultsEnabled(): void {
 function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
   const worker = mergeWorkerState({
     workerId: "worker-1",
+    userId: "user-1",
     apiKeyId: "api-key-1",
     firstRegisteredAt: "2026-01-01T00:00:00.000Z",
     lastRegisteredAt: "2026-01-02T00:00:00.000Z",
@@ -139,6 +143,7 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
 function testWorkerStateMergeIncludesEnabled(): void {
   const worker = mergeWorkerState({
     workerId: "worker-1",
+    userId: "user-1",
     apiKeyId: "api-key-1",
     firstRegisteredAt: "2026-01-01T00:00:00.000Z",
     lastRegisteredAt: "2026-01-02T00:00:00.000Z",
@@ -172,6 +177,7 @@ function testWorkerStateMergeIncludesEnabled(): void {
 function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
   const worker = mergeWorkerState({
     workerId: "worker-1",
+    userId: "user-1",
     apiKeyId: "api-key-1",
     firstRegisteredAt: "2026-01-01T00:00:00.000Z",
     lastRegisteredAt: "2026-01-02T00:00:00.000Z",
