@@ -132,10 +132,8 @@ class TaskQueueDbClient implements DbClient {
     assert.match(sql, /inner join client_command_users command_users/);
     assert.match(sql, /left join client_workers assigned_worker/);
     assert.match(sql, /assigned_worker\.worker_id = commands\.worker_id/);
-    assert.match(sql, /left join api_keys assigned_worker_api_key/);
-    assert.match(sql, /assigned_worker_api_key\.id = assigned_worker\.api_key_id/);
     assert.match(sql, /left join users worker_owner/);
-    assert.match(sql, /worker_owner\.id = assigned_worker_api_key\.user_id/);
+    assert.match(sql, /worker_owner\.id = assigned_worker\.user_id/);
     assert.match(sql, /left join lateral/);
     assert.match(sql, /from integration_intake_events intake_events/);
     assert.match(sql, /worker_owner\.id as worker_owner_user_id/);
@@ -245,10 +243,7 @@ class DispatchableQueueDbClient implements DbClient {
     assert.match(sql, /inner join client_workers claiming_worker/);
     assert.match(sql, /claiming_worker\.worker_id = \$1/);
     assert.match(sql, /inner join client_command_users command_users/);
-    assert.match(sql, /inner join api_keys claiming_api_key/);
-    assert.match(sql, /claiming_api_key\.id = claiming_worker\.api_key_id/);
-    assert.match(sql, /command_users\.user_id = claiming_api_key\.user_id/);
-    assert.match(sql, /claiming_api_key\.revoked_at is null/);
+    assert.match(sql, /command_users\.user_id = claiming_worker\.user_id/);
     assert.match(sql, /commands\.worker_id = \$1 or commands\.worker_id is null/);
     assert.deepEqual(parameters, ["worker-1", true]);
 
@@ -283,14 +278,11 @@ class ClaimCommandDbClient implements DbClient {
 
     assert.match(sql, /update client_commands/);
     assert.match(sql, /from client_workers claiming_worker/);
-    assert.match(sql, /inner join api_keys claiming_api_key/);
-    assert.match(sql, /claiming_api_key\.id = claiming_worker\.api_key_id/);
     assert.match(sql, /inner join client_command_users command_users/);
     assert.match(sql, /command_users\.transaction_id = client_commands\.transaction_id/);
-    assert.match(sql, /command_users\.user_id = claiming_api_key\.user_id/);
+    assert.match(sql, /command_users\.user_id = claiming_worker\.user_id/);
     assert.match(sql, /where client_commands\.transaction_id = \$1/);
     assert.match(sql, /claiming_worker\.worker_id = \$2/);
-    assert.match(sql, /claiming_api_key\.revoked_at is null/);
     assert.match(sql, /client_commands\.status = 'queued'/);
     assert.match(sql, /client_commands\.worker_id is null or client_commands\.worker_id = \$2/);
     assert.match(sql, /returning client_commands\.transaction_id/);

@@ -27,7 +27,7 @@ Authentication:
 
 Worker authentication:
 
-- `POST /api/worker-auth/token`
+- `POST /api/worker-auth/token` with a user bearer token
 - `POST /api/worker-auth/refresh`
 - `GET /api/worker-auth/public-key`
 - `GET /api/worker-auth/jira-attachments/:integrationId/:issueId/:attachmentId`

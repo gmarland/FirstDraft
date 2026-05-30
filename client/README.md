@@ -7,7 +7,7 @@ The project targets `net10.0` and builds the `firstdraft` assembly. At runtime t
 ## Prerequisites
 
 - .NET SDK 10.
-- FirstDraft API credentials from the web console API keys page.
+- A FirstDraft user account.
 - Network access to the FirstDraft API.
 - Codex CLI or Claude CLI when using `ai` commands.
 - `git` on `PATH` when advertising the `git` skill or running `gitflow` commands.
@@ -55,7 +55,7 @@ Workers accept all command modes by default. Configure `EnabledTaskTypes` to res
 
 Gitflow tasks use `GitWorkspaceDirectory` as the workspace root when configured, otherwise they fall back to the worker's application workspace. The worker clones missing repositories into that workspace and reuses existing repository workspaces for later tasks.
 
-Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker API credentials and a reachable `ExternalAPI` URL.
+Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
 
 `MaxConcurrentTasks` controls concurrent gitflow execution and must be between `1` and `8`.
 
@@ -65,8 +65,8 @@ The worker stores local configuration through `ApplicationData`. Important field
 
 - `WorkerId`: stable worker identifier generated during configuration.
 - `Name` and `Tags`: optional labels shown to API and console users.
-- `ApiKey` and `ApiSecret`: worker API credentials created in the console.
-- `EncryptedApiKey`, `EncryptedApiSecret`, and `ConfigEncryptionKey`: encrypted credential storage.
+- `AuthUserId`, `AuthEmail`, and `AuthName`: metadata for the user account that owns the worker.
+- `EncryptedWorkerRefreshToken` and `ConfigEncryptionKey`: encrypted worker refresh-token storage.
 - `ExternalAPI`: base URL for the FirstDraft API.
 - `ApplicationFolder`: local folder used by the worker application.
 - `LogsFolder`: local log output folder.
@@ -89,7 +89,7 @@ Create or update configuration:
 dotnet run -- init
 ```
 
-During setup, provide the API key and secret, set the external API URL, choose the AI provider, and select the task types, paths, and skills this worker should advertise.
+During setup, set the external API URL, log in or sign up with your FirstDraft user, choose the AI provider, and select the task types, paths, and skills this worker should advertise.
 
 Start the worker:
 

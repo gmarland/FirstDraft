@@ -6,7 +6,8 @@ import { normalizeEnabledTaskTypes } from "../commandModes.js";
 
 export type RegisterWorkerInput = {
   workerId: string;
-  apiKeyId: string;
+  userId: string;
+  apiKeyId?: string;
   connectionId: string;
   paths: string[];
   skills: string[];
@@ -237,6 +238,7 @@ export function mergeWorkerState(record: WorkerRecord, inProgressCommands: Comma
 
   return {
     workerId: record.workerId,
+    userId: record.userId,
     apiKeyId: record.apiKeyId,
     connectionId: record.lastConnectionId ?? "",
     paths: record.paths,

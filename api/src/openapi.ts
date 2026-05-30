@@ -99,7 +99,8 @@ export const openApiDocument = {
     "/api/worker-auth/token": {
       post: {
         tags: ["Worker Auth"],
-        summary: "Exchange worker API credentials for worker tokens",
+        summary: "Exchange user authentication for worker tokens",
+        security: bearerSecurity(),
         requestBody: jsonBody(ref("WorkerTokenRequest"), true),
         responses: {
           "200": jsonResponse("Worker token pair", ref("WorkerTokenResponse")),
@@ -425,7 +426,7 @@ export const openApiDocument = {
         createdAt: { type: "string", format: "date-time" },
         disabledAt: { type: "string", format: "date-time" }
       }, ["userId", "email", "role", "createdAt"]),
-      WorkerTokenRequest: object({ workerId: { type: "string" }, apiKey: { type: "string" }, apiSecret: { type: "string" } }, ["workerId", "apiKey", "apiSecret"]),
+      WorkerTokenRequest: object({ workerId: { type: "string" } }, ["workerId"]),
       RefreshTokenRequest: object({ refreshToken: { type: "string" } }, ["refreshToken"]),
       WorkerTokenPair: object({ accessToken: { type: "string" }, refreshToken: { type: "string" }, expiresIn: { type: "string" } }, ["accessToken", "refreshToken"]),
       WorkerTokenResponse: object({
@@ -446,6 +447,7 @@ export const openApiDocument = {
       CreateApiKeyRequest: object({ name: { type: "string" } }),
       WorkerRegistration: object({
         workerId: { type: "string" },
+        userId: { type: "string" },
         apiKeyId: { type: "string" },
         connectionId: { type: "string" },
         paths: array({ type: "string" }),
@@ -463,7 +465,7 @@ export const openApiDocument = {
         lastSeenAt: { type: "string", format: "date-time" },
         stateUpdatedAt: { type: "string", format: "date-time" },
         stoppedAt: { type: "string", format: "date-time" }
-      }, ["workerId", "connectionId", "paths", "skills", "enabled", "enabledTaskTypes", "state", "registeredAt", "firstRegisteredAt", "lastRegisteredAt", "lastSeenAt", "stateUpdatedAt"]),
+      }, ["workerId", "userId", "connectionId", "paths", "skills", "enabled", "enabledTaskTypes", "state", "registeredAt", "firstRegisteredAt", "lastRegisteredAt", "lastSeenAt", "stateUpdatedAt"]),
       SetWorkerEnabledRequest: object({ enabled: { type: "boolean" } }, ["enabled"]),
       CreateCommandRequest: object({
         command: { type: "string" },

@@ -205,12 +205,9 @@ export class IntegrationIntakeEventStore {
         inner join client_workers worker
           on worker.worker_id = $2
           and worker.worker_id = commands.worker_id
-        inner join api_keys worker_api_key
-          on worker_api_key.id = worker.api_key_id
-          and worker_api_key.revoked_at is null
         inner join integration_intake_event_users participants
           on participants.event_id = events.id
-          and participants.user_id = worker_api_key.user_id
+          and participants.user_id = worker.user_id
         where events.transaction_id = $1
         order by participants.created_at asc, participants.integration_id asc
         limit 1
@@ -327,11 +324,8 @@ export class IntegrationIntakeEventStore {
                 and assigned_worker.worker_id = commands.worker_id
               inner join client_command_users command_users
                 on command_users.transaction_id = commands.transaction_id
-              inner join api_keys assigned_api_key
-                on assigned_api_key.id = assigned_worker.api_key_id
               where commands.transaction_id = coalesce($5, integration_intake_events.transaction_id)
-                and command_users.user_id = assigned_api_key.user_id
-                and assigned_api_key.revoked_at is null
+                and command_users.user_id = assigned_worker.user_id
             )
           )
         returning ${returningColumns}

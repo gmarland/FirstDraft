@@ -55,7 +55,7 @@ Browser console / Jira / API clients
  local repositories and toolchains
 ```
 
-Workers authenticate with API credentials, maintain a live hub connection, and execute commands on the machines where they are installed. The API records command metadata and worker runtime state in Postgres, and writes command output as NDJSON so runs can be audited after the fact.
+Workers authenticate with a FirstDraft user account, maintain their own worker JWT, keep a live hub connection, and execute commands on the machines where they are installed. The API records command metadata and worker runtime state in Postgres, and writes command output as NDJSON so runs can be audited after the fact.
 
 ## Remote Worker Fleet
 
@@ -138,11 +138,7 @@ npm run dev
 
 Open the Vite URL printed by the command, then create the first user from the console.
 
-### 4. Create worker API credentials
-
-In the console, create an API key for your user. Keep the generated key and secret available for worker setup.
-
-### 5. Configure and run a worker
+### 4. Configure and run a worker
 
 ```bash
 cd client
@@ -150,11 +146,11 @@ dotnet run -- init
 dotnet run -- run
 ```
 
-During `init`, provide the API key and secret, set the external API to `http://localhost:5080`, choose `Codex` or `Claude`, and select the paths and skills this worker should advertise.
+During `init`, set the external API to `http://localhost:5080`, log in or sign up with your FirstDraft user, choose `Codex` or `Claude`, and select the paths and skills this worker should advertise.
 
 For real use, run this worker on the remote machine that has the repository, network access, credentials, and toolchain needed for the jobs you want it to perform. Repeat the setup on additional machines to build a worker fleet.
 
-### 6. Enable Jira intake
+### 5. Enable Jira intake
 
 Open the Integrations page, add a Jira connection, choose the board and workflow statuses, then enable intake. Once enabled, Jira issues in the selected ready status can be picked up and queued as worker tasks.
 

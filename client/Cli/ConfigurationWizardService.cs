@@ -1,3 +1,4 @@
+using FirstDraft.Api.Auth;
 using FirstDraft.Configuration;
 
 namespace FirstDraft.Cli
@@ -26,13 +27,35 @@ namespace FirstDraft.Cli
 
             Console.WriteLine($"Worker ID: {applicationData.WorkerId}");
 
-            applicationData.ApiKey = PromptSensitiveRequired("API key", applicationData.ApiKey);
-            applicationData.ApiSecret = PromptSensitiveRequired("API secret", applicationData.ApiSecret);
-
             applicationData.ExternalAPI = PromptUntilValid(
                 "External API",
                 string.IsNullOrWhiteSpace(applicationData.ExternalAPI) ? "http://localhost:5080" : applicationData.ExternalAPI,
                 ValidateExternalApi);
+
+            if (PromptAuthentication(applicationData))
+            {
+                WorkerTokenManager tokens = new WorkerTokenManager(applicationData, _applicationDataService);
+                string authMode = PromptAuthMode(applicationData);
+                string email = PromptRequired("Email", applicationData.AuthEmail ?? string.Empty);
+                string password = PromptSensitiveRequired("Password", string.Empty);
+                try
+                {
+                    if (authMode == "signup")
+                    {
+                        string name = Prompt("Name", applicationData.AuthName ?? string.Empty);
+                        await tokens.AuthenticateWithSignupAsync(email, password, string.IsNullOrWhiteSpace(name) ? null : name);
+                    }
+                    else
+                    {
+                        await tokens.AuthenticateWithLoginAsync(email, password);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Authentication failed: {ex.Message}");
+                    return 1;
+                }
+            }
 
             applicationData.AIProvider = PromptAIProvider(applicationData.AIProvider);
             applicationData.PlanningEnabled = PromptBool("AI planning enabled", applicationData.PlanningEnabled);
@@ -162,6 +185,26 @@ namespace FirstDraft.Cli
                 if (!string.IsNullOrWhiteSpace(value)) return value;
 
                 Console.Error.WriteLine($"{label} is required");
+            }
+        }
+
+        private static bool PromptAuthentication(ApplicationData applicationData)
+        {
+            if (string.IsNullOrEmpty(applicationData.GetWorkerRefreshToken())) return true;
+
+            Console.WriteLine($"Authenticated user: {applicationData.AuthEmail ?? "unknown"}");
+            return PromptBool("Re-authenticate worker", false);
+        }
+
+        private static string PromptAuthMode(ApplicationData applicationData)
+        {
+            string defaultValue = string.IsNullOrWhiteSpace(applicationData.AuthEmail) ? "login" : "login";
+            while (true)
+            {
+                string input = Prompt("Authenticate with login or signup", defaultValue).ToLowerInvariant();
+                if (input == "login" || input == "signup") return input;
+
+                Console.Error.WriteLine("Authentication mode must be login or signup");
             }
         }
 

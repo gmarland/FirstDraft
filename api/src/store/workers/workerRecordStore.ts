@@ -7,6 +7,7 @@ type QueryResultRow = Record<string, unknown>;
 
 export type WorkerRecord = {
   workerId: string;
+  userId: string;
   apiKeyId?: string;
   firstRegisteredAt: string;
   lastRegisteredAt: string;
@@ -24,7 +25,8 @@ export type WorkerRecord = {
 
 export type UpsertWorkerRegistrationInput = {
   workerId: string;
-  apiKeyId: string;
+  userId: string;
+  apiKeyId?: string;
   connectionId: string;
   paths: string[];
   skills: string[];
@@ -52,8 +54,7 @@ export class WorkerRecordStore {
       `
         select ${prefixedWorkerRecordColumns}
         from client_workers
-        inner join api_keys on api_keys.id = client_workers.api_key_id
-        where api_keys.user_id = $1
+        where client_workers.user_id = $1
         order by coalesce(client_workers.state_updated_at, client_workers.last_seen_at, client_workers.last_registered_at, client_workers.first_registered_at) desc
       `,
       [userId]
@@ -80,8 +81,7 @@ export class WorkerRecordStore {
       `
         select ${prefixedWorkerRecordColumns}
         from client_workers
-        inner join api_keys on api_keys.id = client_workers.api_key_id
-        where api_keys.user_id = $1 and client_workers.worker_id = $2
+        where client_workers.user_id = $1 and client_workers.worker_id = $2
       `,
       [userId, workerId]
     );
@@ -93,12 +93,13 @@ export class WorkerRecordStore {
     const result = await this.pool.query(
       `
         insert into client_workers (
-          worker_id, api_key_id, first_registered_at, last_registered_at, last_seen_at,
+          worker_id, user_id, api_key_id, first_registered_at, last_registered_at, last_seen_at,
           last_connection_id, paths, skills, enabled_task_types, max_concurrent_tasks, state, state_updated_at, stopped_at
         )
-        values ($1, $2, now(), now(), now(), $3, $4, $5, $6, $7, 'started', now(), null)
+        values ($1, $2, $3, now(), now(), now(), $4, $5, $6, $7, $8, 'started', now(), null)
         on conflict (worker_id)
         do update set
+          user_id = excluded.user_id,
           api_key_id = excluded.api_key_id,
           last_registered_at = now(),
           last_seen_at = now(),
@@ -116,7 +117,8 @@ export class WorkerRecordStore {
       `,
       [
         input.workerId,
-        input.apiKeyId,
+        input.userId,
+        input.apiKeyId ?? null,
         input.connectionId,
         input.paths,
         input.skills,
@@ -163,9 +165,7 @@ export class WorkerRecordStore {
       `
         update client_workers
         set enabled = $3
-        from api_keys
-        where api_keys.id = client_workers.api_key_id
-          and api_keys.user_id = $1
+        where client_workers.user_id = $1
           and client_workers.worker_id = $2
         returning ${workerRecordColumns}
       `,
@@ -180,9 +180,7 @@ export class WorkerRecordStore {
       `
         update client_workers
         set enabled = false
-        from api_keys
-        where api_keys.id = client_workers.api_key_id
-          and api_keys.user_id = $1
+        where client_workers.user_id = $1
           and client_workers.enabled = true
         returning ${workerRecordColumns}
       `,
@@ -210,6 +208,7 @@ export class WorkerRecordStore {
 
 const workerRecordColumnNames = [
   "worker_id",
+  "user_id",
   "api_key_id",
   "first_registered_at",
   "last_registered_at",
@@ -236,6 +235,7 @@ export function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
 
   return {
     workerId: String(row.worker_id),
+    userId: String(row.user_id),
     apiKeyId: row.api_key_id ? String(row.api_key_id) : undefined,
     firstRegisteredAt: toIsoString(row.first_registered_at),
     lastRegisteredAt: toIsoString(row.last_registered_at),

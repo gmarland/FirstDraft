@@ -41,7 +41,8 @@ export class SchemaMigrator {
       create table if not exists worker_refresh_tokens (
         id uuid primary key,
         worker_id text not null,
-        api_key_id uuid not null references api_keys(id) on delete cascade,
+        user_id uuid not null references users(id) on delete cascade,
+        api_key_id uuid references api_keys(id) on delete set null,
         refresh_token_hash text not null unique,
         issued_at timestamptz not null default now(),
         expires_at timestamptz not null,
@@ -52,11 +53,15 @@ export class SchemaMigrator {
       create index if not exists worker_refresh_tokens_api_key_idx
         on worker_refresh_tokens(api_key_id);
 
+      create index if not exists worker_refresh_tokens_user_idx
+        on worker_refresh_tokens(user_id);
+
       create index if not exists worker_refresh_tokens_worker_idx
         on worker_refresh_tokens(worker_id);
 
       create table if not exists client_workers (
         worker_id text primary key,
+        user_id uuid not null references users(id) on delete cascade,
         api_key_id uuid references api_keys(id) on delete set null,
         first_registered_at timestamptz not null default now(),
         last_registered_at timestamptz not null default now(),
@@ -74,6 +79,9 @@ export class SchemaMigrator {
 
       create index if not exists client_workers_last_seen_idx
         on client_workers(last_seen_at desc);
+
+      create index if not exists client_workers_user_idx
+        on client_workers(user_id);
 
       create table if not exists user_git_repositories (
         user_id uuid not null references users(id) on delete cascade,
@@ -224,6 +232,35 @@ export class SchemaMigrator {
       create index if not exists integration_intake_events_transaction_created_idx
         on integration_intake_events(transaction_id, created_at, id)
         where transaction_id is not null;
+    `);
+
+    await this.pool.query(`
+      alter table worker_refresh_tokens
+        add column if not exists user_id uuid references users(id) on delete cascade;
+
+      update worker_refresh_tokens
+      set user_id = api_keys.user_id
+      from api_keys
+      where worker_refresh_tokens.user_id is null
+        and worker_refresh_tokens.api_key_id = api_keys.id;
+
+      alter table worker_refresh_tokens
+        alter column api_key_id drop not null;
+
+      create index if not exists worker_refresh_tokens_user_idx
+        on worker_refresh_tokens(user_id);
+
+      alter table client_workers
+        add column if not exists user_id uuid references users(id) on delete cascade;
+
+      update client_workers
+      set user_id = api_keys.user_id
+      from api_keys
+      where client_workers.user_id is null
+        and client_workers.api_key_id = api_keys.id;
+
+      create index if not exists client_workers_user_idx
+        on client_workers(user_id);
     `);
   }
 }

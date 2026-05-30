@@ -29,7 +29,7 @@ class FakeWorkerStore implements WorkerStore {
     const now = new Date().toISOString();
     this.worker = {
       workerId: "worker-1",
-      apiKeyId: "api-key-1",
+      userId: "user-1",
       connectionId: "connection-1",
       paths: [],
       skills: ["git", "npm"],
@@ -295,8 +295,8 @@ function createWorkerRegistration(
     store,
     {
       verifyAccessToken: async (token: string) => {
-        if (token === "access:worker-1") return { workerId: "worker-1", apiKeyId: "api-key-1" };
-        if (token === "access:worker-2") return { workerId: "worker-2", apiKeyId: "api-key-2" };
+        if (token === "access:worker-1") return { workerId: "worker-1", userId: "user-1" };
+        if (token === "access:worker-2") return { workerId: "worker-2", userId: "user-2" };
         return undefined;
       }
     } as WorkerTokenService,
@@ -611,7 +611,7 @@ async function testRegistrationRejectsMismatchedTokenAndRemapsConnection(): Prom
   assert.equal(connections.get("connection-registered"), connection);
   assert.deepEqual(store.registeredInput, {
     workerId: "worker-1",
-    apiKeyId: "api-key-1",
+    userId: "user-1",
     connectionId: "connection-registered",
     paths: ["/repo", "/other"],
     skills: ["git", "npm"],

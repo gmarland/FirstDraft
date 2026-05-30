@@ -2,8 +2,6 @@ import { isSupportedImageMimeType } from "../../integrations/jira/jiraIntakeServ
 
 export type WorkerTokenRequest = {
   workerId?: string;
-  apiKey?: string;
-  apiSecret?: string;
 };
 
 export type JiraAttachmentMetadata = {
@@ -19,8 +17,6 @@ export function parseWorkerTokenRequest(body: unknown): WorkerTokenRequest {
 
 export function validateWorkerTokenRequest(input: WorkerTokenRequest): string | undefined {
   if (!input.workerId?.trim()) return "workerId is required";
-  if (!input.apiKey?.trim()) return "apiKey is required";
-  if (!input.apiSecret) return "apiSecret is required";
   return undefined;
 }
 

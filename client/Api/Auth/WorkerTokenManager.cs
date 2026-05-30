@@ -16,6 +16,7 @@ namespace FirstDraft.Api.Auth
         {
             _applicationData = applicationData;
             _applicationDataService = applicationDataService;
+            _refreshToken = _applicationData.GetWorkerRefreshToken();
         }
 
         public async Task<string> EnsureAccessTokenAsync()
@@ -38,22 +39,36 @@ namespace FirstDraft.Api.Auth
                 }
             }
 
-            await IssueAsync();
-            return _accessToken!;
+            throw new InvalidOperationException("Worker is not authenticated. Run firstdraft init to log in or sign up.");
         }
 
-        private async Task IssueAsync()
+        public async Task AuthenticateWithLoginAsync(string email, string password)
+        {
+            AuthResponse auth = await PostAuthAsync("/api/auth/login", new { email, password });
+            await IssueAsync(auth.Token);
+            ApplyUser(auth);
+            await _applicationDataService.Save(_applicationData);
+        }
+
+        public async Task AuthenticateWithSignupAsync(string email, string password, string? name)
+        {
+            AuthResponse auth = await PostAuthAsync("/api/auth/signup", new { email, password, name });
+            await IssueAsync(auth.Token);
+            ApplyUser(auth);
+            await _applicationDataService.Save(_applicationData);
+        }
+
+        private async Task IssueAsync(string userAccessToken)
         {
             TokenResponse response = await PostTokenAsync(
                 "/api/worker-auth/token",
                 new
                 {
-                    workerId = _applicationData.WorkerId,
-                    apiKey = _applicationData.GetApiKey(),
-                    apiSecret = _applicationData.GetApiSecret()
-                });
+                    workerId = _applicationData.WorkerId
+                },
+                userAccessToken);
             Apply(response);
-            await EncryptStoredCredentials(response);
+            await StoreRefreshToken(response);
         }
 
         private async Task RefreshAsync()
@@ -62,11 +77,36 @@ namespace FirstDraft.Api.Auth
                 "/api/worker-auth/refresh",
                 new { refreshToken = _refreshToken });
             Apply(response);
+            if (!string.IsNullOrEmpty(_applicationData.ConfigEncryptionKey))
+            {
+                _applicationData.StoreWorkerRefreshToken(response.RefreshToken, _applicationData.ConfigEncryptionKey);
+                await _applicationDataService.Save(_applicationData);
+            }
         }
 
-        private async Task<TokenResponse> PostTokenAsync(string path, object body)
+        private async Task<AuthResponse> PostAuthAsync(string path, object body)
         {
             using HttpResponseMessage response = await _http.PostAsJsonAsync($"{_applicationData.ExternalAPI}{path}", body);
+            response.EnsureSuccessStatusCode();
+            AuthResponse? authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            if (authResponse == null || string.IsNullOrEmpty(authResponse.Token))
+            {
+                throw new InvalidOperationException("Auth response did not include a token");
+            }
+
+            return authResponse;
+        }
+
+        private async Task<TokenResponse> PostTokenAsync(string path, object body, string? bearerToken = null)
+        {
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, $"{_applicationData.ExternalAPI}{path}");
+            request.Content = JsonContent.Create(body);
+            if (!string.IsNullOrEmpty(bearerToken))
+            {
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
+            }
+
+            using HttpResponseMessage response = await _http.SendAsync(request);
             response.EnsureSuccessStatusCode();
             TokenResponse? tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>();
             if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken) || string.IsNullOrEmpty(tokenResponse.RefreshToken))
@@ -84,13 +124,33 @@ namespace FirstDraft.Api.Auth
             _accessExpiresAt = DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, response.AccessTokenExpiresIn));
         }
 
-        private async Task EncryptStoredCredentials(TokenResponse response)
+        private async Task StoreRefreshToken(TokenResponse response)
         {
             if (string.IsNullOrEmpty(response.ConfigEncryptionKey)) return;
-            if (!_applicationData.HasPlaintextCredentials() && !string.IsNullOrEmpty(_applicationData.ConfigEncryptionKey)) return;
 
-            _applicationData.EncryptCredentials(response.ConfigEncryptionKey);
+            _applicationData.StoreWorkerRefreshToken(response.RefreshToken, response.ConfigEncryptionKey);
             await _applicationDataService.Save(_applicationData);
+        }
+
+        private void ApplyUser(AuthResponse response)
+        {
+            if (response.User == null) return;
+            _applicationData.AuthUserId = response.User.UserId;
+            _applicationData.AuthEmail = response.User.Email;
+            _applicationData.AuthName = response.User.Name;
+        }
+
+        private sealed class AuthResponse
+        {
+            public string Token { get; set; } = string.Empty;
+            public AuthUser? User { get; set; }
+        }
+
+        private sealed class AuthUser
+        {
+            public string UserId { get; set; } = string.Empty;
+            public string Email { get; set; } = string.Empty;
+            public string? Name { get; set; }
         }
 
         private sealed class TokenResponse

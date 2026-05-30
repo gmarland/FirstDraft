@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireJwt } from "../auth/requireJwt.js";
 import { ApiToWorkerTokenIssuer, WorkerTokenService } from "../auth/workerTokens.js";
 import { createWorkerAuthController } from "../controllers/workerAuth/workerAuthController.js";
 import { IntegrationIntakeEventStore } from "../store/integrations/integrationIntakeEventStore.js";
@@ -23,7 +24,7 @@ export function createWorkerAuthRoutes(
     jiraIntegrations
   );
 
-  router.post("/token", controller.issueToken);
+  router.post("/token", requireJwt, controller.issueToken);
   router.post("/refresh", controller.refreshToken);
   router.get("/public-key", controller.publicKey);
   router.get("/jira-attachments/:eventId/:attachmentId", controller.downloadJiraAttachment);

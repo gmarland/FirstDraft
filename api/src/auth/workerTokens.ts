@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from "crypto";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { WorkerRefreshTokenStore } from "../store/workerAuth/workerRefreshTokenStore.js";
-import { AuthenticatedApiKey } from "../store/tenantApiKeys/tenantApiKeyTypes.js";
+import { User } from "../types.js";
 import { WorkerAccessPayload } from "./workerAuthTypes.js";
 
 export type WorkerJwtConfig = {
@@ -26,17 +26,17 @@ export class WorkerTokenService {
     private readonly refreshTokens: WorkerRefreshTokenStore
   ) {}
 
-  public async issue(workerId: string, authenticated: AuthenticatedApiKey): Promise<WorkerTokenPair> {
-    return this.issueForApiKey(workerId, authenticated.key.keyId, authenticated.key.userId);
+  public async issue(workerId: string, user: User): Promise<WorkerTokenPair> {
+    return this.issueForUser(workerId, user.userId);
   }
 
   public async refresh(refreshToken: string): Promise<WorkerTokenPair | undefined> {
     const consumed = await this.refreshTokens.consume(refreshToken);
     if (!consumed) return undefined;
 
-    const refresh = await this.refreshTokens.issue(consumed.workerId, consumed.apiKeyId, this.config.refreshExpiresInSeconds);
+    const refresh = await this.refreshTokens.issue(consumed.workerId, consumed.userId, this.config.refreshExpiresInSeconds);
     await this.refreshTokens.markReplaced(consumed.id, refresh.id);
-    return this.createTokenPair(consumed.workerId, consumed.apiKeyId, consumed.userId, refresh.refreshToken);
+    return this.createTokenPair(consumed.workerId, consumed.userId, refresh.refreshToken);
   }
 
   public async verifyAccessToken(accessToken: string): Promise<WorkerAccessPayload | undefined> {
@@ -46,28 +46,27 @@ export class WorkerTokenService {
         audience: this.config.audience
       }) as WorkerAccessPayload;
 
-      if (payload.typ !== "worker_access" || !payload.workerId || payload.sub !== payload.workerId || !payload.apiKeyId || !payload.userId) {
+      if (payload.typ !== "worker_access" || !payload.workerId || payload.sub !== payload.workerId || !payload.userId) {
         return undefined;
       }
 
-      const active = await this.refreshTokens.isActiveApiKey(payload.apiKeyId);
+      const active = await this.refreshTokens.isActiveUser(payload.userId);
       return active ? payload : undefined;
     } catch {
       return undefined;
     }
   }
 
-  private async issueForApiKey(workerId: string, apiKeyId: string, userId: string): Promise<WorkerTokenPair> {
-    const refresh = await this.refreshTokens.issue(workerId, apiKeyId, this.config.refreshExpiresInSeconds);
-    return this.createTokenPair(workerId, apiKeyId, userId, refresh.refreshToken);
+  private async issueForUser(workerId: string, userId: string): Promise<WorkerTokenPair> {
+    const refresh = await this.refreshTokens.issue(workerId, userId, this.config.refreshExpiresInSeconds);
+    return this.createTokenPair(workerId, userId, refresh.refreshToken);
   }
 
-  private createTokenPair(workerId: string, apiKeyId: string, userId: string, refreshToken: string): WorkerTokenPair {
+  private createTokenPair(workerId: string, userId: string, refreshToken: string): WorkerTokenPair {
     const accessToken = jwt.sign(
       {
         typ: "worker_access",
         workerId,
-        apiKeyId,
         userId
       },
       this.config.secret,

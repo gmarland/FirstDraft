@@ -42,9 +42,8 @@ async function testDeleteUserDeletesDependentRecordsBeforeUser(): Promise<void> 
   assert.equal(deleted, true);
   assert.equal(db.calls.length, 1);
   assert.deepEqual(db.calls[0].parameters, ["user-1"]);
-  assert.match(db.calls[0].sql, /with user_api_keys as/);
   assert.match(db.calls[0].sql, /delete from client_workers/);
-  assert.match(db.calls[0].sql, /where api_key_id in \(select id from user_api_keys\)/);
+  assert.match(db.calls[0].sql, /where user_id = \$1/);
   assert.match(db.calls[0].sql, /delete from client_commands/);
   assert.match(db.calls[0].sql, /where user_id = \$1/);
   assert.match(db.calls[0].sql, /delete from users/);

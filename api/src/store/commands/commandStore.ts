@@ -116,14 +116,11 @@ export class CommandStore {
           on command_users.transaction_id = commands.transaction_id
         inner join client_workers claiming_worker
           on claiming_worker.worker_id = $1
-        inner join api_keys claiming_api_key
-          on claiming_api_key.id = claiming_worker.api_key_id
         left join worker_git_repositories worker_repos
           on worker_repos.worker_id = $1
           and worker_repos.normalized_repository_url = commands.normalized_repository_url
         where commands.status = 'queued'
-          and command_users.user_id = claiming_api_key.user_id
-          and claiming_api_key.revoked_at is null
+          and command_users.user_id = claiming_worker.user_id
           and (commands.worker_id = $1 or commands.worker_id is null)
           and (
             commands.command_mode in ('ai', 'shell')
@@ -228,10 +225,8 @@ export class CommandStore {
           on command_users.transaction_id = commands.transaction_id
         left join client_workers assigned_worker
           on assigned_worker.worker_id = commands.worker_id
-        left join api_keys assigned_worker_api_key
-          on assigned_worker_api_key.id = assigned_worker.api_key_id
         left join users worker_owner
-          on worker_owner.id = assigned_worker_api_key.user_id
+          on worker_owner.id = assigned_worker.user_id
         left join lateral (
           select
             intake_events.provider,
@@ -293,14 +288,11 @@ export class CommandStore {
           status = 'in_progress',
           claimed_at = now()
         from client_workers claiming_worker
-        inner join api_keys claiming_api_key
-          on claiming_api_key.id = claiming_worker.api_key_id
         inner join client_command_users command_users
-          on command_users.user_id = claiming_api_key.user_id
+          on command_users.user_id = claiming_worker.user_id
         where client_commands.transaction_id = $1
           and claiming_worker.worker_id = $2
           and command_users.transaction_id = client_commands.transaction_id
-          and claiming_api_key.revoked_at is null
           and client_commands.status = 'queued'
           and (client_commands.worker_id is null or client_commands.worker_id = $2)
         returning ${clientCommandColumns}
