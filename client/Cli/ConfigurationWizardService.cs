@@ -266,10 +266,47 @@ namespace FirstDraft.Cli
             string suffix = !string.IsNullOrWhiteSpace(defaultValue) ? " [configured]" : string.Empty;
             Console.Write($"{label}{suffix}: ");
 
-            string? input = Console.ReadLine();
+            string? input = Console.IsInputRedirected
+                ? Console.ReadLine()
+                : ReadHiddenLine();
             if (string.IsNullOrWhiteSpace(input)) return defaultValue ?? string.Empty;
 
             return input.Trim();
+        }
+
+        private static string ReadHiddenLine()
+        {
+            System.Text.StringBuilder input = new System.Text.StringBuilder();
+
+            while (true)
+            {
+                ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+                if (key.Key == ConsoleKey.Enter)
+                {
+                    Console.WriteLine();
+                    return input.ToString();
+                }
+
+                if (key.Key == ConsoleKey.Backspace)
+                {
+                    if (input.Length > 0)
+                    {
+                        input.Length--;
+                    }
+                    continue;
+                }
+
+                if (key.Key == ConsoleKey.Escape)
+                {
+                    input.Clear();
+                    continue;
+                }
+
+                if (!char.IsControl(key.KeyChar))
+                {
+                    input.Append(key.KeyChar);
+                }
+            }
         }
 
         private static bool IsYes(string value)
