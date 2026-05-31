@@ -38,14 +38,35 @@ namespace FirstDraft.Cli
                 return 0;
             }
 
+            int repositoryWidth = Math.Max(
+                "REPOSITORY URL".Length,
+                repositories.Max(repository => repository.RepositoryUrl.Length));
+            int sourceWidth = Math.Max(
+                "BRANCH SOURCE".Length,
+                repositories.Max(repository => repository.SourceBranch.Length));
+            int targetWidth = Math.Max(
+                "PR TARGET".Length,
+                repositories.Max(repository => repository.TargetBranch.Length));
+
+            PrintReposTableRow("REPOSITORY URL", "BRANCH SOURCE", "PR TARGET", repositoryWidth, sourceWidth, targetWidth);
             foreach (GitRepositoryConfig repository in repositories)
             {
-                Console.WriteLine(repository.RepositoryUrl);
-                Console.WriteLine($"  Branch source: {repository.SourceBranch}");
-                Console.WriteLine($"  PR target:  {repository.TargetBranch}");
+                PrintReposTableRow(repository.RepositoryUrl, repository.SourceBranch, repository.TargetBranch, repositoryWidth, sourceWidth, targetWidth);
             }
 
             return 0;
+        }
+
+        private static void PrintReposTableRow(
+            string repositoryUrl,
+            string sourceBranch,
+            string targetBranch,
+            int repositoryWidth,
+            int sourceWidth,
+            int targetWidth)
+        {
+            Console.WriteLine(
+                $"{repositoryUrl.PadRight(repositoryWidth)}  {sourceBranch.PadRight(sourceWidth)}  {targetBranch.PadRight(targetWidth)}");
         }
 
         private async Task<int> Save(string[] args, bool createOnly)
