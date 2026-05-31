@@ -29,7 +29,7 @@ dotnet run -- repos add <repository-url> --source <branch> --target <branch>
 dotnet run -- repos update <repository-url> --source <branch> --target <branch>
 dotnet run -- repos remove <repository-url>
 dotnet run -- integrations list
-dotnet run -- integrations add --site-url <url> --email <email> --api-token <token>
+dotnet run -- integrations add jira
 dotnet run -- integrations configure <integration-id>
 dotnet run -- integrations remove <integration-id>
 dotnet run -- run
@@ -45,7 +45,7 @@ Command details:
 - `taskTypes` or `task-types`: update which task types this worker accepts.
 - `enablePlanning`: configure whether AI commands use a planning pass.
 - `repos list|add|update|remove`: manage Git repositories and their enforced source/PR target branches for this worker.
-- `integrations list|add|configure|remove`: manage Jira integrations for this worker. `add` stores the Jira connection and prints a generated 5-character integration ID, then `configure` uses that ID to select the board and workflow statuses interactively. API tokens are encrypted in local config and are never printed by `list`.
+- `integrations list|add|configure|remove`: manage Jira integrations for this worker. `add jira` prompts for the Jira connection and prints a generated 5-character integration ID, then `configure` uses that ID to select the board and workflow statuses interactively. API tokens are encrypted in local config and are never printed by `list`.
 - `run`: start the worker and connect it to the API.
 - `run --task-types ai,shell,gitflow`: override enabled task types for this run only without changing saved configuration.
 - `help`: print command help.
@@ -80,12 +80,12 @@ Each worker also advertises its own Jira integrations from local configuration. 
 
 ```bash
 dotnet run -- integrations list
-dotnet run -- integrations add --site-url https://example.atlassian.net --email user@example.com --api-token <token>
+dotnet run -- integrations add jira
 dotnet run -- integrations configure <integration-id>
 dotnet run -- integrations remove <integration-id>
 ```
 
-The `add` command prints the generated integration ID to use with `configure` and `remove`. Connection-only Jira integrations remain local-only and are not advertised to the API until fully configured.
+The `add jira` command prompts for the Jira site URL, email, and API token, then prints the generated integration ID to use with `configure` and `remove`. Connection-only Jira integrations remain local-only and are not advertised to the API until fully configured.
 
 Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
 

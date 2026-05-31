@@ -152,7 +152,7 @@ For real use, run this worker on the remote machine that has the repository, net
 
 ### 5. Enable Jira intake
 
-On each worker that should handle Jira work, create a Jira connection with `dotnet run -- integrations add --site-url <url> --email <email> --api-token <token>`, then configure its board and statuses interactively with `dotnet run -- integrations configure <generated-id>`. The `add` command prints the generated 5-character ID. Once enabled, Jira issues in the selected ready status can be picked up and queued as worker tasks.
+On each worker that should handle Jira work, create a Jira connection with `dotnet run -- integrations add jira`, then configure its board and statuses interactively with `dotnet run -- integrations configure <generated-id>`. The `add jira` command prompts for the Jira site URL, email, and API token, then prints the generated 5-character ID. Once enabled, Jira issues in the selected ready status can be picked up and queued as worker tasks.
 
 ## Common Commands
 

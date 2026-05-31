@@ -82,23 +82,34 @@ namespace FirstDraft.Cli
 
         private async Task<int> Add(string[] args)
         {
-            string? unexpectedArg = FindUnexpectedPositionalArgument(args);
-            if (unexpectedArg != null) return PrintIntegrationsHelp("Integration IDs are generated automatically. Run add without an integration ID.");
+            if (args.Length == 0) return PrintIntegrationsHelp("Integration type is required. Use: firstdraft integrations add jira");
+            if (args.Length > 1) return PrintIntegrationsHelp("Jira connection details are collected interactively. Use: firstdraft integrations add jira");
+            if (!string.Equals(args[0], "jira", StringComparison.OrdinalIgnoreCase))
+            {
+                return PrintIntegrationsHelp($"Unsupported integration type: {args[0]}");
+            }
+
+            if (Console.IsInputRedirected || Console.IsOutputRedirected)
+            {
+                Console.Error.WriteLine("Interactive Jira connection setup requires a terminal.");
+                return 1;
+            }
 
             ApplicationData applicationData = await _applicationDataService.GetApplicationData();
             List<JiraIntegrationConfig> integrations = NormalizeIntegrations(applicationData, applicationData.JiraIntegrations).ToList();
-
-            string? siteUrl = ReadOption(args, "--site-url");
-            string? email = ReadOption(args, "--email");
-            string? apiToken = ReadOption(args, "--api-token");
-            string? connectionError = ValidateConnectionFields(siteUrl, email, apiToken);
-            if (connectionError != null) return PrintIntegrationsHelp(connectionError);
 
             if (string.IsNullOrEmpty(applicationData.ConfigEncryptionKey))
             {
                 Console.Error.WriteLine("ConfigEncryptionKey is required before saving Jira API tokens. Run firstdraft init to authenticate this worker.");
                 return 1;
             }
+
+            Console.WriteLine("Add Jira integration");
+            string siteUrl = PromptUntilValid("Jira site URL", string.Empty, ValidateSiteUrl);
+            string email = PromptUntilValid("Jira email", string.Empty, value => ValidateEmail(value, "Jira email"));
+            string apiToken = PromptSensitiveRequired("Jira API token");
+            string? connectionError = ValidateConnectionFields(siteUrl, email, apiToken);
+            if (connectionError != null) return PrintIntegrationsHelp(connectionError);
 
             string? integrationId = GenerateUniqueIntegrationId(integrations);
             if (integrationId == null)
@@ -111,10 +122,10 @@ namespace FirstDraft.Cli
             {
                 IntegrationId = integrationId,
                 Enabled = false,
-                SiteUrl = CleanSiteUrl(siteUrl!),
-                Email = email!.Trim()
+                SiteUrl = CleanSiteUrl(siteUrl),
+                Email = email.Trim()
             };
-            integration.StoreApiToken(applicationData, apiToken!.Trim());
+            integration.StoreApiToken(applicationData, apiToken.Trim());
 
             integrations.Add(integration);
 
@@ -148,7 +159,7 @@ namespace FirstDraft.Cli
 
             if (existingIndex < 0)
             {
-                Console.Error.WriteLine("Jira integration is not configured. Use firstdraft integrations add to add it.");
+                Console.Error.WriteLine("Jira integration is not configured. Use firstdraft integrations add jira to add it.");
                 return 1;
             }
 
@@ -180,9 +191,9 @@ namespace FirstDraft.Cli
                     return 1;
                 }
 
-                JiraStatusOption ready = PromptSelection("Ready status", statuses, FormatStatus);
-                JiraStatusOption processing = PromptSelection("Processing status", statuses, FormatStatus);
-                JiraStatusOption processed = PromptSelection("Processed status", statuses, FormatStatus);
+                JiraStatusOption ready = PromptSelection("Ready for AI status", statuses, FormatStatus);
+                JiraStatusOption processing = PromptSelection("AI Processing status", statuses, FormatStatus);
+                JiraStatusOption processed = PromptSelection("Processed by AIstatus", statuses, FormatStatus);
 
                 saved.BoardId = board.Id;
                 saved.BoardName = board.Name;
@@ -256,7 +267,6 @@ namespace FirstDraft.Cli
                         Enabled = integration.Enabled,
                         SiteUrl = CleanSiteUrl(integration.SiteUrl),
                         Email = (integration.Email ?? string.Empty).Trim(),
-                        ApiToken = string.Empty,
                         EncryptedApiToken = integration.EncryptedApiToken,
                         BoardId = integration.BoardId,
                         BoardName = (integration.BoardName ?? string.Empty).Trim(),
@@ -372,45 +382,11 @@ namespace FirstDraft.Cli
 
         private static string? ValidateSiteUrl(string? siteUrl)
         {
-            if (string.IsNullOrWhiteSpace(siteUrl)) return "--site-url is required.";
+            if (string.IsNullOrWhiteSpace(siteUrl)) return "Jira site URL is required.";
             if (!Uri.TryCreate(siteUrl, UriKind.Absolute, out Uri? uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {
                 return "Jira site URL must be an absolute http or https URL.";
-            }
-
-            return null;
-        }
-
-        private static string? ReadOption(string[] args, string name)
-        {
-            for (int index = 0; index < args.Length; index++)
-            {
-                string arg = args[index];
-                if (arg.StartsWith($"{name}=", StringComparison.OrdinalIgnoreCase))
-                {
-                    return arg[(name.Length + 1)..].Trim();
-                }
-
-                if (string.Equals(arg, name, StringComparison.OrdinalIgnoreCase) && index + 1 < args.Length)
-                {
-                    return args[index + 1].Trim();
-                }
-            }
-
-            return null;
-        }
-
-        private static string? FindUnexpectedPositionalArgument(string[] args)
-        {
-            for (int index = 0; index < args.Length; index++)
-            {
-                string arg = args[index];
-                if (!arg.StartsWith("--", StringComparison.Ordinal)) return arg;
-                if (!arg.Contains('=') && index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal))
-                {
-                    index++;
-                }
             }
 
             return null;
@@ -461,7 +437,7 @@ namespace FirstDraft.Cli
 
         private static bool HasStoredApiToken(JiraIntegrationConfig integration)
         {
-            return !string.IsNullOrWhiteSpace(integration.ApiToken) || integration.EncryptedApiToken != null;
+            return integration.EncryptedApiToken != null;
         }
 
         private static T PromptSelection<T>(string label, IReadOnlyList<T> options, Func<T, string> format)
@@ -486,16 +462,68 @@ namespace FirstDraft.Cli
             }
         }
 
+        private static string PromptUntilValid(string label, string defaultValue, Func<string, string?> validate)
+        {
+            while (true)
+            {
+                string value = Prompt(label, defaultValue);
+                string? error = validate(value);
+                if (error == null) return value;
+
+                Console.Error.WriteLine(error);
+            }
+        }
+
+        private static string Prompt(string label, string defaultValue)
+        {
+            string suffix = string.IsNullOrWhiteSpace(defaultValue) ? string.Empty : $" [{defaultValue}]";
+            Console.Write($"{label}{suffix}: ");
+            string? input = Console.ReadLine();
+            return string.IsNullOrWhiteSpace(input) ? defaultValue : input.Trim();
+        }
+
+        private static string PromptSensitiveRequired(string label)
+        {
+            while (true)
+            {
+                string value = PromptSensitive(label);
+                if (!string.IsNullOrWhiteSpace(value)) return value.Trim();
+                Console.Error.WriteLine($"{label} is required.");
+            }
+        }
+
+        private static string PromptSensitive(string label)
+        {
+            Console.Write($"{label}: ");
+            StringBuilder value = new StringBuilder();
+
+            while (true)
+            {
+                ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+                if (key.Key == ConsoleKey.Enter)
+                {
+                    Console.WriteLine();
+                    return value.ToString();
+                }
+
+                if (key.Key == ConsoleKey.Backspace)
+                {
+                    if (value.Length > 0) value.Length--;
+                    continue;
+                }
+
+                if (!char.IsControl(key.KeyChar)) value.Append(key.KeyChar);
+            }
+        }
+
         private static string FormatBoard(JiraBoardOption board)
         {
-            return $"{board.Name} ({board.Type}, {board.Id})";
+            return $"{board.Name}";
         }
 
         private static string FormatStatus(JiraStatusOption status)
         {
-            return string.IsNullOrWhiteSpace(status.StatusCategory)
-                ? $"{status.Name} ({status.Id})"
-                : $"{status.Name} ({status.StatusCategory}, {status.Id})";
+            return status.Name;
         }
 
         private sealed class JiraCliClient : IDisposable
@@ -613,7 +641,7 @@ namespace FirstDraft.Cli
 
             Console.Error.WriteLine("Usage:");
             Console.Error.WriteLine("  firstdraft integrations list");
-            Console.Error.WriteLine("  firstdraft integrations add --site-url <url> --email <email> --api-token <token>");
+            Console.Error.WriteLine("  firstdraft integrations add jira");
             Console.Error.WriteLine("  firstdraft integrations configure <integration-id>");
             Console.Error.WriteLine("  firstdraft integrations remove <integration-id>");
             return string.IsNullOrWhiteSpace(error) ? 0 : 1;

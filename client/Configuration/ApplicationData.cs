@@ -252,8 +252,6 @@ namespace FirstDraft.Configuration
 
         public string Email { get; set; } = string.Empty;
 
-        public string ApiToken { get; set; } = string.Empty;
-
         public EncryptedConfigValue? EncryptedApiToken { get; set; }
 
         public int? BoardId { get; set; }
@@ -278,7 +276,6 @@ namespace FirstDraft.Configuration
 
         public string GetApiToken(ApplicationData applicationData)
         {
-            if (!string.IsNullOrEmpty(ApiToken)) return ApiToken;
             return applicationData.DecryptSecret(EncryptedApiToken);
         }
 
@@ -294,7 +291,6 @@ namespace FirstDraft.Configuration
                 throw new Exception("ConfigEncryptionKey is required before saving Jira API tokens. Run firstdraft init to authenticate this worker.");
             }
 
-            ApiToken = string.Empty;
             EncryptedApiToken = applicationData.EncryptSecret(apiToken);
         }
     }
