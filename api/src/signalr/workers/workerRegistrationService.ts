@@ -3,6 +3,7 @@ import { WorkerAccessPayload } from "../../auth/workerAuthTypes.js";
 import { WorkerTokenService } from "../../auth/workerTokens.js";
 import { normalizeEnabledTaskTypes } from "../../commandModes.js";
 import { WorkerStore } from "../../store/clientStore.js";
+import { GitRepositoryStore, WorkerGitRepositoryInput } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { normalizeMaxConcurrentTasks } from "../../workers/workerState.js";
 import { readRequiredString, readString } from "../shared/argumentReaders.js";
 import { HubConnectionRegistry, SignalRConnection } from "../shared/types.js";
@@ -11,7 +12,8 @@ export class WorkerRegistrationService {
   public constructor(
     private readonly store: WorkerStore,
     private readonly workerTokens: WorkerTokenService,
-    private readonly connections: HubConnectionRegistry
+    private readonly connections: HubConnectionRegistry,
+    private readonly gitRepositories?: GitRepositoryStore
   ) {}
 
   public async registerWorker(connection: SignalRConnection, args: unknown[]): Promise<void> {
@@ -30,6 +32,7 @@ export class WorkerRegistrationService {
     const skills = normalizeSkills(readString(args[4]));
     const maxConcurrentTasks = normalizeMaxConcurrentTasks(args[5]);
     const enabledTaskTypes = normalizeEnabledTaskTypes(args[6]);
+    const repositories = readWorkerRepositories(args[7]);
 
     await this.markStaleWorkerStopped(workerId, connectionId);
 
@@ -45,6 +48,7 @@ export class WorkerRegistrationService {
       enabledTaskTypes,
       maxConcurrentTasks
     });
+    await this.gitRepositories?.syncWorkerRepositories(workerId, repositories);
 
     if (previousConnectionId !== connectionId) {
       this.connections.delete(previousConnectionId);
@@ -86,6 +90,26 @@ export class WorkerRegistrationService {
 
     await this.store.markWorkerStopped(workerId, existing.connectionId);
   }
+}
+
+function readWorkerRepositories(value: unknown): WorkerGitRepositoryInput[] {
+  if (value === undefined || value === null || value === "") return [];
+
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .map((item): WorkerGitRepositoryInput | undefined => {
+      if (!item || typeof item !== "object") return undefined;
+      const payload = item as Record<string, unknown>;
+      const repositoryUrl = readString(payload.RepositoryUrl ?? payload.repositoryUrl);
+      const normalizedRepositoryUrl = readString(payload.NormalizedRepositoryUrl ?? payload.normalizedRepositoryUrl);
+      const sourceBranch = readString(payload.SourceBranch ?? payload.sourceBranch);
+      const targetBranch = readString(payload.TargetBranch ?? payload.targetBranch);
+      if (!repositoryUrl || !sourceBranch || !targetBranch) return undefined;
+      return { repositoryUrl, normalizedRepositoryUrl, sourceBranch, targetBranch };
+    })
+    .filter((repository): repository is WorkerGitRepositoryInput => Boolean(repository));
 }
 
 function normalizeSkills(value: string): string[] {

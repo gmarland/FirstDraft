@@ -70,34 +70,13 @@ export type PaginatedCommands = {
 export type GitRepositorySuggestion = {
   repositoryUrl: string;
   normalizedRepositoryUrl: string;
-  defaultSourceBranch?: string;
-  defaultTargetBranch?: string;
-  lastSourceBranch?: string;
+  sourceBranch: string;
+  targetBranch: string;
   lastUsedAt: string;
-  previouslyUsedByWorker: boolean;
 };
 
 export type GitflowSuggestions = {
   repositories: GitRepositorySuggestion[];
-};
-
-export type GitRepository = {
-  repositoryUrl: string;
-  normalizedRepositoryUrl: string;
-  defaultSourceBranch: string;
-  defaultTargetBranch: string;
-  lastSourceBranch?: string;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastUsedAt: string;
-};
-
-export type SaveGitRepositoryInput = {
-  repositoryUrl?: string;
-  defaultSourceBranch?: string;
-  defaultTargetBranch?: string;
-  enabled?: boolean;
 };
 
 export type JiraIntegrationSettings = {

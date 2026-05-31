@@ -244,7 +244,9 @@ class DispatchableQueueDbClient implements DbClient {
     assert.match(sql, /claiming_worker\.worker_id = \$1/);
     assert.match(sql, /inner join client_command_users command_users/);
     assert.match(sql, /command_users\.user_id = claiming_worker\.user_id/);
+    assert.match(sql, /left join worker_git_repositories worker_repos/);
     assert.match(sql, /commands\.worker_id = \$1 or commands\.worker_id is null/);
+    assert.match(sql, /worker_repos\.normalized_repository_url is not null/);
     assert.deepEqual(parameters, ["worker-1", true]);
 
     return {

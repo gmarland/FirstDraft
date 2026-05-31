@@ -85,6 +85,8 @@ namespace FirstDraft.Configuration
 
         public int MaxConcurrentTasks { get; set; } = 1;
 
+        public GitRepositoryConfig[]? GitRepositories { get; set; }
+
         public void ValidateApplicationData()
         {
             ApplicationDataValidator.Validate(this);
@@ -215,5 +217,16 @@ namespace FirstDraft.Configuration
             return ApplicationPathResolver.EnsureDirectory(LogsFolder);
         }
 
+    }
+
+    public class GitRepositoryConfig
+    {
+        public string RepositoryUrl { get; set; } = string.Empty;
+
+        public string NormalizedRepositoryUrl { get; set; } = string.Empty;
+
+        public string SourceBranch { get; set; } = "main";
+
+        public string TargetBranch { get; set; } = "main";
     }
 }

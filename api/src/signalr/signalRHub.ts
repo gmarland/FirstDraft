@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import { ApiToWorkerTokenIssuer, WorkerTokenService } from "../auth/workerTokens.js";
 import { CommandOutputStorage } from "../storage/commandOutputStorage.js";
 import { WorkerStore } from "../store/clientStore.js";
+import { GitRepositoryStore } from "../store/gitRepositories/gitRepositoryStore.js";
 import { CommandResultService } from "./commands/commandResultService.js";
 import { WorkerCommandDispatcher } from "./commands/workerCommandDispatcher.js";
 import { SignalRInvocationDispatcher } from "./invocations/signalRInvocationDispatcher.js";
@@ -41,9 +42,10 @@ export class SignalRHub {
     workerTokens: WorkerTokenService,
     apiToWorkerTokens: ApiToWorkerTokenIssuer,
     outputStorage?: CommandOutputStorage,
-    lifecycle?: CommandLifecycleObserver
+    lifecycle?: CommandLifecycleObserver,
+    gitRepositories?: GitRepositoryStore
   ) {
-    this.workerRegistration = new WorkerRegistrationService(store, workerTokens, this.connections);
+    this.workerRegistration = new WorkerRegistrationService(store, workerTokens, this.connections, gitRepositories);
     this.commands = new WorkerCommandDispatcher(store, apiToWorkerTokens, this.connections, lifecycle);
 
     const commandResults = new CommandResultService(

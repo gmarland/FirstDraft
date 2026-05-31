@@ -215,15 +215,10 @@ export class IntegrationLifecycleService {
     if (!this.gitRepositories || command.commandMode !== "gitflow" || !command.workerId) return;
 
     const repositoryUrl = command.repositoryUrl ?? readGitflowPayloadString(command.command, "repositoryUrl");
-    const sourceBranch = readGitflowPayloadString(command.command, "sourceBranch") ?? "main";
     if (!repositoryUrl) return;
 
     try {
-      await this.gitRepositories.recordWorkerGitflowUsage({
-        workerId: command.workerId,
-        repositoryUrl,
-        sourceBranch,
-      });
+      await this.gitRepositories.touchWorkerRepository(command.workerId, repositoryUrl);
     } catch (error) {
       console.error("[integration-lifecycle] failed recording worker repository usage", {
         transactionId: command.transactionId,

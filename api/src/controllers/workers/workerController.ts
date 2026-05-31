@@ -1,7 +1,7 @@
 import { RequestHandler } from "express";
 import { CommandOutputStorage } from "../../storage/commandOutputStorage.js";
 import { WorkerStore } from "../../store/clientStore.js";
-import { GitRepositoryStore } from "../../store/gitRepositories/gitRepositoryStore.js";
+import { GitRepositoryStore, normalizeRepositoryUrl } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { Command, User } from "../../types.js";
 import { isTaskTypeEnabled } from "../../commandModes.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "./workerRequests.js";
@@ -120,7 +120,7 @@ export class WorkerController {
 
       res.json({
         repositories: this.gitRepositories
-          ? await this.gitRepositories.listGitflowSuggestions(user.userId, client.workerId)
+          ? await this.gitRepositories.listGitflowSuggestions(client.workerId)
           : []
       });
     } catch (error) {
@@ -158,21 +158,33 @@ export class WorkerController {
         return res.status(400).json({ error: `commandMode ${parsedCommandMode} requires worker skill(s): ${missingSkills.join(", ")}` });
       }
 
+      const gitflowPayload = parsedCommandMode === "gitflow" ? parseGitflowPayload(command) : undefined;
       if (parsedCommandMode === "gitflow") {
-        const payload = parseGitflowPayload(command);
+        const payload = gitflowPayload;
         if (!payload) {
           return res.status(400).json({ error: "gitflow command must be valid JSON with repositoryUrl and sourceBranch" });
         }
 
-        await this.gitRepositories?.recordGitflowUsage({
-          userId: user.userId,
-          workerId: client.workerId,
-          repositoryUrl: payload.repositoryUrl,
-          sourceBranch: payload.sourceBranch
-        });
+        const repository = await this.gitRepositories?.getWorkerRepository(client.workerId, payload.repositoryUrl);
+        if (!repository) {
+          return res.status(400).json({ error: "worker is not configured for this gitflow repository" });
+        }
+
+        if (payload.sourceBranch !== repository.sourceBranch || (payload.targetBranch ?? payload.sourceBranch) !== repository.targetBranch) {
+          return res.status(400).json({ error: "gitflow sourceBranch and targetBranch must match the worker repository configuration" });
+        }
+
+        await this.gitRepositories?.touchWorkerRepository(client.workerId, payload.repositoryUrl);
       }
 
-      const queued = await this.store.createWorkerCommand(user.userId, client.workerId, command, parsedCommandMode);
+      const queued = await this.store.createQueuedCommand({
+        userId: user.userId,
+        workerId: client.workerId,
+        command,
+        commandMode: parsedCommandMode,
+        repositoryUrl: gitflowPayload?.repositoryUrl,
+        normalizedRepositoryUrl: gitflowPayload ? normalizeRepositoryUrl(gitflowPayload.repositoryUrl) : undefined
+      });
       await this.dispatcher.dispatchCommand(client.workerId, queued.transactionId, { allowDisabledWorker: true });
 
       res.status(202).json(queued);

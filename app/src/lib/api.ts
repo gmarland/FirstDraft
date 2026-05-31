@@ -10,7 +10,6 @@ import type {
   LoginResponse,
   ApiKey,
   GitflowSuggestions,
-  GitRepository,
   JiraBoard,
   JiraBoardStatus,
   JiraConnectionInput,
@@ -19,7 +18,6 @@ import type {
   JiraIntegrationTestResult,
   JiraTransition,
   SaveJiraIntegrationInput,
-  SaveGitRepositoryInput,
   UpdateProfileInput,
 } from "../types/api";
 
@@ -212,39 +210,6 @@ export const api = {
     return request<GitflowSuggestions>(
       `/api/workers/${encodeURIComponent(workerId)}/gitflow-suggestions`,
       { token },
-    );
-  },
-
-  listRepositories(token: string) {
-    return request<{ repositories: GitRepository[] }>("/api/repositories", { token });
-  },
-
-  createRepository(token: string, input: SaveGitRepositoryInput) {
-    return request<GitRepository>("/api/repositories", {
-      token,
-      method: "POST",
-      body: input,
-    });
-  },
-
-  updateRepository(token: string, normalizedRepositoryUrl: string, input: SaveGitRepositoryInput) {
-    return request<GitRepository>(
-      `/api/repositories/${encodeURIComponent(normalizedRepositoryUrl)}`,
-      {
-        token,
-        method: "PUT",
-        body: input,
-      },
-    );
-  },
-
-  deleteRepository(token: string, normalizedRepositoryUrl: string) {
-    return request<void>(
-      `/api/repositories/${encodeURIComponent(normalizedRepositoryUrl)}`,
-      {
-        token,
-        method: "DELETE",
-      },
     );
   },
 

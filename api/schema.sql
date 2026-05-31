@@ -76,28 +76,12 @@ create index if not exists client_workers_last_seen_idx
 create index if not exists client_workers_user_idx
   on client_workers(user_id);
 
-create table if not exists user_git_repositories (
-  user_id uuid not null references users(id) on delete cascade,
-  repository_url text not null,
-  normalized_repository_url text not null,
-  default_source_branch text not null,
-  default_target_branch text not null default 'main',
-  last_source_branch text not null,
-  enabled boolean not null default true,
-  first_used_at timestamptz not null default now(),
-  last_used_at timestamptz not null default now(),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  primary key (user_id, normalized_repository_url)
-);
-
-create index if not exists user_git_repositories_user_last_used_idx
-  on user_git_repositories(user_id, last_used_at desc);
-
 create table if not exists worker_git_repositories (
   worker_id text not null references client_workers(worker_id) on delete cascade,
   normalized_repository_url text not null,
   repository_url text not null,
+  source_branch text not null default 'main',
+  target_branch text not null default 'main',
   local_path text,
   last_source_branch text,
   first_used_at timestamptz not null default now(),

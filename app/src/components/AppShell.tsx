@@ -10,7 +10,6 @@ import {
   Typography,
 } from "@mui/material";
 import AppsIcon from "@mui/icons-material/Apps";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import HubIcon from "@mui/icons-material/Hub";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
 import KeyIcon from "@mui/icons-material/VpnKey";
@@ -26,7 +25,6 @@ export function AppShell() {
   const workersActive =
     location.pathname === "/workers" ||
     location.pathname.startsWith("/workers/");
-  const repositoriesActive = location.pathname === "/repositories";
   const integrationsActive = location.pathname === "/integrations";
   const apiKeysActive = location.pathname === "/settings/api-keys";
   const profileActive = location.pathname === "/profile";
@@ -72,16 +70,6 @@ export function AppShell() {
               <AppsIcon />
             </ListItemIcon>
             <ListItemText primary="Workers" />
-          </ListItemButton>
-          <ListItemButton
-            selected={repositoriesActive}
-            onClick={() => navigate("/repositories")}
-            sx={navSx}
-          >
-            <ListItemIcon sx={iconSx}>
-              <AccountTreeIcon />
-            </ListItemIcon>
-            <ListItemText primary="Repositories" />
           </ListItemButton>
           <ListItemButton
             selected={integrationsActive}

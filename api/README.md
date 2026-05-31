@@ -1,10 +1,10 @@
 # FirstDraft API
 
-Express and TypeScript API for the FirstDraft control plane. It handles user authentication, worker authentication, worker registration, command dispatch, command history, command output storage, repositories, Jira integrations, and OpenAPI documentation.
+Express and TypeScript API for the FirstDraft control plane. It handles user authentication, worker authentication, worker registration, command dispatch, command history, command output storage, worker-local Git repository advertisements, Jira integrations, and OpenAPI documentation.
 
 ## Runtime Dependencies
 
-- Postgres for users, API keys, repositories, integrations, workers, and command records.
+- Postgres for users, API keys, worker-local Git repository advertisements, integrations, workers, and command records.
 - MinIO, another S3-compatible service, Google Cloud Storage, or Azure Blob Storage for durable command output.
 
 The local `docker-compose.yml` starts Postgres and MinIO, then creates a `firstdraft-command-output` bucket.
@@ -52,13 +52,6 @@ Workers and commands:
 - `POST /api/workers/:workerId/commands/:transactionId/cancel`
 - `GET /api/workers/:workerId/commands/:transactionId/output`
 - `GET /api/workers/:workerId/commands/:transactionId/responses`
-
-Repositories:
-
-- `GET /api/repositories`
-- `POST /api/repositories`
-- `PUT /api/repositories/:normalizedRepositoryUrl`
-- `DELETE /api/repositories/:normalizedRepositoryUrl`
 
 Jira integrations:
 

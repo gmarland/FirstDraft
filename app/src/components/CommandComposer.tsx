@@ -4,7 +4,6 @@ import {
   Autocomplete,
   Box,
   Button,
-  Chip,
   Stack,
   TextField,
   ToggleButton,
@@ -89,17 +88,6 @@ export function CommandComposer({
       ),
     [gitRepositorySuggestions, gitflow.repositoryUrl],
   );
-  const branchOptions = useMemo(
-    () =>
-      uniqueStrings([
-        selectedRepository?.defaultSourceBranch,
-        selectedRepository?.defaultTargetBranch,
-        selectedRepository?.lastSourceBranch,
-        gitflow.sourceBranch,
-        gitflow.targetBranch,
-      ]),
-    [selectedRepository, gitflow.sourceBranch, gitflow.targetBranch],
-  );
 
   useEffect(() => {
     if (fixedCommandMode) {
@@ -124,6 +112,24 @@ export function CommandComposer({
     selectedCommandMode,
     normalizedSkills,
     acceptedTaskTypes,
+  ]);
+
+  useEffect(() => {
+    if (gitflowContinuation || commandMode !== "gitflow") return;
+    if (gitflow.repositoryUrl || gitRepositorySuggestions.length === 0) return;
+
+    const repository = gitRepositorySuggestions[0];
+    setGitflow((current) => ({
+      ...current,
+      repositoryUrl: repository.repositoryUrl,
+      sourceBranch: repository.sourceBranch,
+      targetBranch: repository.targetBranch,
+    }));
+  }, [
+    commandMode,
+    gitRepositorySuggestions,
+    gitflow.repositoryUrl,
+    gitflowContinuation,
   ]);
 
   const submit = async (event: FormEvent) => {
@@ -196,33 +202,29 @@ export function CommandComposer({
       {commandMode === "gitflow" && !gitflowContinuation ? (
         <Stack spacing={1.5}>
           <Autocomplete
-            freeSolo
             options={gitRepositorySuggestions}
-            inputValue={gitflow.repositoryUrl}
+            value={selectedRepository ?? null}
             getOptionLabel={(option) =>
-              typeof option === "string" ? option : option.repositoryUrl
+              option.repositoryUrl
             }
             isOptionEqualToValue={(option, value) =>
-              typeof value !== "string" &&
               option.normalizedRepositoryUrl === value.normalizedRepositoryUrl
             }
-            onInputChange={(_, value) =>
-              setGitflow((current) => ({ ...current, repositoryUrl: value }))
-            }
             onChange={(_, value) => {
-              if (!value || typeof value === "string") return;
+              if (!value) {
+                setGitflow((current) => ({
+                  ...current,
+                  repositoryUrl: "",
+                  sourceBranch: "",
+                  targetBranch: "",
+                }));
+                return;
+              }
               setGitflow((current) => ({
                 ...current,
                 repositoryUrl: value.repositoryUrl,
-                sourceBranch:
-                  value.lastSourceBranch ||
-                  value.defaultSourceBranch ||
-                  current.sourceBranch,
-                targetBranch:
-                  value.defaultTargetBranch ||
-                  value.defaultSourceBranch ||
-                  value.lastSourceBranch ||
-                  current.targetBranch,
+                sourceBranch: value.sourceBranch,
+                targetBranch: value.targetBranch,
               }));
             }}
             disabled={disabled || submitting || !commandModeSupported}
@@ -239,48 +241,25 @@ export function CommandComposer({
                   <Typography className="wrap-code" sx={{ fontWeight: 800 }}>
                     {option.repositoryUrl}
                   </Typography>
-                  {(option.lastSourceBranch || option.defaultSourceBranch) && (
-                    <Typography variant="caption" color="text.secondary">
-                      {option.lastSourceBranch || option.defaultSourceBranch}
-                    </Typography>
-                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    {option.sourceBranch} {"->"} {option.targetBranch}
+                  </Typography>
                 </Box>
-                {option.previouslyUsedByWorker && (
-                  <Chip label="Worker used" size="small" />
-                )}
               </Box>
             )}
           />
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-            <Autocomplete
-              freeSolo
-              options={branchOptions}
-              inputValue={gitflow.sourceBranch}
-              onInputChange={(_, value) =>
-                setGitflow((current) => ({ ...current, sourceBranch: value }))
-              }
+            <TextField
+              value={gitflow.sourceBranch}
               disabled={disabled || submitting || !commandModeSupported}
               fullWidth
-              renderInput={(params) => (
-                <TextField {...params} label="Source branch" fullWidth />
-              )}
+              label="Source branch"
             />
-            <Autocomplete
-              freeSolo
-              options={branchOptions}
-              inputValue={gitflow.targetBranch}
-              onInputChange={(_, value) =>
-                setGitflow((current) => ({ ...current, targetBranch: value }))
-              }
+            <TextField
+              value={gitflow.targetBranch}
               disabled={disabled || submitting || !commandModeSupported}
               fullWidth
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Target branch for PRs"
-                  fullWidth
-                />
-              )}
+              label="Target branch for PRs"
             />
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -358,22 +337,6 @@ export function CommandComposer({
       </Stack>
     </Stack>
   );
-}
-
-function uniqueStrings(values: Array<string | undefined>): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const value of values
-    .map((candidate) => candidate?.trim())
-    .filter((candidate): candidate is string => Boolean(candidate))) {
-    const key = value.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(value);
-  }
-
-  return result;
 }
 
 function normalizeEnabledTaskTypes(

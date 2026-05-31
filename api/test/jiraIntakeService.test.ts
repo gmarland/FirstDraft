@@ -191,10 +191,7 @@ function setupService(options: FetchOptions & { integration?: Partial<JiraIntegr
     },
   };
   const gitRepositories = {
-    async getRepository() {
-      return undefined;
-    },
-    async recordUserGitflowUsage() {},
+    async touchWorkerRepository() {},
   };
   const dispatcher = {
     async dispatchQueuedCommands() {},
@@ -290,10 +287,7 @@ function setupDuplicateIssueService() {
     },
   };
   const gitRepositories = {
-    async getRepository() {
-      return undefined;
-    },
-    async recordUserGitflowUsage() {},
+    async touchWorkerRepository() {},
   };
   const dispatcher = {
     dispatchCalls: 0,

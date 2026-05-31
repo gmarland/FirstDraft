@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using FirstDraft.Api.Auth;
 using FirstDraft.Api.Outbox;
+using FirstDraft.Cli;
 using FirstDraft.Commands;
 using FirstDraft.Configuration;
 using FirstDraft.Infrastructure.Logging;
+using Newtonsoft.Json;
 using System.Threading.Channels;
 
 namespace FirstDraft.Api
@@ -155,14 +157,16 @@ namespace FirstDraft.Api
                     string appPathsParam = ((_applicationData.ApplicationPaths != null) && (_applicationData.ApplicationPaths.Length > 0)) ? string.Join("|", _applicationData.ApplicationPaths) : string.Empty;
                     string skillsParam = string.Join("|", WorkerSkillRegistry.ResolveAvailableSkills(_applicationData.Skills));
                     string enabledTaskTypesParam = string.Join("|", WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(_applicationData.EnabledTaskTypes));
+                    string gitRepositoriesParam = JsonConvert.SerializeObject(GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories));
 
-                    await _apiHubConnection.InvokeAsync("Register", await _tokens.EnsureAccessTokenAsync(), _apiHubConnection.ConnectionId, _applicationData.WorkerId, appPathsParam, skillsParam, GetMaxConcurrentTasks(_applicationData), enabledTaskTypesParam);
+                    await _apiHubConnection.InvokeAsync("Register", await _tokens.EnsureAccessTokenAsync(), _apiHubConnection.ConnectionId, _applicationData.WorkerId, appPathsParam, skillsParam, GetMaxConcurrentTasks(_applicationData), enabledTaskTypesParam, gitRepositoriesParam);
 
                     _handshakeComplete = true;
 
                     _logger.Info("Connection made, worker registered");
                     _logger.Info($"Max concurrent tasks: {GetMaxConcurrentTasks(_applicationData)}");
                     _logger.Info($"Enabled task types: {enabledTaskTypesParam}");
+                    _logger.Info($"Configured Git repositories: {GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories).Length}");
 
                     await FlushPendingCommandEvents(waitForLock: true);
                 }

@@ -1,6 +1,6 @@
 # FirstDraft Console
 
-React and Vite console for operating a FirstDraft worker fleet. It lets users sign in, create the first user, inspect workers, queue commands, review command history and output, manage repositories, configure Jira intake, update their profile, and create API keys for workers.
+React and Vite console for operating a FirstDraft worker fleet. It lets users sign in, create the first user, inspect workers, queue commands, review command history and output, configure Jira intake, update their profile, and create API keys for workers.
 
 ## Main Workflows
 
@@ -12,7 +12,6 @@ React and Vite console for operating a FirstDraft worker fleet. It lets users si
 - Use gitflow repository suggestions when creating repository-backed tasks.
 - Review command history, command metadata, streamed output, parsed responses, and cancellation state.
 - Cancel queued or running commands when the API and worker can honor the request.
-- Manage repository records used by gitflow and Jira intake.
 - Configure Jira connections, boards, workflow statuses, ready issue sampling, and intake.
 - Create and revoke user API keys for worker authentication.
 
@@ -22,7 +21,6 @@ React and Vite console for operating a FirstDraft worker fleet. It lets users si
 - `/create-user`
 - `/workers`
 - `/workers/:workerId`
-- `/repositories`
 - `/integrations`
 - `/settings/api-keys`
 - `/profile`
@@ -49,7 +47,6 @@ Important API areas used by the console include:
 
 - `/api/auth/*` for signup, login, current-user lookup, and profile updates.
 - `/api/workers/*` for workers, worker enablement, task queues, commands, output, responses, cancellation, and gitflow suggestions.
-- `/api/repositories/*` for repository records.
 - `/api/integrations/jira/*` for Jira connection, workflow, ready status, and intake setup.
 - `/api/me/api-keys/*` for worker API credentials.
 

@@ -20,7 +20,6 @@ import { TenantSettingsStore } from "./store/tenants/tenantSettingsStore.js";
 import { JiraIntegrationStore } from "./store/integrations/jiraIntegrationStore.js";
 import { IntegrationIntakeEventStore } from "./store/integrations/integrationIntakeEventStore.js";
 import { createIntegrationRoutes } from "./routes/integrations.js";
-import { createRepositoryRoutes } from "./routes/repositories.js";
 import { createDataSource } from "./db/dataSource.js";
 import { TypeOrmStoreContext } from "./db/typeOrmStoreContext.js";
 import { JiraIntakeService } from "./integrations/jira/jiraIntakeService.js";
@@ -45,7 +44,7 @@ const gitRepositories = new GitRepositoryStore(db);
 const jiraIntegrations = new JiraIntegrationStore(db, tenantCrypto);
 const integrationIntakeEvents = new IntegrationIntakeEventStore(db);
 await workerRecords.markAllWorkersStopped();
-const store = createWorkerStore(commands, workerRecords);
+const store = createWorkerStore(commands, workerRecords, gitRepositories);
 const tenants = createAppStore(db, tenantCrypto);
 const jwtConfig = createJwtConfigFromEnv();
 configurePassport(tenants, jwtConfig);
@@ -55,7 +54,7 @@ const apiToWorkerTokens = new ApiToWorkerTokenIssuer();
 const outputStorage = createCommandOutputStorageFromEnv();
 const outputStorageProvider = outputStorage ? getCommandOutputStorageProviderFromEnv() : undefined;
 const integrationLifecycle = new IntegrationLifecycleService(integrationIntakeEvents, jiraIntegrations, gitRepositories);
-const signalRHub = new SignalRHub(store, workerTokenService, apiToWorkerTokens, outputStorage, integrationLifecycle);
+const signalRHub = new SignalRHub(store, workerTokenService, apiToWorkerTokens, outputStorage, integrationLifecycle, gitRepositories);
 const jiraIntake = new JiraIntakeService(jiraIntegrations, integrationIntakeEvents, store, gitRepositories, signalRHub);
 const app = createApp({
   authRoutes: createAuthRoutes(jwtConfig, tenants, outputStorage),
@@ -70,7 +69,6 @@ const app = createApp({
   workerRoutes: createWorkerRoutes(store, signalRHub, outputStorage, gitRepositories),
   userApiKeyRoutes: createUserApiKeyRoutes(tenants),
   integrationRoutes: createIntegrationRoutes(jiraIntegrations, jiraIntake),
-  repositoryRoutes: createRepositoryRoutes(gitRepositories),
   negotiateHandler: signalRHub.negotiate
 });
 const server = createServer(app);
