@@ -22,6 +22,9 @@ namespace FirstDraft.Cli.Jira
                 "add" => await Add(args.Skip(1).ToArray()),
                 "configure" => await Configure(args.Skip(1).ToArray()),
                 "update" => await Configure(args.Skip(1).ToArray()),
+                "details" => await Details(args.Skip(1).ToArray()),
+                "detail" => await Details(args.Skip(1).ToArray()),
+                "show" => await Details(args.Skip(1).ToArray()),
                 "remove" => await Remove(args.Skip(1).ToArray()),
                 "delete" => await Remove(args.Skip(1).ToArray()),
                 _ => PrintIntegrationsHelp($"Unknown integrations command: {args[0]}")
@@ -39,20 +42,13 @@ namespace FirstDraft.Cli.Jira
                 return 0;
             }
 
-            PrintRow("INTEGRATION ID", "STATUS", "ENABLED", "SITE URL", "EMAIL", "BOARD", "READY", "PROCESSING", "PROCESSED", "TOKEN");
+            PrintRow("INTEGRATION ID", "SITE URL", "BOARD");
             foreach (JiraIntegrationConfig integration in integrations)
             {
                 PrintRow(
                     integration.IntegrationId,
-                    JiraIntegrationConfigService.GetIntegrationStatus(applicationData, integration),
-                    integration.Enabled ? "yes" : "no",
                     integration.SiteUrl,
-                    integration.Email,
-                    integration.BoardName,
-                    integration.ReadyStatusName,
-                    integration.ProcessingStatusName,
-                    integration.ProcessedStatusName,
-                    JiraIntegrationConfigService.HasStoredApiToken(integration) ? "configured" : "missing");
+                    FormatConfiguredBoard(integration));
             }
 
             return 0;
@@ -60,17 +56,46 @@ namespace FirstDraft.Cli.Jira
 
         private static void PrintRow(
             string integrationId,
-            string status,
-            string enabled,
             string siteUrl,
-            string email,
-            string board,
-            string ready,
-            string processing,
-            string processed,
-            string token)
+            string board)
         {
-            Console.WriteLine($"{integrationId}\t{status}\t{enabled}\t{siteUrl}\t{email}\t{board}\t{ready}\t{processing}\t{processed}\t{token}");
+            Console.WriteLine($"{integrationId}\t{siteUrl}\t{board}");
+        }
+
+        private async Task<int> Details(string[] args)
+        {
+            if (args.Length == 0) return PrintIntegrationsHelp("Integration ID is required.");
+            if (args.Length > 1) return PrintIntegrationsHelp("Details accepts only an integration ID.");
+
+            string? integrationId = JiraIntegrationConfigService.NormalizeIntegrationId(args[0]);
+            if (integrationId == null) return PrintIntegrationsHelp("Integration ID must be 5 lowercase alphanumeric characters.");
+
+            ApplicationData applicationData = await _applicationDataService.GetApplicationData();
+            JiraIntegrationConfig[] integrations = JiraIntegrationConfigService.NormalizeIntegrations(applicationData.JiraIntegrations);
+            JiraIntegrationConfig? integration = integrations.FirstOrDefault(integration =>
+                string.Equals(integration.IntegrationId, integrationId, StringComparison.OrdinalIgnoreCase));
+
+            if (integration == null)
+            {
+                Console.Error.WriteLine("Jira integration is not configured.");
+                return 1;
+            }
+
+            Console.WriteLine($"Integration ID:\t{integration.IntegrationId}");
+            Console.WriteLine($"Status:\t{JiraIntegrationConfigService.GetIntegrationStatus(applicationData, integration)}");
+            Console.WriteLine($"Enabled:\t{(integration.Enabled ? "yes" : "no")}");
+            Console.WriteLine($"Site URL:\t{integration.SiteUrl}");
+            Console.WriteLine($"Email:\t{integration.Email}");
+            Console.WriteLine($"Board:\t{FormatConfiguredBoard(integration)}");
+            Console.WriteLine($"Board ID:\t{FormatNullableValue(integration.BoardId)}");
+            Console.WriteLine($"Board type:\t{FormatValue(integration.BoardType)}");
+            Console.WriteLine($"Board filter ID:\t{FormatNullableValue(integration.BoardFilterId)}");
+            Console.WriteLine($"Ready status:\t{FormatStatusDetails(integration.ReadyStatusName, integration.ReadyStatusId)}");
+            Console.WriteLine($"Processing status:\t{FormatStatusDetails(integration.ProcessingStatusName, integration.ProcessingStatusId)}");
+            Console.WriteLine($"Processed status:\t{FormatStatusDetails(integration.ProcessedStatusName, integration.ProcessedStatusId)}");
+            Console.WriteLine($"Token:\t{(JiraIntegrationConfigService.HasStoredApiToken(integration) ? "configured" : "missing")}");
+
+            return 0;
         }
 
         private async Task<int> Add(string[] args)
@@ -246,6 +271,32 @@ namespace FirstDraft.Cli.Jira
             return $"{board.Name}";
         }
 
+        private static string FormatConfiguredBoard(JiraIntegrationConfig integration)
+        {
+            if (string.IsNullOrWhiteSpace(integration.BoardName)) return "-";
+            if (!integration.BoardId.HasValue || integration.BoardId.Value <= 0) return integration.BoardName;
+
+            return $"{integration.BoardName}";
+        }
+
+        private static string FormatStatusDetails(string? name, string? id)
+        {
+            string formattedName = FormatValue(name);
+            if (string.IsNullOrWhiteSpace(id)) return formattedName;
+
+            return $"{formattedName} ({id.Trim()})";
+        }
+
+        private static string FormatNullableValue(int? value)
+        {
+            return value.HasValue ? value.Value.ToString() : "-";
+        }
+
+        private static string FormatValue(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+        }
+
         private static string FormatStatus(JiraStatusOption status)
         {
             return status.Name;
@@ -256,6 +307,7 @@ namespace FirstDraft.Cli.Jira
             return CliOutput.PrintHelp(
                 error,
                 "  firstdraft integrations list",
+                "  firstdraft integrations details <integration-id>",
                 "  firstdraft integrations add jira",
                 "  firstdraft integrations configure <integration-id>",
                 "  firstdraft integrations remove <integration-id>");
