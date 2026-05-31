@@ -24,13 +24,14 @@ Authentication:
 - `POST /api/auth/login`
 - `GET /api/auth/me`
 - `PATCH /api/auth/me`
+- `DELETE /api/auth/me`
 
 Worker authentication:
 
 - `POST /api/worker-auth/token` with a user bearer token
 - `POST /api/worker-auth/refresh`
 - `GET /api/worker-auth/public-key`
-- `GET /api/worker-auth/jira-attachments/:integrationId/:issueId/:attachmentId`
+- `GET /api/worker-auth/jira-attachments/:eventId/:attachmentId`
 
 Workers and commands:
 
@@ -123,6 +124,12 @@ Run tests and build:
 ```bash
 npm test
 npm run build
+```
+
+Run the compiled API after building:
+
+```bash
+npm start
 ```
 
 ## Queue A Command

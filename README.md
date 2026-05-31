@@ -108,35 +108,22 @@ This starts Postgres and MinIO. MinIO creates a local `firstdraft-command-output
 ```bash
 cd api
 npm install
-
-cat > .env <<'EOF'
-DATABASE_URL=postgres://firstdraft:firstdraft@localhost:5432/firstdraft
-JWT_SECRET=replace-with-a-local-development-secret
-PORT=5080
-COMMAND_OUTPUT_BUCKET=firstdraft-command-output
-COMMAND_OUTPUT_STORAGE_PROVIDER=s3
-COMMAND_OUTPUT_PREFIX=dev/
-S3_ENDPOINT_URL=http://localhost:9000
-S3_FORCE_PATH_STYLE=true
-AWS_ACCESS_KEY_ID=minioadmin
-AWS_SECRET_ACCESS_KEY=minioadmin
-AWS_REGION=us-east-1
-EOF
-
+cp .env.example .env
 npm run dev
 ```
 
-The API listens on `http://localhost:5080`.
+The API listens on `http://localhost:5080`. The checked-in `api/.env.example` matches the local `docker-compose.yml` Postgres and MinIO services, including the `firstdraft-command-output` bucket and `AWS_REGION=eu-west-2` for local S3-compatible storage.
 
 ### 3. Run the web console
 
 ```bash
 cd app
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-Open the Vite URL printed by the command, then create the first user from the console.
+Open the Vite URL printed by the command, then create the first user from the console. The checked-in `app/.env.example` points the console at `http://localhost:5080`.
 
 ### 4. Configure and run a worker
 
@@ -160,29 +147,43 @@ API:
 
 ```bash
 cd api
+npm install
 npm run dev
 npm test
 npm run build
+npm start
 ```
 
 Web console:
 
 ```bash
 cd app
+npm install
 npm run dev
 npm run build
+npm run preview
 ```
 
 Worker:
 
 ```bash
 cd client
+dotnet build
 dotnet run -- init
 dotnet run -- skills
 dotnet run -- capacity
 dotnet run -- taskTypes
 dotnet run -- enablePlanning
+dotnet run -- repos list
+dotnet run -- integrations list
 dotnet run -- run
+```
+
+Local infrastructure:
+
+```bash
+docker compose up -d
+docker compose down
 ```
 
 ## API Example
@@ -214,6 +215,11 @@ Important API environment variables:
 | `COMMAND_OUTPUT_BUCKET` | No | Bucket or Azure Blob container for command output |
 | `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws`, `gcs`/`google`, or `azure`/`az`; defaults to `s3` |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |
+| `S3_ENDPOINT_URL` | No | S3-compatible endpoint for local MinIO or another compatible service |
+| `S3_FORCE_PATH_STYLE` | No | Set to `true` for local MinIO path-style bucket access |
+| `AWS_ACCESS_KEY_ID` | No | S3-compatible access key for command output storage |
+| `AWS_SECRET_ACCESS_KEY` | No | S3-compatible secret key for command output storage |
+| `AWS_REGION` | No | S3-compatible region; local development uses `eu-west-2` |
 
 For Google Cloud Storage, set `COMMAND_OUTPUT_STORAGE_PROVIDER=gcs` and `COMMAND_OUTPUT_BUCKET` to the GCS bucket name. Authentication uses Google Application Default Credentials, including `GOOGLE_APPLICATION_CREDENTIALS`; optionally set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
 
