@@ -126,7 +126,6 @@ namespace FirstDraft.Cli.Git
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"{(createOnly ? "Added" : "Updated")} repository {saved.RepositoryUrl}");
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 
@@ -150,7 +149,6 @@ namespace FirstDraft.Cli.Git
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"Removed repository {args[0].Trim()}");
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 

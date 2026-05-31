@@ -2,10 +2,6 @@ namespace FirstDraft.Cli.Common
 {
     public static class CliOutput
     {
-        public static void PrintConfigWritten(string configLocation)
-        {
-            Console.WriteLine($"Config written to {configLocation}");
-        }
 
         public static int PrintHelp(string? error, params string[] usageLines)
         {

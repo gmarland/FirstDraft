@@ -128,9 +128,7 @@ namespace FirstDraft.Cli.Jira
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"Added Jira integration {integrationId}");
-            Console.WriteLine($"Configure board and statuses with: firstdraft integrations configure {integrationId}");
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
-            return 0;
+            return await Configure(new[] { integrationId });
         }
 
         private async Task<int> Configure(string[] args)
@@ -216,7 +214,6 @@ namespace FirstDraft.Cli.Jira
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"Configured Jira integration {saved.IntegrationId}");
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 
@@ -241,7 +238,6 @@ namespace FirstDraft.Cli.Jira
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"Removed Jira integration {integrationId}");
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 

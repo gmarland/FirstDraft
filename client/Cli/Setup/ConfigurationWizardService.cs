@@ -92,7 +92,6 @@ namespace FirstDraft.Cli.Setup
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             Console.WriteLine("Run the client with: firstdraft run");
 
             return 0;
@@ -110,7 +109,6 @@ namespace FirstDraft.Cli.Setup
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
 
             return 0;
         }
@@ -127,7 +125,6 @@ namespace FirstDraft.Cli.Setup
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
 
             return 0;
         }
@@ -144,7 +141,6 @@ namespace FirstDraft.Cli.Setup
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
 
             return 0;
         }
@@ -161,7 +157,6 @@ namespace FirstDraft.Cli.Setup
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             Console.WriteLine(applicationData.PlanningEnabled
                 ? "AI planning is enabled."
                 : "AI planning is disabled.");
