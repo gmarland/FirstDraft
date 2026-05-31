@@ -83,7 +83,7 @@ export class JiraIntegrationStore {
       `
         delete from worker_jira_integrations
         where worker_id = $1
-          and not (integration_id = any($2::uuid[]))
+          and not (integration_id = any($2::text[]))
       `,
       [workerId, integrationIds],
     );
@@ -178,7 +178,7 @@ export class JiraIntegrationStore {
         from worker_jira_integrations
         where user_id = $1
           and enabled = true
-          and ($2::uuid is null or integration_id = $2::uuid)
+          and ($2::text is null or integration_id = $2::text)
         order by created_at asc
       `,
       [userId, integrationId ?? null],
@@ -195,7 +195,7 @@ export class JiraIntegrationStore {
         select ${returningColumns}
         from worker_jira_integrations
         where enabled = true
-          and ($1::uuid is null or integration_id = $1::uuid)
+          and ($1::text is null or integration_id = $1::text)
         order by created_at asc
       `,
       [integrationId ?? null],
@@ -214,7 +214,7 @@ export class JiraIntegrationStore {
         select ${returningColumns}
         from worker_jira_integrations
         where user_id = $1
-          and integration_id = $2::uuid
+          and integration_id = $2::text
           and ($3::text is null or worker_id = $3)
         order by updated_at desc
         limit 1
@@ -294,8 +294,8 @@ function normalizeWorkerJiraIntegrationInputs(
 function normalizeWorkerJiraIntegrationInput(
   integration: WorkerJiraIntegrationInput,
 ): WorkerJiraIntegrationInput | undefined {
-  const integrationId = clean(integration.integrationId).toLowerCase();
-  if (!isUuid(integrationId)) return undefined;
+  const integrationId = clean(integration.integrationId);
+  if (!isIntegrationId(integrationId)) return undefined;
 
   const siteUrl = clean(integration.siteUrl).replace(/\/+$/, "");
   const email = clean(integration.email);
@@ -353,6 +353,6 @@ function clean(value: string | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+function isIntegrationId(value: string): boolean {
+  return /^[a-z0-9]{5}$/.test(value);
 }

@@ -27,7 +27,7 @@ export const WorkerJiraIntegrationSchema = new EntitySchema<WorkerJiraIntegratio
   tableName: "worker_jira_integrations",
   columns: {
     workerId: { type: "text", name: "worker_id", primary: true },
-    integrationId: { type: "uuid", name: "integration_id", primary: true },
+    integrationId: { type: "text", name: "integration_id", primary: true },
     userId: { type: "uuid", name: "user_id" },
     siteUrl: { type: "text", name: "site_url" },
     email: { type: "text" },

@@ -99,7 +99,7 @@ namespace FirstDraft
             Console.WriteLine("  firstdraft taskTypes  Update enabled task types interactively");
             Console.WriteLine("  firstdraft enablePlanning  Configure AI planning for this client");
             Console.WriteLine("  firstdraft repos list|add|update|remove  Manage Git repositories for this worker");
-            Console.WriteLine("  firstdraft integrations list|add|update|remove  Manage Jira integrations for this worker");
+            Console.WriteLine("  firstdraft integrations list|add|configure|remove         Manage Jira integrations for this worker");
             Console.WriteLine("  firstdraft run [--task-types ai,shell,gitflow]  Start the FirstDraft client worker");
             Console.WriteLine("  firstdraft help    Show this help");
         }

@@ -101,7 +101,7 @@ export class SchemaMigrator {
 
       create table if not exists worker_jira_integrations (
         worker_id text not null references client_workers(worker_id) on delete cascade,
-        integration_id uuid not null,
+        integration_id text not null,
         user_id uuid not null references users(id) on delete cascade,
         site_url text not null,
         email text not null,
@@ -196,7 +196,7 @@ export class SchemaMigrator {
       create table if not exists integration_intake_event_users (
         event_id uuid not null references integration_intake_events(id) on delete cascade,
         user_id uuid not null references users(id) on delete cascade,
-        integration_id uuid not null,
+        integration_id text not null,
         created_at timestamptz not null default now(),
         primary key (event_id, user_id, integration_id)
       );

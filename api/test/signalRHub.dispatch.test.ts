@@ -747,7 +747,7 @@ async function testRegistrationSyncsWorkerJiraIntegrations(): Promise<void> {
     "[]",
     JSON.stringify([
       {
-        integrationId: "11111111-1111-4111-8111-111111111111",
+        integrationId: "ab123",
         enabled: true,
         siteUrl: "https://example.atlassian.net",
         email: "user@example.com",
@@ -776,7 +776,7 @@ async function testRegistrationSyncsWorkerJiraIntegrations(): Promise<void> {
       userId: "user-1",
       integrations: [
         {
-          integrationId: "11111111-1111-4111-8111-111111111111",
+          integrationId: "ab123",
           enabled: true,
           siteUrl: "https://example.atlassian.net",
           email: "user@example.com",

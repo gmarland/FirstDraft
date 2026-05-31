@@ -1,9 +1,17 @@
+using System.Net.Http.Headers;
+using System.Net.Mail;
+using System.Security.Cryptography;
+using System.Text;
 using FirstDraft.Configuration;
+using Newtonsoft.Json.Linq;
 
 namespace FirstDraft.Cli
 {
     public class JiraIntegrationConfigurationService
     {
+        private const int IntegrationIdLength = 5;
+        private const int GenerateIntegrationIdMaxAttempts = 100;
+        private const string IntegrationIdCharacters = "abcdefghijklmnopqrstuvwxyz0123456789";
         private readonly ApplicationDataService _applicationDataService;
 
         public JiraIntegrationConfigurationService(ApplicationDataService applicationDataService)
@@ -18,8 +26,9 @@ namespace FirstDraft.Cli
             return command switch
             {
                 "list" => await List(),
-                "add" => await Save(args.Skip(1).ToArray(), createOnly: true),
-                "update" => await Save(args.Skip(1).ToArray(), createOnly: false),
+                "add" => await Add(args.Skip(1).ToArray()),
+                "configure" => await Configure(args.Skip(1).ToArray()),
+                "update" => await Configure(args.Skip(1).ToArray()),
                 "remove" => await Remove(args.Skip(1).ToArray()),
                 "delete" => await Remove(args.Skip(1).ToArray()),
                 _ => PrintIntegrationsHelp($"Unknown integrations command: {args[0]}")
@@ -37,11 +46,12 @@ namespace FirstDraft.Cli
                 return 0;
             }
 
-            PrintRow("INTEGRATION ID", "ENABLED", "SITE URL", "EMAIL", "BOARD", "READY", "PROCESSING", "PROCESSED", "TOKEN");
+            PrintRow("INTEGRATION ID", "STATUS", "ENABLED", "SITE URL", "EMAIL", "BOARD", "READY", "PROCESSING", "PROCESSED", "TOKEN");
             foreach (JiraIntegrationConfig integration in integrations)
             {
                 PrintRow(
                     integration.IntegrationId,
+                    GetIntegrationStatus(applicationData, integration),
                     integration.Enabled ? "yes" : "no",
                     integration.SiteUrl,
                     integration.Email,
@@ -49,7 +59,7 @@ namespace FirstDraft.Cli
                     integration.ReadyStatusName,
                     integration.ProcessingStatusName,
                     integration.ProcessedStatusName,
-                    integration.HasApiToken(applicationData) ? "configured" : "missing");
+                    HasStoredApiToken(integration) ? "configured" : "missing");
             }
 
             return 0;
@@ -57,6 +67,7 @@ namespace FirstDraft.Cli
 
         private static void PrintRow(
             string integrationId,
+            string status,
             string enabled,
             string siteUrl,
             string email,
@@ -66,83 +77,141 @@ namespace FirstDraft.Cli
             string processed,
             string token)
         {
-            Console.WriteLine($"{integrationId}\t{enabled}\t{siteUrl}\t{email}\t{board}\t{ready}\t{processing}\t{processed}\t{token}");
+            Console.WriteLine($"{integrationId}\t{status}\t{enabled}\t{siteUrl}\t{email}\t{board}\t{ready}\t{processing}\t{processed}\t{token}");
         }
 
-        private async Task<int> Save(string[] args, bool createOnly)
+        private async Task<int> Add(string[] args)
         {
-            if (args.Length == 0) return PrintIntegrationsHelp("Integration ID is required.");
-            if (!Guid.TryParse(args[0], out Guid integrationGuid)) return PrintIntegrationsHelp("Integration ID must be a UUID.");
+            string? unexpectedArg = FindUnexpectedPositionalArgument(args);
+            if (unexpectedArg != null) return PrintIntegrationsHelp("Integration IDs are generated automatically. Run add without an integration ID.");
 
             ApplicationData applicationData = await _applicationDataService.GetApplicationData();
+            List<JiraIntegrationConfig> integrations = NormalizeIntegrations(applicationData, applicationData.JiraIntegrations).ToList();
+
+            string? siteUrl = ReadOption(args, "--site-url");
+            string? email = ReadOption(args, "--email");
+            string? apiToken = ReadOption(args, "--api-token");
+            string? connectionError = ValidateConnectionFields(siteUrl, email, apiToken);
+            if (connectionError != null) return PrintIntegrationsHelp(connectionError);
+
             if (string.IsNullOrEmpty(applicationData.ConfigEncryptionKey))
             {
                 Console.Error.WriteLine("ConfigEncryptionKey is required before saving Jira API tokens. Run firstdraft init to authenticate this worker.");
                 return 1;
             }
 
-            List<JiraIntegrationConfig> integrations = NormalizeIntegrations(applicationData, applicationData.JiraIntegrations).ToList();
-            string integrationId = integrationGuid.ToString();
-            int existingIndex = integrations.FindIndex(integration =>
-                string.Equals(integration.IntegrationId, integrationId, StringComparison.OrdinalIgnoreCase));
-
-            if (createOnly && existingIndex >= 0)
+            string? integrationId = GenerateUniqueIntegrationId(integrations);
+            if (integrationId == null)
             {
-                Console.Error.WriteLine("Jira integration is already configured. Use firstdraft integrations update to change it.");
+                Console.Error.WriteLine("Unable to generate a unique Jira integration ID. Remove unused integrations and try again.");
                 return 1;
             }
 
-            if (!createOnly && existingIndex < 0)
+            JiraIntegrationConfig integration = new JiraIntegrationConfig
             {
-                Console.Error.WriteLine("Jira integration is not configured. Use firstdraft integrations add to add it.");
-                return 1;
-            }
+                IntegrationId = integrationId,
+                Enabled = false,
+                SiteUrl = CleanSiteUrl(siteUrl!),
+                Email = email!.Trim()
+            };
+            integration.StoreApiToken(applicationData, apiToken!.Trim());
 
-            JiraIntegrationConfig saved = existingIndex >= 0 ? integrations[existingIndex] : new JiraIntegrationConfig();
-            saved.IntegrationId = integrationId;
-            try
-            {
-                saved.Enabled = ReadBoolOption(args, "--enabled") ?? saved.Enabled;
-                saved.SiteUrl = ReadRequiredOption(args, "--site-url", saved.SiteUrl, createOnly);
-                saved.Email = ReadRequiredOption(args, "--email", saved.Email, createOnly);
-                saved.BoardId = ReadRequiredIntOption(args, "--board-id", saved.BoardId, createOnly);
-                saved.BoardName = ReadRequiredOption(args, "--board-name", saved.BoardName, createOnly);
-                saved.BoardType = ReadRequiredOption(args, "--board-type", saved.BoardType, createOnly);
-                saved.BoardFilterId = ReadOptionalIntOption(args, "--board-filter-id", saved.BoardFilterId);
-                saved.ReadyStatusId = ReadRequiredOption(args, "--ready-status-id", saved.ReadyStatusId, createOnly);
-                saved.ReadyStatusName = ReadRequiredOption(args, "--ready-status-name", saved.ReadyStatusName, createOnly);
-                saved.ProcessingStatusId = ReadRequiredOption(args, "--processing-status-id", saved.ProcessingStatusId, createOnly);
-                saved.ProcessingStatusName = ReadRequiredOption(args, "--processing-status-name", saved.ProcessingStatusName, createOnly);
-                saved.ProcessedStatusId = ReadRequiredOption(args, "--processed-status-id", saved.ProcessedStatusId, createOnly);
-                saved.ProcessedStatusName = ReadRequiredOption(args, "--processed-status-name", saved.ProcessedStatusName, createOnly);
-            }
-            catch (ArgumentException ex)
-            {
-                return PrintIntegrationsHelp(ex.Message);
-            }
-
-            string? apiToken = ReadOption(args, "--api-token");
-            if (!string.IsNullOrWhiteSpace(apiToken))
-            {
-                saved.StoreApiToken(applicationData, apiToken);
-            }
-            else if (createOnly || !saved.HasApiToken(applicationData))
-            {
-                return PrintIntegrationsHelp("--api-token is required.");
-            }
-
-            string? validationError = ValidateIntegration(applicationData, saved);
-            if (validationError != null) return PrintIntegrationsHelp(validationError);
-
-            if (existingIndex >= 0) integrations[existingIndex] = saved;
-            else integrations.Add(saved);
+            integrations.Add(integration);
 
             applicationData.JiraIntegrations = integrations
                 .OrderBy(integration => integration.IntegrationId, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             await _applicationDataService.Save(applicationData);
 
-            Console.WriteLine($"{(createOnly ? "Added" : "Updated")} Jira integration {saved.IntegrationId}");
+            Console.WriteLine($"Added Jira integration {integrationId}");
+            Console.WriteLine($"Configure board and statuses with: firstdraft integrations configure {integrationId}");
+            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
+            return 0;
+        }
+
+        private async Task<int> Configure(string[] args)
+        {
+            if (args.Length == 0) return PrintIntegrationsHelp("Integration ID is required.");
+            string? integrationId = NormalizeIntegrationId(args[0]);
+            if (integrationId == null) return PrintIntegrationsHelp("Integration ID must be 5 lowercase alphanumeric characters.");
+            if (args.Length > 1) return PrintIntegrationsHelp("Configure is interactive and does not accept option flags.");
+            if (Console.IsInputRedirected || Console.IsOutputRedirected)
+            {
+                Console.Error.WriteLine("Interactive Jira configuration requires a terminal.");
+                return 1;
+            }
+
+            ApplicationData applicationData = await _applicationDataService.GetApplicationData();
+            List<JiraIntegrationConfig> integrations = NormalizeIntegrations(applicationData, applicationData.JiraIntegrations).ToList();
+            int existingIndex = integrations.FindIndex(integration =>
+                string.Equals(integration.IntegrationId, integrationId, StringComparison.OrdinalIgnoreCase));
+
+            if (existingIndex < 0)
+            {
+                Console.Error.WriteLine("Jira integration is not configured. Use firstdraft integrations add to add it.");
+                return 1;
+            }
+
+            JiraIntegrationConfig saved = integrations[existingIndex];
+            saved.IntegrationId = integrationId;
+            string? connectionError = ValidateSavedConnection(applicationData, saved);
+            if (connectionError != null) return PrintIntegrationsHelp(connectionError);
+
+            string apiToken = saved.GetApiToken(applicationData);
+            try
+            {
+                using JiraCliClient jira = new JiraCliClient(saved.SiteUrl, saved.Email, apiToken);
+                Console.WriteLine($"Testing Jira connection to {saved.SiteUrl}...");
+                await jira.TestConnection();
+
+                JiraBoardOption[] boards = await jira.ListBoards();
+                if (boards.Length == 0)
+                {
+                    Console.Error.WriteLine("No Jira boards were returned for this account.");
+                    return 1;
+                }
+
+                JiraBoardOption board = PromptSelection("Board", boards, FormatBoard);
+                JiraBoardConfiguration boardConfiguration = await jira.GetBoardConfiguration(board.Id);
+                JiraStatusOption[] statuses = await jira.GetBoardStatuses(boardConfiguration);
+                if (statuses.Length == 0)
+                {
+                    Console.Error.WriteLine("No Jira statuses were returned for the selected board.");
+                    return 1;
+                }
+
+                JiraStatusOption ready = PromptSelection("Ready status", statuses, FormatStatus);
+                JiraStatusOption processing = PromptSelection("Processing status", statuses, FormatStatus);
+                JiraStatusOption processed = PromptSelection("Processed status", statuses, FormatStatus);
+
+                saved.BoardId = board.Id;
+                saved.BoardName = board.Name;
+                saved.BoardType = board.Type;
+                saved.BoardFilterId = boardConfiguration.FilterId;
+                saved.ReadyStatusId = ready.Id;
+                saved.ReadyStatusName = ready.Name;
+                saved.ProcessingStatusId = processing.Id;
+                saved.ProcessingStatusName = processing.Name;
+                saved.ProcessedStatusId = processed.Id;
+                saved.ProcessedStatusName = processed.Name;
+                saved.Enabled = true;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Unable to configure Jira integration: {ex.Message}");
+                return 1;
+            }
+
+            string? validationError = ValidateIntegration(applicationData, saved, requireReadableToken: false);
+            if (validationError != null) return PrintIntegrationsHelp(validationError);
+
+            integrations[existingIndex] = saved;
+            applicationData.JiraIntegrations = integrations
+                .OrderBy(integration => integration.IntegrationId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            await _applicationDataService.Save(applicationData);
+
+            Console.WriteLine($"Configured Jira integration {saved.IntegrationId}");
             Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
             return 0;
         }
@@ -150,11 +219,11 @@ namespace FirstDraft.Cli
         private async Task<int> Remove(string[] args)
         {
             if (args.Length == 0) return PrintIntegrationsHelp("Integration ID is required.");
-            if (!Guid.TryParse(args[0], out Guid integrationGuid)) return PrintIntegrationsHelp("Integration ID must be a UUID.");
+            string? integrationId = NormalizeIntegrationId(args[0]);
+            if (integrationId == null) return PrintIntegrationsHelp("Integration ID must be 5 lowercase alphanumeric characters.");
 
             ApplicationData applicationData = await _applicationDataService.GetApplicationData();
             List<JiraIntegrationConfig> integrations = NormalizeIntegrations(applicationData, applicationData.JiraIntegrations).ToList();
-            string integrationId = integrationGuid.ToString();
             int removed = integrations.RemoveAll(integration =>
                 string.Equals(integration.IntegrationId, integrationId, StringComparison.OrdinalIgnoreCase));
 
@@ -177,13 +246,13 @@ namespace FirstDraft.Cli
             if (integrations == null || integrations.Length == 0) return Array.Empty<JiraIntegrationConfig>();
 
             return integrations
-                .Where(integration => Guid.TryParse(integration.IntegrationId, out _))
+                .Where(integration => NormalizeIntegrationId(integration.IntegrationId) != null)
                 .Select(integration =>
                 {
-                    Guid integrationId = Guid.Parse(integration.IntegrationId);
+                    string integrationId = NormalizeIntegrationId(integration.IntegrationId)!;
                     return new JiraIntegrationConfig
                     {
-                        IntegrationId = integrationId.ToString(),
+                        IntegrationId = integrationId,
                         Enabled = integration.Enabled,
                         SiteUrl = CleanSiteUrl(integration.SiteUrl),
                         Email = (integration.Email ?? string.Empty).Trim(),
@@ -232,16 +301,11 @@ namespace FirstDraft.Cli
                 .ToArray();
         }
 
-        private static string? ValidateIntegration(ApplicationData applicationData, JiraIntegrationConfig integration)
+        private static string? ValidateIntegration(ApplicationData applicationData, JiraIntegrationConfig integration, bool requireReadableToken = true)
         {
-            if (!Guid.TryParse(integration.IntegrationId, out _)) return "Integration ID must be a UUID.";
-            if (!Uri.TryCreate(integration.SiteUrl, UriKind.Absolute, out Uri? uri) ||
-                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-            {
-                return "Jira site URL must be an absolute http or https URL.";
-            }
-            if (string.IsNullOrWhiteSpace(integration.Email)) return "Jira email is required.";
-            if (string.IsNullOrWhiteSpace(integration.GetApiToken(applicationData))) return "Jira API token is required.";
+            if (NormalizeIntegrationId(integration.IntegrationId) == null) return "Integration ID must be 5 lowercase alphanumeric characters.";
+            string? connectionError = ValidateSavedConnection(applicationData, integration, requireReadableToken);
+            if (connectionError != null) return connectionError;
             if (!integration.BoardId.HasValue || integration.BoardId.Value <= 0) return "Jira board ID is required.";
             if (string.IsNullOrWhiteSpace(integration.BoardName)) return "Jira board name is required.";
             if (string.IsNullOrWhiteSpace(integration.BoardType)) return "Jira board type is required.";
@@ -254,46 +318,73 @@ namespace FirstDraft.Cli
             return null;
         }
 
-        private static string ReadRequiredOption(string[] args, string name, string currentValue, bool createOnly)
+        private static string GetIntegrationStatus(ApplicationData applicationData, JiraIntegrationConfig integration)
         {
-            string? value = ReadOption(args, name);
-            if (!string.IsNullOrWhiteSpace(value)) return value.Trim();
-            if (!createOnly && !string.IsNullOrWhiteSpace(currentValue)) return currentValue;
-            throw new ArgumentException($"{name} is required.");
+            if (ValidateIntegration(applicationData, integration, requireReadableToken: false) == null) return "configured";
+            if (ValidateSavedConnection(applicationData, integration, requireReadableToken: false) == null) return "connection";
+            return "incomplete";
         }
 
-        private static int? ReadRequiredIntOption(string[] args, string name, int? currentValue, bool createOnly)
+        private static string? ValidateConnectionFields(string? siteUrl, string? email, string? apiToken)
         {
-            int? value = ReadOptionalIntOption(args, name, currentValue);
-            if (value.HasValue) return value;
-            if (!createOnly && currentValue.HasValue) return currentValue;
-            throw new ArgumentException($"{name} is required.");
+            string? siteError = ValidateSiteUrl(siteUrl);
+            if (siteError != null) return siteError;
+            string? emailError = ValidateEmail(email, "--email");
+            if (emailError != null) return emailError;
+            if (string.IsNullOrWhiteSpace(apiToken)) return "--api-token is required.";
+            return null;
         }
 
-        private static int? ReadOptionalIntOption(string[] args, string name, int? currentValue)
+        private static string? ValidateSavedConnection(ApplicationData applicationData, JiraIntegrationConfig integration, bool requireReadableToken = true)
         {
-            string? value = ReadOption(args, name);
-            if (string.IsNullOrWhiteSpace(value)) return currentValue;
-            if (int.TryParse(value, out int parsed) && parsed > 0) return parsed;
-            throw new ArgumentException($"{name} must be a positive integer.");
+            string? siteError = ValidateSiteUrl(integration.SiteUrl);
+            if (siteError != null) return siteError;
+            string? emailError = ValidateEmail(integration.Email, "Jira email");
+            if (emailError != null) return emailError;
+            if (requireReadableToken)
+            {
+                if (string.IsNullOrWhiteSpace(integration.GetApiToken(applicationData))) return "Jira API token is required or could not be decrypted.";
+            }
+            else if (!HasStoredApiToken(integration))
+            {
+                return "Jira API token is required.";
+            }
+
+            return null;
         }
 
-        private static bool? ReadBoolOption(string[] args, string name)
+        private static string? ValidateEmail(string? email, string label)
         {
-            string? value = ReadOption(args, name);
-            if (string.IsNullOrWhiteSpace(value)) return null;
-            if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)) return true;
-            if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(value, "no", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(value, "0", StringComparison.OrdinalIgnoreCase)) return false;
-            throw new ArgumentException($"{name} must be true or false.");
+            if (string.IsNullOrWhiteSpace(email)) return $"{label} is required.";
+
+            try
+            {
+                MailAddress parsed = new MailAddress(email.Trim());
+                return string.Equals(parsed.Address, email.Trim(), StringComparison.OrdinalIgnoreCase)
+                    ? null
+                    : $"{label} must be a valid email address.";
+            }
+            catch (FormatException)
+            {
+                return $"{label} must be a valid email address.";
+            }
+        }
+
+        private static string? ValidateSiteUrl(string? siteUrl)
+        {
+            if (string.IsNullOrWhiteSpace(siteUrl)) return "--site-url is required.";
+            if (!Uri.TryCreate(siteUrl, UriKind.Absolute, out Uri? uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return "Jira site URL must be an absolute http or https URL.";
+            }
+
+            return null;
         }
 
         private static string? ReadOption(string[] args, string name)
         {
-            for (int index = 1; index < args.Length; index++)
+            for (int index = 0; index < args.Length; index++)
             {
                 string arg = args[index];
                 if (arg.StartsWith($"{name}=", StringComparison.OrdinalIgnoreCase))
@@ -310,10 +401,207 @@ namespace FirstDraft.Cli
             return null;
         }
 
+        private static string? FindUnexpectedPositionalArgument(string[] args)
+        {
+            for (int index = 0; index < args.Length; index++)
+            {
+                string arg = args[index];
+                if (!arg.StartsWith("--", StringComparison.Ordinal)) return arg;
+                if (!arg.Contains('=') && index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal))
+                {
+                    index++;
+                }
+            }
+
+            return null;
+        }
+
+        private static string? GenerateUniqueIntegrationId(IEnumerable<JiraIntegrationConfig> integrations)
+        {
+            HashSet<string> existingIds = integrations
+                .Select(integration => integration.IntegrationId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            for (int attempt = 0; attempt < GenerateIntegrationIdMaxAttempts; attempt++)
+            {
+                string integrationId = GenerateIntegrationId();
+                if (!existingIds.Contains(integrationId)) return integrationId;
+            }
+
+            return null;
+        }
+
+        private static string GenerateIntegrationId()
+        {
+            char[] value = new char[IntegrationIdLength];
+            for (int index = 0; index < value.Length; index++)
+            {
+                value[index] = IntegrationIdCharacters[RandomNumberGenerator.GetInt32(IntegrationIdCharacters.Length)];
+            }
+
+            return new string(value);
+        }
+
+        private static string? NormalizeIntegrationId(string? integrationId)
+        {
+            string normalized = (integrationId ?? string.Empty).Trim();
+            if (normalized.Length != IntegrationIdLength) return null;
+            return normalized.All(character =>
+                (character >= 'a' && character <= 'z') ||
+                (character >= '0' && character <= '9'))
+                ? normalized
+                : null;
+        }
+
         private static string CleanSiteUrl(string value)
         {
             return (value ?? string.Empty).Trim().TrimEnd('/');
         }
+
+        private static bool HasStoredApiToken(JiraIntegrationConfig integration)
+        {
+            return !string.IsNullOrWhiteSpace(integration.ApiToken) || integration.EncryptedApiToken != null;
+        }
+
+        private static T PromptSelection<T>(string label, IReadOnlyList<T> options, Func<T, string> format)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"{label}:");
+            for (int index = 0; index < options.Count; index++)
+            {
+                Console.WriteLine($"  {index + 1}. {format(options[index])}");
+            }
+
+            while (true)
+            {
+                Console.Write($"Select {label.ToLowerInvariant()} [1-{options.Count}]: ");
+                string? input = Console.ReadLine();
+                if (int.TryParse(input, out int selected) && selected >= 1 && selected <= options.Count)
+                {
+                    return options[selected - 1];
+                }
+
+                Console.Error.WriteLine("Enter one of the listed numbers.");
+            }
+        }
+
+        private static string FormatBoard(JiraBoardOption board)
+        {
+            return $"{board.Name} ({board.Type}, {board.Id})";
+        }
+
+        private static string FormatStatus(JiraStatusOption status)
+        {
+            return string.IsNullOrWhiteSpace(status.StatusCategory)
+                ? $"{status.Name} ({status.Id})"
+                : $"{status.Name} ({status.StatusCategory}, {status.Id})";
+        }
+
+        private sealed class JiraCliClient : IDisposable
+        {
+            private readonly HttpClient _httpClient;
+
+            public JiraCliClient(string siteUrl, string email, string apiToken)
+            {
+                _httpClient = new HttpClient
+                {
+                    BaseAddress = new Uri($"{CleanSiteUrl(siteUrl)}/")
+                };
+                string credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{email}:{apiToken}"));
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+                _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            }
+
+            public async Task TestConnection()
+            {
+                await RequestJson("rest/api/3/myself");
+            }
+
+            public async Task<JiraBoardOption[]> ListBoards()
+            {
+                JObject json = await RequestJson("rest/agile/1.0/board?maxResults=100");
+                return json["values"]?
+                    .OfType<JObject>()
+                    .Select(board => new JiraBoardOption(
+                        board.Value<int?>("id") ?? 0,
+                        board.Value<string>("name") ?? string.Empty,
+                        board.Value<string>("type") ?? string.Empty))
+                    .Where(board => board.Id > 0 && !string.IsNullOrWhiteSpace(board.Name))
+                    .OrderBy(board => board.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(board => board.Id)
+                    .ToArray() ?? Array.Empty<JiraBoardOption>();
+            }
+
+            public async Task<JiraBoardConfiguration> GetBoardConfiguration(int boardId)
+            {
+                JObject json = await RequestJson($"rest/agile/1.0/board/{boardId}/configuration");
+                int? filterId = json["filter"]?.Value<int?>("id");
+                string[] statusIds = json["columnConfig"]?["columns"]?
+                    .OfType<JObject>()
+                    .SelectMany(column => column["statuses"]?.OfType<JObject>() ?? Enumerable.Empty<JObject>())
+                    .Select(status => status.Value<string>("id") ?? string.Empty)
+                    .Where(statusId => !string.IsNullOrWhiteSpace(statusId))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray() ?? Array.Empty<string>();
+
+                return new JiraBoardConfiguration(boardId, filterId, statusIds);
+            }
+
+            public async Task<JiraStatusOption[]> GetBoardStatuses(JiraBoardConfiguration configuration)
+            {
+                List<JiraStatusOption> statuses = new List<JiraStatusOption>();
+                foreach (string statusId in configuration.StatusIds)
+                {
+                    statuses.Add(await GetStatus(statusId));
+                }
+
+                return statuses
+                    .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(status => status.Id, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+
+            private async Task<JiraStatusOption> GetStatus(string statusId)
+            {
+                JObject json = await RequestJson($"rest/api/3/status/{Uri.EscapeDataString(statusId)}");
+                return new JiraStatusOption(
+                    json.Value<string>("id") ?? statusId,
+                    json.Value<string>("name") ?? statusId,
+                    json["statusCategory"]?.Value<string>("name") ?? string.Empty);
+            }
+
+            private async Task<JObject> RequestJson(string path)
+            {
+                using HttpResponseMessage response = await _httpClient.GetAsync(path);
+                string body = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    string message = string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase ?? "request failed" : body;
+                    throw new InvalidOperationException($"Jira API returned {(int)response.StatusCode}: {message}");
+                }
+
+                try
+                {
+                    return JObject.Parse(body);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Jira API returned invalid JSON: {ex.Message}");
+                }
+            }
+
+            public void Dispose()
+            {
+                _httpClient.Dispose();
+            }
+        }
+
+        private sealed record JiraBoardOption(int Id, string Name, string Type);
+
+        private sealed record JiraBoardConfiguration(int BoardId, int? FilterId, string[] StatusIds);
+
+        private sealed record JiraStatusOption(string Id, string Name, string StatusCategory);
 
         private static int PrintIntegrationsHelp(string? error = null)
         {
@@ -325,8 +613,8 @@ namespace FirstDraft.Cli
 
             Console.Error.WriteLine("Usage:");
             Console.Error.WriteLine("  firstdraft integrations list");
-            Console.Error.WriteLine("  firstdraft integrations add <integration-id> --site-url <url> --email <email> --api-token <token> --board-id <id> --board-name <name> --board-type <type> --ready-status-id <id> --ready-status-name <name> --processing-status-id <id> --processing-status-name <name> --processed-status-id <id> --processed-status-name <name> [--board-filter-id <id>] [--enabled true|false]");
-            Console.Error.WriteLine("  firstdraft integrations update <integration-id> [options]");
+            Console.Error.WriteLine("  firstdraft integrations add --site-url <url> --email <email> --api-token <token>");
+            Console.Error.WriteLine("  firstdraft integrations configure <integration-id>");
             Console.Error.WriteLine("  firstdraft integrations remove <integration-id>");
             return string.IsNullOrWhiteSpace(error) ? 0 : 1;
         }
