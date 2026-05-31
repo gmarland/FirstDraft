@@ -1,7 +1,8 @@
 using System.Text.RegularExpressions;
+using FirstDraft.Cli.Common;
 using FirstDraft.Configuration;
 
-namespace FirstDraft.Cli
+namespace FirstDraft.Cli.Git
 {
     public class GitRepositoryConfigurationService
     {
@@ -38,35 +39,16 @@ namespace FirstDraft.Cli
                 return 0;
             }
 
-            int repositoryWidth = Math.Max(
-                "REPOSITORY URL".Length,
-                repositories.Max(repository => repository.RepositoryUrl.Length));
-            int sourceWidth = Math.Max(
-                "BRANCH SOURCE".Length,
-                repositories.Max(repository => repository.SourceBranch.Length));
-            int targetWidth = Math.Max(
-                "PR TARGET".Length,
-                repositories.Max(repository => repository.TargetBranch.Length));
-
-            PrintReposTableRow("REPOSITORY URL", "BRANCH SOURCE", "PR TARGET", repositoryWidth, sourceWidth, targetWidth);
-            foreach (GitRepositoryConfig repository in repositories)
-            {
-                PrintReposTableRow(repository.RepositoryUrl, repository.SourceBranch, repository.TargetBranch, repositoryWidth, sourceWidth, targetWidth);
-            }
+            CliOutput.PrintTable(
+                new[] { "REPOSITORY URL", "BRANCH SOURCE", "PR TARGET" },
+                repositories.Select(repository => new[]
+                {
+                    repository.RepositoryUrl,
+                    repository.SourceBranch,
+                    repository.TargetBranch
+                }));
 
             return 0;
-        }
-
-        private static void PrintReposTableRow(
-            string repositoryUrl,
-            string sourceBranch,
-            string targetBranch,
-            int repositoryWidth,
-            int sourceWidth,
-            int targetWidth)
-        {
-            Console.WriteLine(
-                $"{repositoryUrl.PadRight(repositoryWidth)}  {sourceBranch.PadRight(sourceWidth)}  {targetBranch.PadRight(targetWidth)}");
         }
 
         private async Task<int> Save(string[] args, bool createOnly)
@@ -125,7 +107,6 @@ namespace FirstDraft.Cli
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"{(createOnly ? "Added" : "Updated")} repository {saved.RepositoryUrl}");
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
             return 0;
         }
 
@@ -149,7 +130,6 @@ namespace FirstDraft.Cli
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"Removed repository {args[0].Trim()}");
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
             return 0;
         }
 
@@ -278,18 +258,12 @@ namespace FirstDraft.Cli
 
         private static int PrintReposHelp(string? error = null)
         {
-            if (!string.IsNullOrWhiteSpace(error))
-            {
-                Console.Error.WriteLine(error);
-                Console.Error.WriteLine();
-            }
-
-            Console.Error.WriteLine("Usage:");
-            Console.Error.WriteLine("  firstdraft repos list");
-            Console.Error.WriteLine("  firstdraft repos add <repository-url> --source <branch> --target <branch>");
-            Console.Error.WriteLine("  firstdraft repos update <repository-url> --source <branch> --target <branch>");
-            Console.Error.WriteLine("  firstdraft repos remove <repository-url>");
-            return string.IsNullOrWhiteSpace(error) ? 0 : 1;
+            return CliOutput.PrintHelp(
+                error,
+                "  firstdraft repos list",
+                "  firstdraft repos add <repository-url> --source <branch> --target <branch>",
+                "  firstdraft repos update <repository-url> --source <branch> --target <branch>",
+                "  firstdraft repos remove <repository-url>");
         }
     }
 }

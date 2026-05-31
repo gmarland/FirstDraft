@@ -87,6 +87,8 @@ namespace FirstDraft.Configuration
 
         public GitRepositoryConfig[]? GitRepositories { get; set; }
 
+        public JiraIntegrationConfig[]? JiraIntegrations { get; set; }
+
         public void ValidateApplicationData()
         {
             ApplicationDataValidator.Validate(this);
@@ -148,6 +150,16 @@ namespace FirstDraft.Configuration
             WorkerRefreshToken = refreshToken;
             EncryptedWorkerRefreshToken = EncryptConfigValue(refreshToken);
             WorkerRefreshToken = string.Empty;
+        }
+
+        public string DecryptSecret(EncryptedConfigValue? value)
+        {
+            return DecryptConfigValue(value);
+        }
+
+        public EncryptedConfigValue EncryptSecret(string value)
+        {
+            return EncryptConfigValue(value);
         }
 
         private string DecryptConfigValue(EncryptedConfigValue? value)
@@ -228,5 +240,58 @@ namespace FirstDraft.Configuration
         public string SourceBranch { get; set; } = "main";
 
         public string TargetBranch { get; set; } = "main";
+    }
+
+    public class JiraIntegrationConfig
+    {
+        public string IntegrationId { get; set; } = string.Empty;
+
+        public bool Enabled { get; set; } = true;
+
+        public string SiteUrl { get; set; } = string.Empty;
+
+        public string Email { get; set; } = string.Empty;
+
+        public EncryptedConfigValue? EncryptedApiToken { get; set; }
+
+        public int? BoardId { get; set; }
+
+        public string BoardName { get; set; } = string.Empty;
+
+        public string BoardType { get; set; } = string.Empty;
+
+        public int? BoardFilterId { get; set; }
+
+        public string ReadyStatusId { get; set; } = string.Empty;
+
+        public string ReadyStatusName { get; set; } = string.Empty;
+
+        public string ProcessingStatusId { get; set; } = string.Empty;
+
+        public string ProcessingStatusName { get; set; } = string.Empty;
+
+        public string ProcessedStatusId { get; set; } = string.Empty;
+
+        public string ProcessedStatusName { get; set; } = string.Empty;
+
+        public string GetApiToken(ApplicationData applicationData)
+        {
+            return applicationData.DecryptSecret(EncryptedApiToken);
+        }
+
+        public bool HasApiToken(ApplicationData applicationData)
+        {
+            return !string.IsNullOrEmpty(GetApiToken(applicationData));
+        }
+
+        public void StoreApiToken(ApplicationData applicationData, string apiToken)
+        {
+            if (string.IsNullOrEmpty(applicationData.ConfigEncryptionKey))
+            {
+                throw new Exception("ConfigEncryptionKey is required before saving Jira API tokens. Run firstdraft init to authenticate this worker.");
+            }
+
+            EncryptedApiToken = applicationData.EncryptSecret(apiToken);
+        }
     }
 }

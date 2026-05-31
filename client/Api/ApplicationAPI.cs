@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using FirstDraft.Api.Auth;
 using FirstDraft.Api.Outbox;
-using FirstDraft.Cli;
+using FirstDraft.Cli.Git;
+using FirstDraft.Cli.Jira;
 using FirstDraft.Commands;
 using FirstDraft.Configuration;
 using FirstDraft.Infrastructure.Logging;
@@ -158,8 +159,9 @@ namespace FirstDraft.Api
                     string skillsParam = string.Join("|", WorkerSkillRegistry.ResolveAvailableSkills(_applicationData.Skills));
                     string enabledTaskTypesParam = string.Join("|", WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(_applicationData.EnabledTaskTypes));
                     string gitRepositoriesParam = JsonConvert.SerializeObject(GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories));
+                    string jiraIntegrationsParam = JsonConvert.SerializeObject(JiraIntegrationConfigService.BuildRegistrationPayload(_applicationData));
 
-                    await _apiHubConnection.InvokeAsync("Register", await _tokens.EnsureAccessTokenAsync(), _apiHubConnection.ConnectionId, _applicationData.WorkerId, appPathsParam, skillsParam, GetMaxConcurrentTasks(_applicationData), enabledTaskTypesParam, gitRepositoriesParam);
+                    await _apiHubConnection.InvokeAsync("Register", await _tokens.EnsureAccessTokenAsync(), _apiHubConnection.ConnectionId, _applicationData.WorkerId, appPathsParam, skillsParam, GetMaxConcurrentTasks(_applicationData), enabledTaskTypesParam, gitRepositoriesParam, jiraIntegrationsParam);
 
                     _handshakeComplete = true;
 
@@ -167,6 +169,7 @@ namespace FirstDraft.Api
                     _logger.Info($"Max concurrent tasks: {GetMaxConcurrentTasks(_applicationData)}");
                     _logger.Info($"Enabled task types: {enabledTaskTypesParam}");
                     _logger.Info($"Configured Git repositories: {GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories).Length}");
+                    _logger.Info($"Configured Jira integrations: {JiraIntegrationConfigService.BuildRegistrationPayload(_applicationData).Length}");
 
                     await FlushPendingCommandEvents(waitForLock: true);
                 }

@@ -4,6 +4,7 @@ import { WorkerTokenService } from "../../auth/workerTokens.js";
 import { normalizeEnabledTaskTypes } from "../../commandModes.js";
 import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore, WorkerGitRepositoryInput } from "../../store/gitRepositories/gitRepositoryStore.js";
+import { JiraIntegrationStore, WorkerJiraIntegrationInput } from "../../store/integrations/jiraIntegrationStore.js";
 import { normalizeMaxConcurrentTasks } from "../../workers/workerState.js";
 import { readRequiredString, readString } from "../shared/argumentReaders.js";
 import { HubConnectionRegistry, SignalRConnection } from "../shared/types.js";
@@ -13,7 +14,8 @@ export class WorkerRegistrationService {
     private readonly store: WorkerStore,
     private readonly workerTokens: WorkerTokenService,
     private readonly connections: HubConnectionRegistry,
-    private readonly gitRepositories?: GitRepositoryStore
+    private readonly gitRepositories?: GitRepositoryStore,
+    private readonly jiraIntegrations?: JiraIntegrationStore
   ) {}
 
   public async registerWorker(connection: SignalRConnection, args: unknown[]): Promise<void> {
@@ -33,6 +35,7 @@ export class WorkerRegistrationService {
     const maxConcurrentTasks = normalizeMaxConcurrentTasks(args[5]);
     const enabledTaskTypes = normalizeEnabledTaskTypes(args[6]);
     const repositories = readWorkerRepositories(args[7]);
+    const integrations = readWorkerJiraIntegrations(args[8]);
 
     await this.markStaleWorkerStopped(workerId, connectionId);
 
@@ -49,6 +52,7 @@ export class WorkerRegistrationService {
       maxConcurrentTasks
     });
     await this.gitRepositories?.syncWorkerRepositories(workerId, repositories);
+    await this.jiraIntegrations?.syncWorkerIntegrations(workerId, access.userId, integrations);
 
     if (previousConnectionId !== connectionId) {
       this.connections.delete(previousConnectionId);
@@ -90,6 +94,87 @@ export class WorkerRegistrationService {
 
     await this.store.markWorkerStopped(workerId, existing.connectionId);
   }
+}
+
+function readWorkerJiraIntegrations(value: unknown): WorkerJiraIntegrationInput[] {
+  if (value === undefined || value === null || value === "") return [];
+
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .map((item): WorkerJiraIntegrationInput | undefined => {
+      if (!item || typeof item !== "object") return undefined;
+      const payload = item as Record<string, unknown>;
+      const integrationId = readString(payload.IntegrationId ?? payload.integrationId);
+      const siteUrl = readString(payload.SiteUrl ?? payload.siteUrl);
+      const email = readString(payload.Email ?? payload.email);
+      const apiToken = readString(payload.ApiToken ?? payload.apiToken);
+      const boardId = readInteger(payload.BoardId ?? payload.boardId);
+      const boardName = readString(payload.BoardName ?? payload.boardName);
+      const boardType = readString(payload.BoardType ?? payload.boardType);
+      const boardFilterId = readOptionalInteger(payload.BoardFilterId ?? payload.boardFilterId);
+      const readyStatusId = readString(payload.ReadyStatusId ?? payload.readyStatusId);
+      const readyStatusName = readString(payload.ReadyStatusName ?? payload.readyStatusName);
+      const processingStatusId = readString(payload.ProcessingStatusId ?? payload.processingStatusId);
+      const processingStatusName = readString(payload.ProcessingStatusName ?? payload.processingStatusName);
+      const processedStatusId = readString(payload.ProcessedStatusId ?? payload.processedStatusId);
+      const processedStatusName = readString(payload.ProcessedStatusName ?? payload.processedStatusName);
+      if (
+        !integrationId ||
+        !siteUrl ||
+        !email ||
+        !apiToken ||
+        !boardId ||
+        !boardName ||
+        !boardType ||
+        !readyStatusId ||
+        !readyStatusName ||
+        !processingStatusId ||
+        !processingStatusName ||
+        !processedStatusId ||
+        !processedStatusName
+      ) {
+        return undefined;
+      }
+      return {
+        integrationId,
+        enabled: readBoolean(payload.Enabled ?? payload.enabled),
+        siteUrl,
+        email,
+        apiToken,
+        boardId,
+        boardName,
+        boardType,
+        boardFilterId,
+        readyStatusId,
+        readyStatusName,
+        processingStatusId,
+        processingStatusName,
+        processedStatusId,
+        processedStatusName,
+      };
+    })
+    .filter((integration): integration is WorkerJiraIntegrationInput => Boolean(integration));
+}
+
+function readInteger(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
+  return undefined;
+}
+
+function readOptionalInteger(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  return readInteger(value);
+}
+
+function readBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    return ["true", "yes", "1"].includes(value.trim().toLowerCase());
+  }
+  return false;
 }
 
 function readWorkerRepositories(value: unknown): WorkerGitRepositoryInput[] {

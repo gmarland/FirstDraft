@@ -79,69 +79,6 @@ export type GitflowSuggestions = {
   repositories: GitRepositorySuggestion[];
 };
 
-export type JiraIntegrationSettings = {
-  id: string;
-  connected: boolean;
-  enabled: boolean;
-  siteUrl: string;
-  email: string;
-  boardId?: number;
-  boardName: string;
-  boardType: string;
-  boardFilterId?: number;
-  readyStatusId: string;
-  readyStatusName: string;
-  processingStatusId: string;
-  processingStatusName: string;
-  processedStatusId: string;
-  processedStatusName: string;
-  updatedAt?: string;
-};
-
-export type SaveJiraIntegrationInput = Omit<JiraIntegrationSettings, "id" | "connected" | "updatedAt"> & {
-  apiToken?: string;
-};
-
-export type JiraConnectionInput = {
-  siteUrl: string;
-  email: string;
-  apiToken?: string;
-};
-
-export type JiraBoard = {
-  id: number;
-  name: string;
-  type: string;
-  filterId?: number;
-};
-
-export type JiraBoardStatus = {
-  id: string;
-  name: string;
-  statusCategory: string;
-};
-
-export type JiraIssueSummary = {
-  id: string;
-  key: string;
-  summary: string;
-  status: string;
-};
-
-export type JiraTransition = {
-  id: string;
-  name: string;
-  toStatus: string;
-};
-
-export type JiraIntegrationTestResult = {
-  ok: boolean;
-  matchingIssue?: JiraIssueSummary;
-  availableStatuses: JiraBoardStatus[];
-  processingStatusValidated: boolean;
-  processedStatusValidated: boolean;
-};
-
 export type UserRole = "admin" | "user";
 
 export type User = {

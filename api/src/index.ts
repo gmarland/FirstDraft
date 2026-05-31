@@ -19,10 +19,8 @@ import { WorkerRefreshTokenStore } from "./store/workerAuth/workerRefreshTokenSt
 import { TenantSettingsStore } from "./store/tenants/tenantSettingsStore.js";
 import { JiraIntegrationStore } from "./store/integrations/jiraIntegrationStore.js";
 import { IntegrationIntakeEventStore } from "./store/integrations/integrationIntakeEventStore.js";
-import { createIntegrationRoutes } from "./routes/integrations.js";
 import { createDataSource } from "./db/dataSource.js";
 import { TypeOrmStoreContext } from "./db/typeOrmStoreContext.js";
-import { JiraIntakeService } from "./integrations/jira/jiraIntakeService.js";
 import { IntegrationLifecycleService } from "./integrations/integrationLifecycleService.js";
 
 const port = Number(process.env.PORT ?? 5080);
@@ -54,8 +52,7 @@ const apiToWorkerTokens = new ApiToWorkerTokenIssuer();
 const outputStorage = createCommandOutputStorageFromEnv();
 const outputStorageProvider = outputStorage ? getCommandOutputStorageProviderFromEnv() : undefined;
 const integrationLifecycle = new IntegrationLifecycleService(integrationIntakeEvents, jiraIntegrations, gitRepositories);
-const signalRHub = new SignalRHub(store, workerTokenService, apiToWorkerTokens, outputStorage, integrationLifecycle, gitRepositories);
-const jiraIntake = new JiraIntakeService(jiraIntegrations, integrationIntakeEvents, store, gitRepositories, signalRHub);
+const signalRHub = new SignalRHub(store, workerTokenService, apiToWorkerTokens, outputStorage, integrationLifecycle, gitRepositories, jiraIntegrations);
 const app = createApp({
   authRoutes: createAuthRoutes(jwtConfig, tenants, outputStorage),
   workerAuthRoutes: createWorkerAuthRoutes(
@@ -68,7 +65,6 @@ const app = createApp({
   ),
   workerRoutes: createWorkerRoutes(store, signalRHub, outputStorage, gitRepositories),
   userApiKeyRoutes: createUserApiKeyRoutes(tenants),
-  integrationRoutes: createIntegrationRoutes(jiraIntegrations, jiraIntake),
   negotiateHandler: signalRHub.negotiate
 });
 const server = createServer(app);

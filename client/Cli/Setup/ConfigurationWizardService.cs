@@ -1,7 +1,9 @@
 using FirstDraft.Api.Auth;
+using FirstDraft.Cli.Common;
 using FirstDraft.Configuration;
+using static FirstDraft.Cli.Common.ConsolePrompt;
 
-namespace FirstDraft.Cli
+namespace FirstDraft.Cli.Setup
 {
     public class ConfigurationWizardService
     {
@@ -90,7 +92,6 @@ namespace FirstDraft.Cli
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
             Console.WriteLine("Run the client with: firstdraft run");
 
             return 0;
@@ -108,7 +109,6 @@ namespace FirstDraft.Cli
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
 
             return 0;
         }
@@ -125,7 +125,6 @@ namespace FirstDraft.Cli
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
 
             return 0;
         }
@@ -142,7 +141,6 @@ namespace FirstDraft.Cli
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
 
             return 0;
         }
@@ -159,33 +157,11 @@ namespace FirstDraft.Cli
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine();
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
             Console.WriteLine(applicationData.PlanningEnabled
                 ? "AI planning is enabled."
                 : "AI planning is disabled.");
 
             return 0;
-        }
-
-        private static string PromptRequired(string label, string defaultValue)
-        {
-            return PromptUntilValid(label, defaultValue, value =>
-            {
-                if (string.IsNullOrWhiteSpace(value)) return $"{label} is required";
-                return null;
-            });
-        }
-
-        private static string PromptSensitiveRequired(string label, string defaultValue)
-        {
-            while (true)
-            {
-                string value = PromptSensitive(label, defaultValue);
-
-                if (!string.IsNullOrWhiteSpace(value)) return value;
-
-                Console.Error.WriteLine($"{label} is required");
-            }
         }
 
         private static bool PromptAuthentication(ApplicationData applicationData)
@@ -206,123 +182,6 @@ namespace FirstDraft.Cli
 
                 Console.Error.WriteLine("Authentication mode must be login or signup");
             }
-        }
-
-        private static string PromptUntilValid(string label, string defaultValue, Func<string, string?> validate)
-        {
-            while (true)
-            {
-                string value = Prompt(label, defaultValue);
-                string? error = validate(value);
-
-                if (string.IsNullOrEmpty(error)) return value;
-
-                Console.Error.WriteLine(error);
-            }
-        }
-
-        private static string Prompt(string label, string defaultValue)
-        {
-            string suffix = !string.IsNullOrWhiteSpace(defaultValue) ? $" [{defaultValue}]" : string.Empty;
-            Console.Write($"{label}{suffix}: ");
-
-            string? input = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(input)) return defaultValue ?? string.Empty;
-
-            return input.Trim();
-        }
-
-        private static int PromptInt(string label, int defaultValue, int min, int max)
-        {
-            while (true)
-            {
-                string input = Prompt(label, defaultValue.ToString());
-                if (int.TryParse(input, out int value) && value >= min && value <= max)
-                {
-                    return value;
-                }
-
-                Console.Error.WriteLine($"{label} must be between {min} and {max}");
-            }
-        }
-
-        private static bool PromptBool(string label, bool defaultValue)
-        {
-            string defaultText = defaultValue ? "yes" : "no";
-
-            while (true)
-            {
-                string input = Prompt($"{label} (yes/no)", defaultText);
-
-                if (IsYes(input)) return true;
-                if (IsNo(input)) return false;
-
-                Console.Error.WriteLine($"{label} must be yes or no");
-            }
-        }
-
-        private static string PromptSensitive(string label, string defaultValue)
-        {
-            string suffix = !string.IsNullOrWhiteSpace(defaultValue) ? " [configured]" : string.Empty;
-            Console.Write($"{label}{suffix}: ");
-
-            string? input = Console.IsInputRedirected
-                ? Console.ReadLine()
-                : ReadHiddenLine();
-            if (string.IsNullOrWhiteSpace(input)) return defaultValue ?? string.Empty;
-
-            return input.Trim();
-        }
-
-        private static string ReadHiddenLine()
-        {
-            System.Text.StringBuilder input = new System.Text.StringBuilder();
-
-            while (true)
-            {
-                ConsoleKeyInfo key = Console.ReadKey(intercept: true);
-                if (key.Key == ConsoleKey.Enter)
-                {
-                    Console.WriteLine();
-                    return input.ToString();
-                }
-
-                if (key.Key == ConsoleKey.Backspace)
-                {
-                    if (input.Length > 0)
-                    {
-                        input.Length--;
-                    }
-                    continue;
-                }
-
-                if (key.Key == ConsoleKey.Escape)
-                {
-                    input.Clear();
-                    continue;
-                }
-
-                if (!char.IsControl(key.KeyChar))
-                {
-                    input.Append(key.KeyChar);
-                }
-            }
-        }
-
-        private static bool IsYes(string value)
-        {
-            return string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "y", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsNo(string value)
-        {
-            return string.Equals(value, "no", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "n", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "0", StringComparison.OrdinalIgnoreCase);
         }
 
         private static AIProvider PromptAIProvider(AIProvider defaultProvider)

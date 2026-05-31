@@ -11,7 +11,6 @@ import {
 import { AppShell } from "./components/AppShell";
 import { useAuth } from "./lib/auth";
 import { ApiKeysPage } from "./routes/ApiKeysPage";
-import { IntegrationsPage } from "./routes/IntegrationsPage";
 import { WorkerDetailPage } from "./routes/WorkerDetailPage";
 import { WorkersPage } from "./routes/WorkersPage";
 import { CreateUserPage } from "./routes/CreateUserPage";
@@ -33,7 +32,6 @@ export function App() {
             <Route index element={<Navigate to="/workers" replace />} />
             <Route path="workers" element={<WorkersRoute />} />
             <Route path="workers/:workerId" element={<WorkerRoute />} />
-            <Route path="integrations" element={<IntegrationsPage />} />
             <Route path="settings/api-keys" element={<ApiKeysPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
