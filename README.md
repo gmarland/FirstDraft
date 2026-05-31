@@ -16,13 +16,13 @@ AI coding tools are most useful when they can work where the real context lives:
 
 - Run multiple workers on remote machines and enable the right one for each job.
 - Use the web UI to inspect workers, choose a target, and dispatch work manually.
-- Use Jira intake to turn ready issues into worker tasks without a developer babysitting the queue.
+- Let workers poll their own Jira integrations and claim ready issues without a developer babysitting the queue.
 - Queue AI, shell, or gitflow commands against registered workers.
 - Watch command status, streamed output, parsed responses, and history from a web console.
 - Register worker capabilities and paths so tasks are sent only where they can run.
 - Run Codex or Claude through local CLI providers instead of building a new agent runtime.
 - Keep worker execution close to source code, credentials, and build environments you already manage.
-- Integrate repository workflows and Jira intake so operational requests can become worker tasks.
+- Integrate repository workflows and worker-owned Jira polling so operational requests can become worker tasks.
 
 ## What You Get
 
@@ -70,15 +70,15 @@ That makes FirstDraft useful as a shared execution layer, not just a chat interf
 
 ## Jira-Driven Automation
 
-FirstDraft can connect Jira intake to the worker fleet. Configure Jira connections on the worker CLI, choose the board and statuses that represent ready, processing, and processed work, then start the worker so it advertises those integrations to the API.
+FirstDraft can connect Jira tickets to the worker fleet. Configure Jira connections on the worker CLI, choose the board and statuses that represent ready, processing, and processed work, then start the worker so it advertises those integrations to the API.
 
-When intake runs, FirstDraft finds eligible issues and queues repository-backed worker tasks. This is where the system becomes more than manual dispatch: Jira can become the trigger for remote AI engineering work, with status transitions and command output keeping the workflow visible.
+Each worker polls its own enabled Jira integrations, filters issues to repositories configured on that worker, and asks the API to claim a ticket before starting work. The API records which worker claimed the ticket so another worker cannot process the same issue, while status transitions and command output keep the workflow visible.
 
 ## Features
 
 - **Remote worker registry**: see connected workers, status, advertised skills, task capacity, and registered paths.
 - **UI-driven dispatch**: choose a worker and queue `ai`, `shell`, or `gitflow` commands from the console.
-- **Jira intake**: enable Jira workflows that turn ready tickets into repository-backed worker tasks.
+- **Jira polling**: enable Jira workflows that let workers claim ready tickets for repository-backed gitflow tasks.
 - **Live output**: stream command output while retaining durable command history.
 - **Gitflow workflows**: let workers clone or reuse repository workspaces, run agent tasks, and format pull request-oriented results.
 - **Scoped worker config**: configure application paths, logs, AI working directory, skills, and concurrent gitflow capacity.
@@ -150,9 +150,9 @@ During `init`, set the external API to `http://localhost:5080`, log in or sign u
 
 For real use, run this worker on the remote machine that has the repository, network access, credentials, and toolchain needed for the jobs you want it to perform. Repeat the setup on additional machines to build a worker fleet.
 
-### 5. Enable Jira intake
+### 5. Enable Jira polling
 
-On each worker that should handle Jira work, create a Jira connection with `dotnet run -- integrations add jira`, then configure its board and statuses interactively with `dotnet run -- integrations configure <generated-id>`. The `add jira` command prompts for the Jira site URL, email, and API token, then prints the generated 5-character ID. Once enabled, Jira issues in the selected ready status can be picked up and queued as worker tasks.
+On each worker that should handle Jira work, create a Jira connection with `dotnet run -- integrations add jira`, then configure its board and statuses interactively with `dotnet run -- integrations configure <generated-id>`. The `add jira` command prompts for the Jira site URL, email, and API token, then prints the generated 5-character ID. Once enabled, the worker polls Jira every 60 seconds and claims matching ready issues through the API before running gitflow locally.
 
 ## Common Commands
 

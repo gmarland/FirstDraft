@@ -31,6 +31,8 @@ namespace FirstDraft.Api
 
         private readonly SemaphoreSlim _commandCapacity;
 
+        private JiraTicketPollingService? _jiraTicketPolling;
+
         private bool _handshakeComplete = false;
         private bool _reconnect = false;
 
@@ -130,6 +132,7 @@ namespace FirstDraft.Api
             _reconnect = true;
 
             bool connected = false;
+            bool reauthenticationRequired = false;
 
             try
             {
@@ -141,6 +144,11 @@ namespace FirstDraft.Api
                 await _apiHubConnection!.StartAsync();
 
                 connected = true;
+            }
+            catch (WorkerAuthenticationException ex)
+            {
+                reauthenticationRequired = ex.ReauthenticationRequired;
+                _logger.Error($"Worker authentication failed: {ex.Message}");
             }
             catch (Exception ex)
             {
@@ -172,6 +180,7 @@ namespace FirstDraft.Api
                     _logger.Info($"Configured Jira integrations: {JiraIntegrationConfigService.BuildRegistrationPayload(_applicationData).Length}");
 
                     await FlushPendingCommandEvents(waitForLock: true);
+                    StartJiraTicketPolling();
                 }
                 catch (Exception ex)
                 {
@@ -180,7 +189,7 @@ namespace FirstDraft.Api
             }
             else
             {
-                await Task.Delay(1000);
+                await Task.Delay(reauthenticationRequired ? 30000 : 1000);
 
                 await Start();
             }
@@ -192,6 +201,13 @@ namespace FirstDraft.Api
 
             if (_apiHubConnection != null)
             {
+                if (_jiraTicketPolling != null)
+                {
+                    await _jiraTicketPolling.Stop();
+                    _jiraTicketPolling.Dispose();
+                    _jiraTicketPolling = null;
+                }
+
                 await _apiHubConnection.StopAsync();
             }
         }
@@ -223,6 +239,16 @@ namespace FirstDraft.Api
                 return;
             }
 
+            await RunCommand(transactionId, command, commandMode);
+        }
+
+        public Task ExecuteClaimedCommand(string transactionId, string command, string commandMode)
+        {
+            return RunCommand(transactionId, command, commandMode);
+        }
+
+        private async Task RunCommand(string transactionId, string command, string commandMode)
+        {
             await _commandCapacity.WaitAsync();
 
             try
@@ -266,6 +292,19 @@ namespace FirstDraft.Api
             {
                 _commandCapacity.Release();
             }
+        }
+
+        private void StartJiraTicketPolling()
+        {
+            if (_jiraTicketPolling != null) return;
+
+            _jiraTicketPolling = new JiraTicketPollingService(
+                _logger,
+                _applicationData,
+                () => _tokens.EnsureAccessTokenAsync(),
+                () => _apiHubConnection?.State == HubConnectionState.Connected && _commandCapacity.CurrentCount > 0,
+                ExecuteClaimedCommand);
+            _jiraTicketPolling.Start();
         }
 
         private async Task<CommandTokenValidationResult> RefreshAndValidateCommandToken(string transactionId)

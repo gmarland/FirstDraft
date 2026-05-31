@@ -4,7 +4,6 @@ export type WorkerRefreshTokenEntity = {
   id: string;
   workerId: string;
   userId: string;
-  apiKeyId?: string | null;
   refreshTokenHash: string;
   issuedAt: Date;
   expiresAt: Date;
@@ -19,7 +18,6 @@ export const WorkerRefreshTokenSchema = new EntitySchema<WorkerRefreshTokenEntit
     id: { type: "uuid", primary: true },
     workerId: { type: "text", name: "worker_id" },
     userId: { type: "uuid", name: "user_id" },
-    apiKeyId: { type: "uuid", name: "api_key_id", nullable: true },
     refreshTokenHash: { type: "text", name: "refresh_token_hash", unique: true },
     issuedAt: { type: "timestamptz", name: "issued_at", createDate: true },
     expiresAt: { type: "timestamptz", name: "expires_at" },

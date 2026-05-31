@@ -1,8 +1,10 @@
 import { RequestHandler } from "express";
 import { ApiToWorkerTokenIssuer, WorkerTokenService } from "../../auth/workerTokens.js";
+import { IntegrationLifecycleService } from "../../integrations/integrationLifecycleService.js";
 import { JiraClient } from "../../integrations/jira/jiraClient.js";
 import { IntegrationIntakeEventStore } from "../../store/integrations/integrationIntakeEventStore.js";
 import { JiraIntegrationStore } from "../../store/integrations/jiraIntegrationStore.js";
+import { JiraTicketClaimStore } from "../../store/integrations/jiraTicketClaimStore.js";
 import { AppStore } from "../../store/tenantStore.js";
 import { User } from "../../types.js";
 import {
@@ -21,7 +23,9 @@ export class WorkerAuthController {
     private readonly apiToWorkerTokens: ApiToWorkerTokenIssuer,
     private readonly workerConfigEncryptionKey: string,
     private readonly intakeEvents?: IntegrationIntakeEventStore,
-    private readonly jiraIntegrations?: JiraIntegrationStore
+    private readonly jiraIntegrations?: JiraIntegrationStore,
+    private readonly jiraTicketClaims?: JiraTicketClaimStore,
+    private readonly lifecycle?: IntegrationLifecycleService
   ) {}
 
   public readonly issueToken: RequestHandler = async (req, res, next) => {
@@ -97,6 +101,65 @@ export class WorkerAuthController {
       next(error);
     }
   };
+
+  public readonly claimJiraTicket: RequestHandler = async (req, res, next) => {
+    try {
+      if (!this.jiraTicketClaims) {
+        return res.status(503).json({ error: "Jira ticket claiming is not configured" });
+      }
+
+      const token = readBearerToken(req.headers.authorization);
+      if (!token) return res.status(401).json({ error: "worker bearer token is required" });
+
+      const worker = await this.tokens.verifyAccessToken(token);
+      if (!worker) return res.status(401).json({ error: "invalid worker token" });
+
+      const input = readJiraClaimRequest(req.body);
+      if (!input) {
+        return res.status(400).json({
+          error: "integrationId, sourceItemId, sourceItemKey, sourceItemUrl, repositoryUrl, normalizedRepositoryUrl, and command are required",
+        });
+      }
+      const integration = await this.jiraIntegrations?.getCredentials(
+        worker.userId,
+        input.integrationId,
+        worker.workerId,
+      );
+      if (this.jiraIntegrations && !integration) {
+        return res.status(403).json({ error: "Jira integration does not belong to this worker" });
+      }
+
+      const result = await this.jiraTicketClaims.claim({
+        workerId: worker.workerId,
+        userId: worker.userId,
+        ...input,
+      });
+
+      if (!result.claimed) {
+        return res.status(409).json({
+          claimed: false,
+          event: result.event
+            ? {
+                id: result.event.id,
+                status: result.event.status,
+                workerId: result.event.workerId,
+                transactionId: result.event.transactionId,
+              }
+            : undefined,
+        });
+      }
+
+      await this.lifecycle?.commandStarted(result.command);
+      res.status(201).json({
+        claimed: true,
+        transactionId: result.command.transactionId,
+        eventId: result.event.id,
+        command: result.command,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export function createWorkerAuthController(
@@ -105,7 +168,9 @@ export function createWorkerAuthController(
   apiToWorkerTokens: ApiToWorkerTokenIssuer,
   workerConfigEncryptionKey: string,
   intakeEvents?: IntegrationIntakeEventStore,
-  jiraIntegrations?: JiraIntegrationStore
+  jiraIntegrations?: JiraIntegrationStore,
+  jiraTicketClaims?: JiraTicketClaimStore,
+  lifecycle?: IntegrationLifecycleService
 ): WorkerAuthController {
   return new WorkerAuthController(
     tenants,
@@ -113,6 +178,58 @@ export function createWorkerAuthController(
     apiToWorkerTokens,
     workerConfigEncryptionKey,
     intakeEvents,
-    jiraIntegrations
+    jiraIntegrations,
+    jiraTicketClaims,
+    lifecycle
   );
+}
+
+type JiraClaimRequest = {
+  integrationId: string;
+  sourceItemId: string;
+  sourceItemKey: string;
+  sourceItemUrl: string;
+  repositoryUrl: string;
+  normalizedRepositoryUrl: string;
+  command: string;
+  metadata?: Record<string, unknown>;
+};
+
+function readJiraClaimRequest(value: unknown): JiraClaimRequest | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const body = value as Record<string, unknown>;
+  const input = {
+    integrationId: readCleanString(body.integrationId),
+    sourceItemId: readCleanString(body.sourceItemId),
+    sourceItemKey: readCleanString(body.sourceItemKey),
+    sourceItemUrl: readCleanString(body.sourceItemUrl),
+    repositoryUrl: readCleanString(body.repositoryUrl),
+    normalizedRepositoryUrl: readCleanString(body.normalizedRepositoryUrl),
+    command: readCleanString(body.command),
+    metadata: readMetadata(body.metadata),
+  };
+
+  if (
+    !input.integrationId ||
+    !input.sourceItemId ||
+    !input.sourceItemKey ||
+    !input.sourceItemUrl ||
+    !input.repositoryUrl ||
+    !input.normalizedRepositoryUrl ||
+    !input.command
+  ) {
+    return undefined;
+  }
+
+  return input as JiraClaimRequest;
+}
+
+function readCleanString(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
+function readMetadata(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
 }

@@ -16,7 +16,6 @@ import {
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
-import KeyIcon from "@mui/icons-material/VpnKey";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { DisableAllWorkersDialog } from "../components/workers/actions/DisableAllWorkersDialog";
 import { TaskQueuePanel } from "../components/workers/TaskQueuePanel";
@@ -211,19 +210,8 @@ export function WorkersPage({ navigate }: Props) {
           {loading && !workers && <Skeleton variant="rounded" height={220} />}
 
           {workers && workers.length === 0 && (
-            <EmptyState
-              title="No client workers are registered"
-              action={
-                <Button
-                  variant="contained"
-                  startIcon={<KeyIcon />}
-                  onClick={() => navigate("/settings/api-keys")}
-                >
-                  Create API key
-                </Button>
-              }
-            >
-              Create an API key, configure the client worker, and start it.
+            <EmptyState title="No client workers are registered">
+              Run firstdraft init, log in, configure the client worker, and start it.
               Registered clients will appear here.
             </EmptyState>
           )}

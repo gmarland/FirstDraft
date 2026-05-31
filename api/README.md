@@ -4,7 +4,7 @@ Express and TypeScript API for the FirstDraft control plane. It handles user aut
 
 ## Runtime Dependencies
 
-- Postgres for users, API keys, worker-local Git repository advertisements, integrations, workers, and command records.
+- Postgres for users, worker authentication, worker-local Git repository advertisements, integrations, workers, and command records.
 - MinIO, another S3-compatible service, Google Cloud Storage, or Azure Blob Storage for durable command output.
 
 The local `docker-compose.yml` starts Postgres and MinIO, then creates a `firstdraft-command-output` bucket.
@@ -32,12 +32,6 @@ Worker authentication:
 - `GET /api/worker-auth/public-key`
 - `GET /api/worker-auth/jira-attachments/:integrationId/:issueId/:attachmentId`
 
-User API keys:
-
-- `GET /api/me/api-keys`
-- `POST /api/me/api-keys`
-- `DELETE /api/me/api-keys/:keyId`
-
 Workers and commands:
 
 - `GET /api/workers`
@@ -53,7 +47,7 @@ Workers and commands:
 - `GET /api/workers/:workerId/commands/:transactionId/output`
 - `GET /api/workers/:workerId/commands/:transactionId/responses`
 
-Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for intake, attachment download, and lifecycle transitions. There is no public `/api/integrations` management surface.
+Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for ticket claiming, attachment download, and lifecycle transitions. Workers poll Jira themselves and use `POST /api/worker-auth/integration-tickets/jira/claim` to atomically record which worker claimed a ready issue. There is no public `/api/integrations` management surface.
 
 ## Commands
 

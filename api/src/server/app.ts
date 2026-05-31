@@ -9,7 +9,6 @@ type CreateAppOptions = {
   authRoutes: Router;
   workerAuthRoutes: Router;
   workerRoutes: Router;
-  userApiKeyRoutes: Router;
   negotiateHandler: RequestHandler;
 };
 
@@ -17,7 +16,6 @@ export function createApp({
   authRoutes,
   workerAuthRoutes,
   workerRoutes,
-  userApiKeyRoutes,
   negotiateHandler
 }: CreateAppOptions): express.Express {
   const app = express();
@@ -42,7 +40,6 @@ export function createApp({
   app.post("/WorkerHub/negotiate", negotiateHandler);
   app.use("/api/auth", authRoutes);
   app.use("/api/worker-auth", workerAuthRoutes);
-  app.use("/api/me/api-keys", requireJwt, userApiKeyRoutes);
   app.use("/api/workers", requireJwt, workerRoutes);
 
   return app;

@@ -45,7 +45,6 @@ Important API areas used by the console include:
 
 - `/api/auth/*` for signup, login, current-user lookup, and profile updates.
 - `/api/workers/*` for workers, worker enablement, task queues, commands, output, responses, cancellation, and gitflow suggestions.
-- `/api/me/api-keys/*` for worker API credentials.
 
 Jira integrations are configured on each worker with the worker CLI, not in the web console.
 

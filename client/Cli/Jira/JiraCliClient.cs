@@ -68,6 +68,46 @@ namespace FirstDraft.Cli.Jira
                 .ToArray();
         }
 
+        public async Task<JiraFieldOption[]> FindFields(string searchText)
+        {
+            JObject[] fields = (await RequestJsonArray("rest/api/3/field"))
+                .OfType<JObject>()
+                .ToArray();
+            string needle = searchText.Trim();
+
+            return fields
+                .Select(field => new JiraFieldOption(
+                    field.Value<string>("id") ?? string.Empty,
+                    field.Value<string>("key") ?? field.Value<string>("id") ?? string.Empty,
+                    field.Value<string>("name") ?? string.Empty))
+                .Where(field =>
+                    !string.IsNullOrWhiteSpace(field.Id) &&
+                    (field.Id.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                     field.Key.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                     field.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+        }
+
+        public async Task<JiraIssueSummary[]> SearchIssues(string jql, int maxResults, IEnumerable<string> fields)
+        {
+            JObject body = new JObject
+            {
+                ["jql"] = jql,
+                ["maxResults"] = Math.Clamp(maxResults, 1, 100),
+                ["fields"] = new JArray(fields.Where(field => !string.IsNullOrWhiteSpace(field)).Distinct(StringComparer.OrdinalIgnoreCase))
+            };
+
+            JObject json = await PostJson("rest/api/3/search/jql", body);
+            return json["issues"]?
+                .OfType<JObject>()
+                .Select(issue => new JiraIssueSummary(
+                    issue.Value<string>("id") ?? string.Empty,
+                    issue.Value<string>("key") ?? string.Empty,
+                    issue["fields"] as JObject ?? new JObject()))
+                .Where(issue => !string.IsNullOrWhiteSpace(issue.Id) && !string.IsNullOrWhiteSpace(issue.Key))
+                .ToArray() ?? Array.Empty<JiraIssueSummary>();
+        }
+
         private async Task<JiraStatusOption> GetStatus(string statusId)
         {
             JObject json = await RequestJson($"rest/api/3/status/{Uri.EscapeDataString(statusId)}");
@@ -97,6 +137,47 @@ namespace FirstDraft.Cli.Jira
             }
         }
 
+        private async Task<JArray> RequestJsonArray(string path)
+        {
+            using HttpResponseMessage response = await _httpClient.GetAsync(path);
+            string body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                string message = string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase ?? "request failed" : body;
+                throw new InvalidOperationException($"Jira API returned {(int)response.StatusCode}: {message}");
+            }
+
+            try
+            {
+                return JArray.Parse(body);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Jira API returned invalid JSON: {ex.Message}");
+            }
+        }
+
+        private async Task<JObject> PostJson(string path, JObject body)
+        {
+            using StringContent content = new StringContent(body.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await _httpClient.PostAsync(path, content);
+            string responseBody = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                string message = string.IsNullOrWhiteSpace(responseBody) ? response.ReasonPhrase ?? "request failed" : responseBody;
+                throw new InvalidOperationException($"Jira API returned {(int)response.StatusCode}: {message}");
+            }
+
+            try
+            {
+                return string.IsNullOrWhiteSpace(responseBody) ? new JObject() : JObject.Parse(responseBody);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Jira API returned invalid JSON: {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
             _httpClient.Dispose();
@@ -108,4 +189,8 @@ namespace FirstDraft.Cli.Jira
     public sealed record JiraBoardConfiguration(int BoardId, int? FilterId, string[] StatusIds);
 
     public sealed record JiraStatusOption(string Id, string Name, string StatusCategory);
+
+    public sealed record JiraFieldOption(string Id, string Key, string Name);
+
+    public sealed record JiraIssueSummary(string Id, string Key, JObject Fields);
 }

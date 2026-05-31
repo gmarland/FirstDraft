@@ -14,7 +14,6 @@ export const openApiDocument = {
     { name: "System" },
     { name: "Auth" },
     { name: "Worker Auth" },
-    { name: "API Keys" },
     { name: "Workers" },
     { name: "Integrations" }
   ],
@@ -129,37 +128,19 @@ export const openApiDocument = {
         }
       }
     },
-    "/api/me/api-keys": {
-      get: {
-        tags: ["API Keys"],
-        summary: "List API keys visible to the current user",
-        security: bearerSecurity(),
-        responses: {
-          "200": jsonResponse("API keys", array(ref("ApiKey"))),
-          "401": errorResponse()
-        }
-      },
+    "/api/worker-auth/integration-tickets/jira/claim": {
       post: {
-        tags: ["API Keys"],
-        summary: "Create a user API key",
+        tags: ["Worker Auth"],
+        summary: "Claim a Jira ticket for the authenticated worker",
         security: bearerSecurity(),
-        requestBody: jsonBody(ref("CreateApiKeyRequest"), false),
+        requestBody: jsonBody(ref("JiraTicketClaimRequest"), true),
         responses: {
-          "201": jsonResponse("Created API key", ref("ApiKey")),
-          "401": errorResponse()
-        }
-      }
-    },
-    "/api/me/api-keys/{keyId}": {
-      delete: {
-        tags: ["API Keys"],
-        summary: "Revoke an API key",
-        security: bearerSecurity(),
-        parameters: [pathParam("keyId", "API key id")],
-        responses: {
-          "200": jsonResponse("Revoked API key", ref("ApiKey")),
+          "201": jsonResponse("Claimed Jira ticket", ref("JiraTicketClaimResponse")),
+          "400": errorResponse(),
           "401": errorResponse(),
-          "404": errorResponse()
+          "403": errorResponse(),
+          "409": errorResponse(),
+          "503": errorResponse()
         }
       }
     },
@@ -343,19 +324,25 @@ export const openApiDocument = {
         configEncryptionKey: { type: "string" }
       }, ["accessToken", "refreshToken", "configEncryptionKey"]),
       WorkerPublicKeyResponse: object({ alg: { type: "string", example: "RS256" }, publicKey: { type: "string" } }, ["alg", "publicKey"]),
-      ApiKey: object({
-        keyId: { type: "string" },
-        userId: { type: "string" },
-        apiKey: { type: "string" },
-        name: { type: "string" },
-        createdAt: { type: "string", format: "date-time" },
-        revokedAt: { type: "string", format: "date-time" }
-      }, ["keyId", "userId", "apiKey", "createdAt"]),
-      CreateApiKeyRequest: object({ name: { type: "string" } }),
+      JiraTicketClaimRequest: object({
+        integrationId: { type: "string" },
+        sourceItemId: { type: "string" },
+        sourceItemKey: { type: "string" },
+        sourceItemUrl: { type: "string" },
+        repositoryUrl: { type: "string" },
+        normalizedRepositoryUrl: { type: "string" },
+        command: { type: "string" },
+        metadata: freeForm()
+      }, ["integrationId", "sourceItemId", "sourceItemKey", "sourceItemUrl", "repositoryUrl", "normalizedRepositoryUrl", "command"]),
+      JiraTicketClaimResponse: object({
+        claimed: { type: "boolean" },
+        transactionId: { type: "string" },
+        eventId: { type: "string" },
+        command: ref("Command")
+      }, ["claimed"]),
       WorkerRegistration: object({
         workerId: { type: "string" },
         userId: { type: "string" },
-        apiKeyId: { type: "string" },
         connectionId: { type: "string" },
         paths: array({ type: "string" }),
         skills: array({ type: "string" }),
