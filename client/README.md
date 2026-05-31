@@ -22,19 +22,24 @@ dotnet run -- init
 dotnet run -- skills
 dotnet run -- capacity
 dotnet run -- taskTypes
-dotnet run -- task-types
 dotnet run -- enablePlanning
 dotnet run -- repos list
 dotnet run -- repos add <repository-url> --source <branch> --target <branch>
+dotnet run -- repos add <repository-url> --source=<branch> --target=<branch>
 dotnet run -- repos update <repository-url> --source <branch> --target <branch>
 dotnet run -- repos remove <repository-url>
+dotnet run -- repos delete <repository-url>
 dotnet run -- integrations list
+dotnet run -- integrations details <integration-id>
 dotnet run -- integrations add jira
 dotnet run -- integrations configure <integration-id>
+dotnet run -- integrations update <integration-id>
 dotnet run -- integrations remove <integration-id>
+dotnet run -- integrations delete <integration-id>
 dotnet run -- run
-dotnet run -- run --task-types ai,shell,gitflow
 dotnet run -- help
+dotnet run -- --help
+dotnet run -- -h
 ```
 
 Command details:
@@ -42,13 +47,13 @@ Command details:
 - `init`: create or update the local worker configuration interactively.
 - `skills`: update advertised worker skills.
 - `capacity`: update the maximum number of concurrent gitflow tasks.
-- `taskTypes` or `task-types`: update which task types this worker accepts.
+- `taskTypes`: update which task types this worker accepts.
 - `enablePlanning`: configure whether AI commands use a planning pass.
-- `repos list|add|update|remove`: manage Git repositories and their enforced source/PR target branches for this worker.
-- `integrations list|add|configure|remove`: manage Jira integrations for this worker. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board and workflow statuses interactively. `configure` re-runs board and status selection for an existing integration. API tokens are encrypted in local config and are never printed by `list`.
+- `repos list|add|update|remove|delete`: manage Git repositories and their enforced source/PR target branches for this worker. `add` only creates new entries; `update` only changes existing entries.
+- `integrations list|details|add|configure|update|remove|delete`: manage Jira integrations for this worker. `detail` and `show` are aliases for `details`; `update` is an alias for `configure`; `delete` is an alias for `remove`. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board and workflow statuses interactively. `configure` re-runs board and status selection for an existing integration. API tokens are encrypted in local config and are never printed by `list` or `details`.
 - `run`: start the worker and connect it to the API.
-- `run --task-types ai,shell,gitflow`: override enabled task types for this run only without changing saved configuration.
 - `help`: print command help.
+- `--help` or `-h`: print command help.
 
 Running with no command defaults to `run`.
 
@@ -72,20 +77,25 @@ dotnet run -- repos list
 dotnet run -- repos add https://github.com/example/repo.git --source main --target main
 dotnet run -- repos update https://github.com/example/repo.git --source develop --target main
 dotnet run -- repos remove https://github.com/example/repo.git
+dotnet run -- repos delete https://github.com/example/repo.git
 ```
 
 The configured source and PR target branches are enforced by the API for manual and queued gitflow tasks.
+Branch options can be passed as either `--source main` / `--target main` or `--source=main` / `--target=main`.
 
 Each worker also advertises its own Jira integrations from local configuration. Manage them with:
 
 ```bash
 dotnet run -- integrations list
+dotnet run -- integrations details <integration-id>
 dotnet run -- integrations add jira
 dotnet run -- integrations configure <integration-id>
 dotnet run -- integrations remove <integration-id>
+dotnet run -- integrations delete <integration-id>
 ```
 
 The `add jira` command prompts for the Jira site URL, email, and API token, then immediately configures the board and workflow statuses. If that configuration step fails, the saved connection can be retried with `configure <integration-id>`. Connection-only Jira integrations remain local-only and are not advertised to the API until fully configured.
+Use `details <integration-id>` to inspect board/status configuration and whether an API token is stored. `detail` and `show` are accepted aliases for `details`; `update` is an alias for `configure`.
 
 Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
 

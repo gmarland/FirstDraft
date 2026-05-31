@@ -33,7 +33,6 @@ namespace FirstDraft
                     return await capacityConfigurationWizardService.Capacity();
 
                 case "tasktypes":
-                case "task-types":
                     ApplicationDataService taskTypesApplicationDataService = new ApplicationDataService();
                     ConfigurationWizardService taskTypesConfigurationWizardService = new ConfigurationWizardService(taskTypesApplicationDataService);
                     return await taskTypesConfigurationWizardService.TaskTypes();
@@ -44,7 +43,6 @@ namespace FirstDraft
                     return await planningConfigurationWizardService.EnablePlanning();
 
                 case "repos":
-                case "repositories":
                     ApplicationDataService reposApplicationDataService = new ApplicationDataService();
                     GitRepositoryConfigurationService gitRepositoryConfigurationService = new GitRepositoryConfigurationService(reposApplicationDataService);
                     return await gitRepositoryConfigurationService.Repos(args.Skip(1).ToArray());
@@ -55,6 +53,13 @@ namespace FirstDraft
                     return await jiraIntegrationConfigurationService.Integrations(args.Skip(1).ToArray());
 
                 case "run":
+                    if (args.Length > 1)
+                    {
+                        Console.Error.WriteLine($"Unknown run option: {args[1]}");
+                        PrintHelp();
+                        return 1;
+                    }
+
                     await CreateHostBuilder(args.Skip(1).ToArray()).Build().RunAsync();
                     return 0;
 
@@ -73,14 +78,8 @@ namespace FirstDraft
 
         public static IHostBuilder CreateHostBuilder(string[] args)
         {
-            WorkerRuntimeOptions runtimeOptions = new WorkerRuntimeOptions
-            {
-                EnabledTaskTypesOverride = ParseTaskTypesOverride(args)
-            };
-
             return Host.CreateDefaultBuilder(args).ConfigureServices((hostContext, services) =>
             {
-                services.AddSingleton(runtimeOptions);
                 services.AddSingleton<ApplicationDataService>();
                 services.AddSingleton<ICommandHandler, ShellCommandHandler>();
                 services.AddSingleton<ICommandHandler, AICommandHandler>();
@@ -102,34 +101,8 @@ namespace FirstDraft
             Console.WriteLine("  firstdraft enablePlanning  Configure AI planning for this client");
             Console.WriteLine("  firstdraft repos list|add|update|remove  Manage Git repositories for this worker");
             Console.WriteLine("  firstdraft integrations list|details|add|configure|remove  Manage Jira integrations for this worker");
-            Console.WriteLine("  firstdraft run [--task-types ai,shell,gitflow]  Start the FirstDraft client worker");
+            Console.WriteLine("  firstdraft run    Start the FirstDraft client worker");
             Console.WriteLine("  firstdraft help    Show this help");
-        }
-
-        private static string[]? ParseTaskTypesOverride(string[] args)
-        {
-            for (int index = 0; index < args.Length; index++)
-            {
-                string arg = args[index];
-                string? value = null;
-
-                if (arg.StartsWith("--task-types=", StringComparison.OrdinalIgnoreCase))
-                {
-                    value = arg.Substring("--task-types=".Length);
-                }
-                else if (string.Equals(arg, "--task-types", StringComparison.OrdinalIgnoreCase) && index + 1 < args.Length)
-                {
-                    value = args[index + 1];
-                }
-
-                if (value != null)
-                {
-                    return WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(
-                        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-                }
-            }
-
-            return null;
         }
     }
 }
