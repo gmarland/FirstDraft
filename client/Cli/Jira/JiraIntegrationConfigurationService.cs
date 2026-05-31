@@ -100,7 +100,7 @@ namespace FirstDraft.Cli.Jira
             Console.WriteLine("Add Jira integration");
             string siteUrl = ConsolePrompt.PromptUntilValid("Jira site URL", string.Empty, JiraIntegrationConfigService.ValidateSiteUrl);
             string email = ConsolePrompt.PromptUntilValid("Jira email", string.Empty, value => JiraIntegrationConfigService.ValidateEmail(value, "Jira email"));
-            string apiToken = ConsolePrompt.PromptSensitiveRequired("Jira API token");
+            string apiToken = ConsolePrompt.PromptSensitiveRequired("Jira API token", requiredMessage: "Jira API token is required.");
             string? connectionError = JiraIntegrationConfigService.ValidateConnectionFields(siteUrl, email, apiToken);
             if (connectionError != null) return PrintIntegrationsHelp(connectionError);
 
@@ -129,7 +129,7 @@ namespace FirstDraft.Cli.Jira
 
             Console.WriteLine($"Added Jira integration {integrationId}");
             Console.WriteLine($"Configure board and statuses with: firstdraft integrations configure {integrationId}");
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
+            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 
@@ -216,7 +216,7 @@ namespace FirstDraft.Cli.Jira
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"Configured Jira integration {saved.IntegrationId}");
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
+            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 
@@ -241,7 +241,7 @@ namespace FirstDraft.Cli.Jira
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"Removed Jira integration {integrationId}");
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
+            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 
@@ -257,18 +257,12 @@ namespace FirstDraft.Cli.Jira
 
         private static int PrintIntegrationsHelp(string? error = null)
         {
-            if (!string.IsNullOrWhiteSpace(error))
-            {
-                Console.Error.WriteLine(error);
-                Console.Error.WriteLine();
-            }
-
-            Console.Error.WriteLine("Usage:");
-            Console.Error.WriteLine("  firstdraft integrations list");
-            Console.Error.WriteLine("  firstdraft integrations add jira");
-            Console.Error.WriteLine("  firstdraft integrations configure <integration-id>");
-            Console.Error.WriteLine("  firstdraft integrations remove <integration-id>");
-            return string.IsNullOrWhiteSpace(error) ? 0 : 1;
+            return CliOutput.PrintHelp(
+                error,
+                "  firstdraft integrations list",
+                "  firstdraft integrations add jira",
+                "  firstdraft integrations configure <integration-id>",
+                "  firstdraft integrations remove <integration-id>");
         }
     }
 }

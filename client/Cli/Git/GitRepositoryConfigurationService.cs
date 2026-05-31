@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FirstDraft.Cli.Common;
 using FirstDraft.Configuration;
 
 namespace FirstDraft.Cli.Git
@@ -125,7 +126,7 @@ namespace FirstDraft.Cli.Git
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"{(createOnly ? "Added" : "Updated")} repository {saved.RepositoryUrl}");
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
+            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 
@@ -149,7 +150,7 @@ namespace FirstDraft.Cli.Git
             await _applicationDataService.Save(applicationData);
 
             Console.WriteLine($"Removed repository {args[0].Trim()}");
-            Console.WriteLine($"Config written to {_applicationDataService.ConfigLocation}");
+            CliOutput.PrintConfigWritten(_applicationDataService.ConfigLocation);
             return 0;
         }
 
@@ -278,18 +279,12 @@ namespace FirstDraft.Cli.Git
 
         private static int PrintReposHelp(string? error = null)
         {
-            if (!string.IsNullOrWhiteSpace(error))
-            {
-                Console.Error.WriteLine(error);
-                Console.Error.WriteLine();
-            }
-
-            Console.Error.WriteLine("Usage:");
-            Console.Error.WriteLine("  firstdraft repos list");
-            Console.Error.WriteLine("  firstdraft repos add <repository-url> --source <branch> --target <branch>");
-            Console.Error.WriteLine("  firstdraft repos update <repository-url> --source <branch> --target <branch>");
-            Console.Error.WriteLine("  firstdraft repos remove <repository-url>");
-            return string.IsNullOrWhiteSpace(error) ? 0 : 1;
+            return CliOutput.PrintHelp(
+                error,
+                "  firstdraft repos list",
+                "  firstdraft repos add <repository-url> --source <branch> --target <branch>",
+                "  firstdraft repos update <repository-url> --source <branch> --target <branch>",
+                "  firstdraft repos remove <repository-url>");
         }
     }
 }
