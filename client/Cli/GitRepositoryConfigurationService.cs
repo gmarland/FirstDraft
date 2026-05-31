@@ -41,8 +41,7 @@ namespace FirstDraft.Cli
             foreach (GitRepositoryConfig repository in repositories)
             {
                 Console.WriteLine(repository.RepositoryUrl);
-                Console.WriteLine($"  normalized: {repository.NormalizedRepositoryUrl}");
-                Console.WriteLine($"  source:     {repository.SourceBranch}");
+                Console.WriteLine($"  Branch source: {repository.SourceBranch}");
                 Console.WriteLine($"  PR target:  {repository.TargetBranch}");
             }
 

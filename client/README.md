@@ -24,6 +24,10 @@ dotnet run -- capacity
 dotnet run -- taskTypes
 dotnet run -- task-types
 dotnet run -- enablePlanning
+dotnet run -- repos list
+dotnet run -- repos add <repository-url> --source <branch> --target <branch>
+dotnet run -- repos update <repository-url> --source <branch> --target <branch>
+dotnet run -- repos remove <repository-url>
 dotnet run -- run
 dotnet run -- run --task-types ai,shell,gitflow
 dotnet run -- help
@@ -36,7 +40,7 @@ Command details:
 - `capacity`: update the maximum number of concurrent gitflow tasks.
 - `taskTypes` or `task-types`: update which task types this worker accepts.
 - `enablePlanning`: configure whether AI commands use a planning pass.
-- `repos list|add|update|remove`: manage Git repositories and enforced source/PR target branches for this worker.
+- `repos list|add|update|remove`: manage Git repositories and their enforced source/PR target branches for this worker.
 - `run`: start the worker and connect it to the API.
 - `run --task-types ai,shell,gitflow`: override enabled task types for this run only without changing saved configuration.
 - `help`: print command help.
@@ -59,8 +63,8 @@ Gitflow tasks use `GitWorkspaceDirectory` as the workspace root when configured,
 Each worker advertises its own Git repositories from local configuration. Manage them with:
 
 ```bash
-dotnet run -- repos add https://github.com/example/repo.git --source main --target main
 dotnet run -- repos list
+dotnet run -- repos add https://github.com/example/repo.git --source main --target main
 dotnet run -- repos update https://github.com/example/repo.git --source develop --target main
 dotnet run -- repos remove https://github.com/example/repo.git
 ```
