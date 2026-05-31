@@ -1,7 +1,7 @@
 using FirstDraft.Api.Auth;
 using FirstDraft.Configuration;
 
-namespace FirstDraft.Cli
+namespace FirstDraft.Cli.Setup
 {
     public class ConfigurationWizardService
     {

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using FirstDraft.Cli;
+using FirstDraft.Cli.Git;
+using FirstDraft.Cli.Jira;
+using FirstDraft.Cli.Setup;
 using FirstDraft.Commands;
 using FirstDraft.Commands.Handlers;
 using FirstDraft.Configuration;

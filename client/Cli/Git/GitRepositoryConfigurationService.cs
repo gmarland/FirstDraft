@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using FirstDraft.Configuration;
 
-namespace FirstDraft.Cli
+namespace FirstDraft.Cli.Git
 {
     public class GitRepositoryConfigurationService
     {
