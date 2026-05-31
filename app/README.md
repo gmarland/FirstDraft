@@ -43,7 +43,7 @@ VITE_API_BASE_URL=http://localhost:5080
 
 Important API areas used by the console include:
 
-- `/api/auth/*` for signup, login, current-user lookup, and profile updates.
+- `/api/auth/*` for signup, login, current-user lookup, profile updates, and account deletion.
 - `/api/workers/*` for workers, worker enablement, task queues, commands, output, responses, cancellation, and gitflow suggestions.
 - `/api/me/api-keys/*` for worker API credentials.
 
@@ -56,9 +56,9 @@ npm install
 npm run dev
 ```
 
-Build and lint:
+Available package scripts:
 
 ```bash
 npm run build
-npm run lint
+npm run preview
 ```

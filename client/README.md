@@ -49,7 +49,7 @@ Command details:
 - `capacity`: update the maximum number of concurrent gitflow tasks.
 - `taskTypes`: update which task types this worker accepts.
 - `enablePlanning`: configure whether AI commands use a planning pass.
-- `repos list|add|update|remove|delete`: manage Git repositories and their enforced source/PR target branches for this worker. `add` only creates new entries; `update` only changes existing entries.
+- `repos list|add|update|remove|delete`: manage Git repositories and their enforced source/PR target branches for this worker. `add` only creates new entries; `update` only changes existing entries; `delete` is accepted as an alias for `remove`, although top-level help currently lists only `remove`.
 - `integrations list|details|add|configure|update|remove|delete`: manage Jira integrations for this worker. `detail` and `show` are aliases for `details`; `update` is an alias for `configure`; `delete` is an alias for `remove`. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board and workflow statuses interactively. `configure` re-runs board and status selection for an existing integration. API tokens are encrypted in local config and are never printed by `list` or `details`.
 - `run`: start the worker and connect it to the API.
 - `help`: print command help.
@@ -82,6 +82,7 @@ dotnet run -- repos delete https://github.com/example/repo.git
 
 The configured source and PR target branches are enforced by the API for manual and queued gitflow tasks.
 Branch options can be passed as either `--source main` / `--target main` or `--source=main` / `--target=main`.
+`repos delete` is accepted as a `repos remove` alias, but the nested and top-level help output currently lists `remove`.
 
 Each worker also advertises its own Jira integrations from local configuration. Manage them with:
 
@@ -96,6 +97,7 @@ dotnet run -- integrations delete <integration-id>
 
 The `add jira` command prompts for the Jira site URL, email, and API token, then immediately configures the board and workflow statuses. If that configuration step fails, the saved connection can be retried with `configure <integration-id>`. Connection-only Jira integrations remain local-only and are not advertised to the API until fully configured.
 Use `details <integration-id>` to inspect board/status configuration and whether an API token is stored. `detail` and `show` are accepted aliases for `details`; `update` is an alias for `configure`.
+`integrations delete` is accepted as an `integrations remove` alias, but the nested and top-level help output currently lists `remove`.
 
 Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
 
