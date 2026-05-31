@@ -124,7 +124,12 @@ export class CommandStore {
           and (commands.worker_id = $1 or commands.worker_id is null)
           and (
             commands.command_mode in ('ai', 'shell')
-            or ($2::boolean and commands.command_mode = 'gitflow')
+            or (
+              $2::boolean
+              and commands.command_mode = 'gitflow'
+              and commands.normalized_repository_url is not null
+              and worker_repos.normalized_repository_url is not null
+            )
           )
         order by
           case when commands.worker_id = $1 then 0 else 1 end,
@@ -135,6 +140,21 @@ export class CommandStore {
     );
 
     return result.rows.map(mapCommand);
+  }
+
+  public async setCommandExecutionCommand(transactionId: string, executionCommand: string): Promise<Command | undefined> {
+    const result = await this.pool.query(
+      `
+        update client_commands
+        set execution_command = $2
+        where transaction_id = $1
+          and status = 'queued'
+        returning ${commandColumns}
+      `,
+      [transactionId, executionCommand]
+    );
+
+    return result.rows[0] ? mapCommand(result.rows[0]) : undefined;
   }
 
   public async getInProgressWorkerCommands(workerId: string): Promise<Command[]> {

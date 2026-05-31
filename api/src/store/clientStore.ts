@@ -1,5 +1,6 @@
 import { WorkerRegistration, Command, CommandMode, CommandStatus, PaginatedCommands } from "../types.js";
 import { CommandStore, CreateQueuedCommandInput } from "./commands/commandStore.js";
+import { GitRepositoryStore } from "./gitRepositories/gitRepositoryStore.js";
 import { WorkerRecord, WorkerRecordStore } from "./workers/workerRecordStore.js";
 import { normalizeMaxConcurrentTasks } from "../workers/workerState.js";
 import { normalizeEnabledTaskTypes } from "../commandModes.js";
@@ -69,6 +70,7 @@ export type WorkerStore = {
   listTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<PaginatedCommands>;
   getQueuedWorkerCommands(workerId: string): Promise<Command[]>;
   getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]>;
+  prepareGitflowCommandForWorker(command: Command, workerId: string): Promise<Command | undefined>;
   getInProgressWorkerCommands(workerId: string): Promise<Command[]>;
   markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined>;
   recordWorkerCommandOutputMetadata(input: CommandOutputMetadataInput): Promise<Command>;
@@ -79,7 +81,8 @@ export type WorkerStore = {
 
 export function createWorkerStore(
   commands: CommandStore,
-  workers: WorkerRecordStore
+  workers: WorkerRecordStore,
+  gitRepositories?: GitRepositoryStore
 ): WorkerStore {
   return {
     async listWorkers(): Promise<WorkerRegistration[]> {
@@ -165,6 +168,28 @@ export function createWorkerStore(
       return commands.getDispatchableQueuedCommands(workerId, workerSkills);
     },
 
+    async prepareGitflowCommandForWorker(command: Command, workerId: string): Promise<Command | undefined> {
+      if (command.commandMode !== "gitflow") return command;
+      if (!gitRepositories) return undefined;
+
+      const repositoryUrl = command.repositoryUrl ?? readGitflowPayloadString(command.command, "repositoryUrl");
+      if (!repositoryUrl) return undefined;
+
+      const repository = await gitRepositories.getWorkerRepository(workerId, command.normalizedRepositoryUrl ?? repositoryUrl);
+      if (!repository) return undefined;
+
+      const payload = readGitflowPayload(command.command);
+      if (!payload) return undefined;
+
+      const executionCommand = JSON.stringify({
+        ...payload,
+        repositoryUrl: repository.repositoryUrl,
+        sourceBranch: repository.sourceBranch,
+        targetBranch: repository.targetBranch
+      });
+      return commands.setCommandExecutionCommand(command.transactionId, executionCommand);
+    },
+
     async getInProgressWorkerCommands(workerId: string): Promise<Command[]> {
       return commands.getInProgressWorkerCommands(workerId);
     },
@@ -222,6 +247,23 @@ async function refreshWorkerActivity(
 ): Promise<void> {
   const inProgressCommands = await commands.getInProgressWorkerCommands(workerId);
   await workers.refreshWorkerActivity(workerId, inProgressCommands.length > 0 ? "running_command" : "started");
+}
+
+function readGitflowPayload(command: string): Record<string, unknown> | undefined {
+  try {
+    const payload = JSON.parse(command) as unknown;
+    return payload && typeof payload === "object" && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readGitflowPayloadString(command: string, field: string): string | undefined {
+  const payload = readGitflowPayload(command);
+  const value = payload?.[field];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 export function mergeWorkerState(record: WorkerRecord, inProgressCommands: Command[] = []): WorkerRegistration {

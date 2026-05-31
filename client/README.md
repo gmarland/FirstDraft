@@ -36,6 +36,7 @@ Command details:
 - `capacity`: update the maximum number of concurrent gitflow tasks.
 - `taskTypes` or `task-types`: update which task types this worker accepts.
 - `enablePlanning`: configure whether AI commands use a planning pass.
+- `repos list|add|update|remove`: manage Git repositories and enforced source/PR target branches for this worker.
 - `run`: start the worker and connect it to the API.
 - `run --task-types ai,shell,gitflow`: override enabled task types for this run only without changing saved configuration.
 - `help`: print command help.
@@ -54,6 +55,17 @@ Workers accept all command modes by default. Configure `EnabledTaskTypes` to res
 ## Gitflow Workspaces
 
 Gitflow tasks use `GitWorkspaceDirectory` as the workspace root when configured, otherwise they fall back to the worker's application workspace. The worker clones missing repositories into that workspace and reuses existing repository workspaces for later tasks.
+
+Each worker advertises its own Git repositories from local configuration. Manage them with:
+
+```bash
+dotnet run -- repos add https://github.com/example/repo.git --source main --target main
+dotnet run -- repos list
+dotnet run -- repos update https://github.com/example/repo.git --source develop --target main
+dotnet run -- repos remove https://github.com/example/repo.git
+```
+
+The configured source and PR target branches are enforced by the API for manual and queued gitflow tasks.
 
 Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
 
@@ -78,6 +90,7 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `AIWorkingDirectory`: base working directory for AI commands.
 - `GitWorkspaceDirectory`: workspace root for gitflow repository work.
 - `MaxConcurrentTasks`: maximum concurrent gitflow tasks, from `1` to `8`.
+- `GitRepositories`: worker-local Git repositories with enforced source and PR target branches.
 
 Credentials can be encrypted in the config. Keep the worker configuration private and run workers only on machines trusted to access the configured repositories, credentials, tools, and networks.
 

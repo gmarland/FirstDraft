@@ -4,6 +4,8 @@ export type WorkerGitRepositoryEntity = {
   workerId: string;
   normalizedRepositoryUrl: string;
   repositoryUrl: string;
+  sourceBranch: string;
+  targetBranch: string;
   localPath?: string | null;
   lastSourceBranch?: string | null;
   firstUsedAt: Date;
@@ -17,6 +19,8 @@ export const WorkerGitRepositorySchema = new EntitySchema<WorkerGitRepositoryEnt
     workerId: { type: "text", name: "worker_id", primary: true },
     normalizedRepositoryUrl: { type: "text", name: "normalized_repository_url", primary: true },
     repositoryUrl: { type: "text", name: "repository_url" },
+    sourceBranch: { type: "text", name: "source_branch" },
+    targetBranch: { type: "text", name: "target_branch" },
     localPath: { type: "text", name: "local_path", nullable: true },
     lastSourceBranch: { type: "text", name: "last_source_branch", nullable: true },
     firstUsedAt: { type: "timestamptz", name: "first_used_at", createDate: true },

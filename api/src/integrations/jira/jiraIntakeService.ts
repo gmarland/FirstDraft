@@ -258,18 +258,8 @@ export class JiraIntakeService {
     }
 
     try {
-      const repository = await this.gitRepositories.getRepository(
-        userId,
-        normalizedRepositoryUrl,
-      );
-      const sourceBranch =
-        repository?.lastSourceBranch ||
-        repository?.defaultSourceBranch ||
-        "main";
-      const targetBranch =
-        repository?.defaultTargetBranch ||
-        repository?.defaultSourceBranch ||
-        sourceBranch;
+      const sourceBranch = "main";
+      const targetBranch = "main";
       logJiraIntake("creating worker command", {
         userId,
         integrationId: integration.id,
@@ -277,14 +267,8 @@ export class JiraIntakeService {
         intakeEventId: intake.event.id,
         repositoryUrl,
         normalizedRepositoryUrl,
-        repositoryConfigured: Boolean(repository),
         sourceBranch,
         targetBranch,
-      });
-      await this.gitRepositories.recordUserGitflowUsage({
-        userId,
-        repositoryUrl,
-        sourceBranch,
       });
       const command = await this.workers.createQueuedCommand({
         userId,

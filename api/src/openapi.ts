@@ -16,7 +16,6 @@ export const openApiDocument = {
     { name: "Worker Auth" },
     { name: "API Keys" },
     { name: "Workers" },
-    { name: "Repositories" },
     { name: "Integrations" }
   ],
   paths: {
@@ -304,54 +303,6 @@ export const openApiDocument = {
       "Read command responses parsed from output",
       ref("CommandResponses")
     ),
-    "/api/repositories": {
-      get: {
-        tags: ["Repositories"],
-        summary: "List Git repositories",
-        security: bearerSecurity(),
-        responses: {
-          "200": jsonResponse("Repositories", object({ repositories: array(ref("GitRepository")) }, ["repositories"])),
-          "401": errorResponse()
-        }
-      },
-      post: {
-        tags: ["Repositories"],
-        summary: "Create or update a Git repository",
-        security: bearerSecurity(),
-        requestBody: jsonBody(ref("SaveGitRepositoryRequest"), true),
-        responses: {
-          "201": jsonResponse("Saved repository", ref("GitRepository")),
-          "400": errorResponse(),
-          "401": errorResponse()
-        }
-      }
-    },
-    "/api/repositories/{normalizedRepositoryUrl}": {
-      put: {
-        tags: ["Repositories"],
-        summary: "Update a Git repository",
-        security: bearerSecurity(),
-        parameters: [pathParam("normalizedRepositoryUrl", "Normalized repository URL")],
-        requestBody: jsonBody(ref("SaveGitRepositoryRequest"), true),
-        responses: {
-          "200": jsonResponse("Saved repository", ref("GitRepository")),
-          "400": errorResponse(),
-          "401": errorResponse(),
-          "404": errorResponse()
-        }
-      },
-      delete: {
-        tags: ["Repositories"],
-        summary: "Delete a Git repository",
-        security: bearerSecurity(),
-        parameters: [pathParam("normalizedRepositoryUrl", "Normalized repository URL")],
-        responses: {
-          "204": { description: "Deleted" },
-          "401": errorResponse(),
-          "404": errorResponse()
-        }
-      }
-    },
     "/api/integrations": integrationGet("List integration settings", object({ jira: array(ref("JiraIntegrationSettings")) }, ["jira"])),
     "/api/integrations/jira": integrationGet("List Jira integrations", object({ integrations: array(ref("JiraIntegrationSettings")) }, ["integrations"])),
     "/api/integrations/jira/intake": jiraIntakePost("Run Jira intake across enabled integrations"),
@@ -501,32 +452,13 @@ export const openApiDocument = {
         pageSize: { type: "integer" }
       }, ["commands", "total", "page", "pageSize"]),
       CommandResponses: object({ command: ref("Command"), responses: array(freeForm()) }, ["command", "responses"]),
-      GitRepository: object({
-        repositoryUrl: { type: "string" },
-        normalizedRepositoryUrl: { type: "string" },
-        defaultSourceBranch: { type: "string" },
-        defaultTargetBranch: { type: "string" },
-        lastSourceBranch: { type: "string" },
-        enabled: { type: "boolean" },
-        createdAt: { type: "string", format: "date-time" },
-        updatedAt: { type: "string", format: "date-time" },
-        lastUsedAt: { type: "string", format: "date-time" }
-      }, ["repositoryUrl", "normalizedRepositoryUrl", "defaultSourceBranch", "defaultTargetBranch", "enabled", "createdAt", "updatedAt", "lastUsedAt"]),
       GitRepositorySuggestion: object({
         repositoryUrl: { type: "string" },
         normalizedRepositoryUrl: { type: "string" },
-        defaultSourceBranch: { type: "string" },
-        defaultTargetBranch: { type: "string" },
-        lastSourceBranch: { type: "string" },
-        lastUsedAt: { type: "string", format: "date-time" },
-        previouslyUsedByWorker: { type: "boolean" }
-      }, ["repositoryUrl", "normalizedRepositoryUrl", "lastUsedAt", "previouslyUsedByWorker"]),
-      SaveGitRepositoryRequest: object({
-        repositoryUrl: { type: "string" },
-        defaultSourceBranch: { type: "string" },
-        defaultTargetBranch: { type: "string" },
-        enabled: { type: "boolean" }
-      }),
+        sourceBranch: { type: "string" },
+        targetBranch: { type: "string" },
+        lastUsedAt: { type: "string", format: "date-time" }
+      }, ["repositoryUrl", "normalizedRepositoryUrl", "sourceBranch", "targetBranch", "lastUsedAt"]),
       JiraIntegrationSettings: object({
         id: { type: "string" },
         connected: { type: "boolean" },

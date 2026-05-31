@@ -23,7 +23,7 @@ class FakeWorkerStore implements WorkerStore {
   public registeredInput?: unknown;
   public stoppedWorkers: Array<{ workerId: string; connectionId: string }> = [];
   public outputMetadataInput?: unknown;
-  public localRepositoriesByWorker = new Map<string, Set<string>>();
+  public localRepositoriesByWorker = new Map<string, Map<string, { sourceBranch: string; targetBranch: string; repositoryUrl: string }>>();
 
   public constructor(maxConcurrentTasks: number, commandModes: CommandMode[], enabledTaskTypes: CommandMode[] = ["ai", "shell", "gitflow"]) {
     const now = new Date().toISOString();
@@ -46,15 +46,29 @@ class FakeWorkerStore implements WorkerStore {
       stateUpdatedAt: now
     };
     this.workers = [this.worker];
-    this.commands = commandModes.map((commandMode, index) => ({
-      transactionId: `command-${index + 1}`,
-      userId: "user-1",
-      workerId: this.worker.workerId,
-      command: `${commandMode}-${index + 1}`,
-      commandMode,
-      status: "queued",
-      createdAt: new Date(Date.now() + index).toISOString()
-    }));
+    this.localRepositoriesByWorker.set(this.worker.workerId, new Map([
+      ["repo", { sourceBranch: "main", targetBranch: "main", repositoryUrl: "https://example.com/repo.git" }]
+    ]));
+    this.commands = commandModes.map((commandMode, index) => {
+      const gitflowPayload = {
+        repositoryUrl: "https://example.com/repo.git",
+        sourceBranch: "main",
+        targetBranch: "main",
+        ticketNumber: `FD-${index + 1}`,
+        description: `${commandMode}-${index + 1}`
+      };
+      return {
+        transactionId: `command-${index + 1}`,
+        userId: "user-1",
+        workerId: this.worker.workerId,
+        command: commandMode === "gitflow" ? JSON.stringify(gitflowPayload) : `${commandMode}-${index + 1}`,
+        commandMode,
+        repositoryUrl: commandMode === "gitflow" ? gitflowPayload.repositoryUrl : undefined,
+        normalizedRepositoryUrl: commandMode === "gitflow" ? "repo" : undefined,
+        status: "queued",
+        createdAt: new Date(Date.now() + index).toISOString()
+      };
+    });
   }
 
   public async listWorkers(): Promise<WorkerRegistration[]> {
@@ -149,22 +163,39 @@ class FakeWorkerStore implements WorkerStore {
 
   public async getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]> {
     const supportsGitflow = workerSkills.map((skill) => skill.toLowerCase()).includes("git");
-    const localRepositories = this.localRepositoriesByWorker.get(workerId) ?? new Set<string>();
+    const localRepositories = this.localRepositoriesByWorker.get(workerId) ?? new Map<string, { sourceBranch: string; targetBranch: string; repositoryUrl: string }>();
     return this.commands
       .filter((command) => {
         if (command.status !== "queued") return false;
         if (command.workerId && command.workerId !== workerId) return false;
         if (command.commandMode === "gitflow" && !supportsGitflow) return false;
+        if (command.commandMode === "gitflow" && (!command.normalizedRepositoryUrl || !localRepositories.has(command.normalizedRepositoryUrl))) return false;
         return command.commandMode === "ai" || command.commandMode === "shell" || command.commandMode === "gitflow";
       })
       .sort((left, right) => {
         const assignedDelta = Number(left.workerId !== workerId) - Number(right.workerId !== workerId);
         if (assignedDelta !== 0) return assignedDelta;
-        const leftLocal = left.normalizedRepositoryUrl ? localRepositories.has(left.normalizedRepositoryUrl) : false;
-        const rightLocal = right.normalizedRepositoryUrl ? localRepositories.has(right.normalizedRepositoryUrl) : false;
-        if (leftLocal !== rightLocal) return leftLocal ? -1 : 1;
         return Date.parse(left.createdAt) - Date.parse(right.createdAt);
       });
+  }
+
+  public async prepareGitflowCommandForWorker(command: Command, workerId: string): Promise<Command | undefined> {
+    if (command.commandMode !== "gitflow") return command;
+    if (!command.normalizedRepositoryUrl) return undefined;
+
+    const repository = this.localRepositoriesByWorker.get(workerId)?.get(command.normalizedRepositoryUrl);
+    if (!repository) return undefined;
+
+    const payload = JSON.parse(command.command) as Record<string, unknown>;
+    const stored = await this.getWorkerCommand(command.transactionId);
+    if (!stored) return undefined;
+    stored.executionCommand = JSON.stringify({
+      ...payload,
+      repositoryUrl: repository.repositoryUrl,
+      sourceBranch: repository.sourceBranch,
+      targetBranch: repository.targetBranch
+    });
+    return stored;
   }
 
   public async getInProgressWorkerCommands(): Promise<Command[]> {
@@ -289,7 +320,8 @@ function createCommandDispatcher(store: WorkerStore, connections = new Map<strin
 
 function createWorkerRegistration(
   store: WorkerStore,
-  connections = new Map<string, SignalRConnection>()
+  connections = new Map<string, SignalRConnection>(),
+  gitRepositories?: { syncWorkerRepositories(workerId: string, repositories: unknown[]): Promise<void> }
 ): WorkerRegistrationService {
   return new WorkerRegistrationService(
     store,
@@ -300,7 +332,8 @@ function createWorkerRegistration(
         return undefined;
       }
     } as WorkerTokenService,
-    connections
+    connections,
+    gitRepositories as never
   );
 }
 
@@ -374,12 +407,14 @@ async function testUnassignedQueuedCommandsAreClaimedByWorkerWithCapacity(): Pro
 
 async function testLocalRepositoryMatchesArePreferredForCentralQueue(): Promise<void> {
   const store = new FakeWorkerStore(1, []);
-  store.localRepositoriesByWorker.set("worker-1", new Set(["repo-local"]));
+  store.localRepositoriesByWorker.set("worker-1", new Map([
+    ["repo-local", { sourceBranch: "develop", targetBranch: "main", repositoryUrl: "https://example.com/local.git" }]
+  ]));
   store.commands.push(
     {
       transactionId: "central-non-local",
       userId: "user-1",
-      command: "non-local",
+      command: JSON.stringify({ repositoryUrl: "https://example.com/non-local.git", sourceBranch: "main", targetBranch: "main", ticketNumber: "FD-1", description: "non-local" }),
       commandMode: "gitflow",
       repositoryUrl: "https://example.com/non-local.git",
       normalizedRepositoryUrl: "repo-non-local",
@@ -389,7 +424,7 @@ async function testLocalRepositoryMatchesArePreferredForCentralQueue(): Promise<
     {
       transactionId: "central-local",
       userId: "user-1",
-      command: "local",
+      command: JSON.stringify({ repositoryUrl: "https://example.com/local.git", sourceBranch: "placeholder", targetBranch: "placeholder", ticketNumber: "FD-2", description: "local" }),
       commandMode: "gitflow",
       repositoryUrl: "https://example.com/local.git",
       normalizedRepositoryUrl: "repo-local",
@@ -410,15 +445,24 @@ async function testLocalRepositoryMatchesArePreferredForCentralQueue(): Promise<
   assert.equal(store.commands.find((command) => command.transactionId === "central-local")?.status, "in_progress");
   assert.equal(store.commands.find((command) => command.transactionId === "central-local")?.workerId, "worker-1");
   assert.equal(sent[0].arguments[1], "central-local");
+  assert.deepEqual(JSON.parse(sent[0].arguments[2] as string), {
+    repositoryUrl: "https://example.com/local.git",
+    sourceBranch: "develop",
+    targetBranch: "main",
+    ticketNumber: "FD-2",
+    description: "local"
+  });
 }
 
-async function testNonLocalCentralTasksStillDispatchWhenNoLocalMatchExists(): Promise<void> {
+async function testNonLocalCentralTasksStayQueuedWhenNoLocalMatchExists(): Promise<void> {
   const store = new FakeWorkerStore(1, []);
-  store.localRepositoriesByWorker.set("worker-1", new Set(["repo-other"]));
+  store.localRepositoriesByWorker.set("worker-1", new Map([
+    ["repo-other", { sourceBranch: "main", targetBranch: "main", repositoryUrl: "https://example.com/other.git" }]
+  ]));
   store.commands.push({
     transactionId: "central-non-local",
     userId: "user-1",
-    command: "non-local",
+    command: JSON.stringify({ repositoryUrl: "https://example.com/non-local.git", sourceBranch: "main", targetBranch: "main", ticketNumber: "FD-1", description: "non-local" }),
     commandMode: "gitflow",
     repositoryUrl: "https://example.com/non-local.git",
     normalizedRepositoryUrl: "repo-non-local",
@@ -435,9 +479,9 @@ async function testNonLocalCentralTasksStillDispatchWhenNoLocalMatchExists(): Pr
 
   await dispatcher.dispatchQueuedCommands("worker-1");
 
-  assert.equal(store.commands[0].status, "in_progress");
-  assert.equal(store.commands[0].workerId, "worker-1");
-  assert.equal(sent.length, 1);
+  assert.equal(store.commands[0].status, "queued");
+  assert.equal(store.commands[0].workerId, undefined);
+  assert.equal(sent.length, 0);
 }
 
 async function testCentralQueueFillsCapacityAfterCompletion(): Promise<void> {
@@ -637,6 +681,49 @@ async function testRegistrationDefaultsTaskTypesForOlderClients(): Promise<void>
   assert.deepEqual((store.registeredInput as { enabledTaskTypes: CommandMode[] }).enabledTaskTypes, ["ai", "shell", "gitflow"]);
 }
 
+async function testRegistrationSyncsWorkerRepositories(): Promise<void> {
+  const store = new FakeWorkerStore(1, []);
+  const connection = createConnection();
+  const syncCalls: Array<{ workerId: string; repositories: unknown[] }> = [];
+  const registration = createWorkerRegistration(store, new Map(), {
+    async syncWorkerRepositories(workerId: string, repositories: unknown[]) {
+      syncCalls.push({ workerId, repositories });
+    }
+  });
+
+  await registration.registerWorker(connection, [
+    "access:worker-1",
+    "connection-registered",
+    "worker-1",
+    "",
+    "git",
+    1,
+    "gitflow",
+    JSON.stringify([
+      {
+        RepositoryUrl: "https://github.com/example/repo.git",
+        NormalizedRepositoryUrl: "github.com/example/repo",
+        SourceBranch: "develop",
+        TargetBranch: "main"
+      }
+    ])
+  ]);
+
+  assert.deepEqual(syncCalls, [
+    {
+      workerId: "worker-1",
+      repositories: [
+        {
+          repositoryUrl: "https://github.com/example/repo.git",
+          normalizedRepositoryUrl: "github.com/example/repo",
+          sourceBranch: "develop",
+          targetBranch: "main"
+        }
+      ]
+    }
+  ]);
+}
+
 async function testDispatcherFailsDisabledCommandModes(): Promise<void> {
   const store = new FakeWorkerStore(2, ["gitflow", "ai"], ["ai"]);
   const connection = createConnection();
@@ -751,7 +838,7 @@ await testMixedCommandsFillWorkerCapacity();
 await testConcurrentDispatchDoesNotExceedCapacity();
 await testUnassignedQueuedCommandsAreClaimedByWorkerWithCapacity();
 await testLocalRepositoryMatchesArePreferredForCentralQueue();
-await testNonLocalCentralTasksStillDispatchWhenNoLocalMatchExists();
+await testNonLocalCentralTasksStayQueuedWhenNoLocalMatchExists();
 await testCentralQueueFillsCapacityAfterCompletion();
 await testWorkersWithoutGitSkillDoNotClaimGitflowTasks();
 await testDisabledWorkersDoNotClaimQueuedCommands();
@@ -759,6 +846,7 @@ await testTargetedManualCommandsDispatchToDisabledWorkers();
 await testBackfillsAvailableSlotsAfterCompletionAndCancel();
 await testRegistrationRejectsMismatchedTokenAndRemapsConnection();
 await testRegistrationDefaultsTaskTypesForOlderClients();
+await testRegistrationSyncsWorkerRepositories();
 await testDispatcherFailsDisabledCommandModes();
 await testCommandResultCompletesOutputStorageAndMetadata();
 await testCommandOutputChunkRejectsQueuedAndNonOwnedCommands();

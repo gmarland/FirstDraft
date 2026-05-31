@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { normalizeEnabledTaskTypes } from "../src/commandModes.js";
 import { readUpdateProfileInput, validateUpdateProfileInput, validateUserInput } from "../src/controllers/auth/authValidation.js";
 import { validateConnectionInput, validateWorkflowInput } from "../src/controllers/integrations/integrationRequests.js";
-import { parseRepositoryInput, validateRepositoryInput } from "../src/controllers/repositories/repositoryRequests.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "../src/controllers/workers/workerRequests.js";
 
 function testAuthValidation(): void {
@@ -14,22 +13,6 @@ function testAuthValidation(): void {
   assert.equal(validateUpdateProfileInput(readUpdateProfileInput({ password: "short" })), "password must be at least 8 characters");
   assert.equal(validateUpdateProfileInput(readUpdateProfileInput({ email: "user@example.com" })), undefined);
   assert.equal(validateUpdateProfileInput(readUpdateProfileInput({ email: "user@example.com", password: "password123" })), undefined);
-}
-
-function testRepositoryRequests(): void {
-  const createInput = parseRepositoryInput({
-    repositoryUrl: " https://github.com/example/repo ",
-    defaultSourceBranch: " main ",
-    enabled: true
-  });
-  assert.deepEqual(createInput, {
-    repositoryUrl: "https://github.com/example/repo",
-    defaultSourceBranch: "main",
-    defaultTargetBranch: undefined,
-    enabled: true
-  });
-  assert.equal(validateRepositoryInput(parseRepositoryInput({})), "repositoryUrl is required");
-  assert.equal(validateRepositoryInput(parseRepositoryInput({}, true), true), undefined);
 }
 
 function testWorkerRequests(): void {
@@ -84,7 +67,6 @@ function testIntegrationRequests(): void {
 }
 
 testAuthValidation();
-testRepositoryRequests();
 testWorkerRequests();
 testIntegrationRequests();
 

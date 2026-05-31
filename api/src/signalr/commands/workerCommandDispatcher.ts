@@ -53,7 +53,7 @@ export class WorkerCommandDispatcher {
         const connection = this.connections.get(client.connectionId);
         if (!connection || connection.socket.readyState !== WebSocket.OPEN) return;
 
-        const queuedCommands = (await this.store.getDispatchableQueuedCommands(workerId, client.skills)).filter(
+        const queuedCommands: Command[] = (await this.store.getDispatchableQueuedCommands(workerId, client.skills)).filter(
           (command) => !options.transactionId || command.transactionId === options.transactionId
         );
         if (queuedCommands.length === 0) return;
@@ -73,7 +73,20 @@ export class WorkerCommandDispatcher {
             continue;
           }
 
-          const claimed = await this.store.markWorkerCommandInProgress(nextCommand, workerId);
+          const preparedCommand = await this.store.prepareGitflowCommandForWorker(nextCommand, workerId);
+          if (!preparedCommand) {
+            if (nextCommand.workerId === workerId) {
+              await this.store.cancelWorkerCommand({
+                transactionId: nextCommand.transactionId,
+                workerId,
+                reason: "worker is not configured for the gitflow repository"
+              });
+              claimedCommand = true;
+            }
+            continue;
+          }
+
+          const claimed = await this.store.markWorkerCommandInProgress(preparedCommand, workerId);
           
           if (!claimed) continue;
           if (!claimed.workerId) continue;

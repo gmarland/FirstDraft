@@ -11,7 +11,6 @@ type CreateAppOptions = {
   workerRoutes: Router;
   userApiKeyRoutes: Router;
   integrationRoutes: Router;
-  repositoryRoutes: Router;
   negotiateHandler: RequestHandler;
 };
 
@@ -21,7 +20,6 @@ export function createApp({
   workerRoutes,
   userApiKeyRoutes,
   integrationRoutes,
-  repositoryRoutes,
   negotiateHandler
 }: CreateAppOptions): express.Express {
   const app = express();
@@ -48,7 +46,6 @@ export function createApp({
   app.use("/api/worker-auth", workerAuthRoutes);
   app.use("/api/me/api-keys", requireJwt, userApiKeyRoutes);
   app.use("/api/integrations", requireJwtUnlessPublicJiraIntake, integrationRoutes);
-  app.use("/api/repositories", requireJwt, repositoryRoutes);
   app.use("/api/workers", requireJwt, workerRoutes);
 
   return app;
