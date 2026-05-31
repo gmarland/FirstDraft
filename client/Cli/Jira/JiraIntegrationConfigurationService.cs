@@ -42,24 +42,16 @@ namespace FirstDraft.Cli.Jira
                 return 0;
             }
 
-            PrintRow("ID", "SITE URL", "BOARD");
-            foreach (JiraIntegrationConfig integration in integrations)
-            {
-                PrintRow(
+            CliOutput.PrintTable(
+                new[] { "ID", "SITE URL", "BOARD" },
+                integrations.Select(integration => new[]
+                {
                     integration.IntegrationId,
                     integration.SiteUrl,
-                    FormatConfiguredBoard(integration));
-            }
+                    FormatConfiguredBoard(integration)
+                }));
 
             return 0;
-        }
-
-        private static void PrintRow(
-            string integrationId,
-            string siteUrl,
-            string board)
-        {
-            Console.WriteLine($"{integrationId}\t{siteUrl}\t{board}");
         }
 
         private async Task<int> Details(string[] args)
