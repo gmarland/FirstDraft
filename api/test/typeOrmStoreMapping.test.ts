@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
-import { ApiKeyEntity } from "../src/db/entities/apiKey.js";
 import { UserEntity } from "../src/db/entities/user.js";
 import { mergeWorkerState } from "../src/store/clientStore.js";
-import { mapApiKeyEntity } from "../src/store/tenantApiKeys/tenantApiKeyRowMappers.js";
 import { mapUserEntity } from "../src/store/tenantUsers/tenantUserRowMappers.js";
 import { mapWorkerRecord } from "../src/store/workers/workerRecordStore.js";
 
@@ -27,32 +25,10 @@ function testUserEntityMapping(): void {
   });
 }
 
-function testApiKeyEntityMapping(): void {
-  const apiKey: ApiKeyEntity = {
-    id: "00000000-0000-0000-0000-000000000002",
-    userId: "00000000-0000-0000-0000-000000000001",
-    apiKeyEncrypted: "encrypted-key",
-    apiSecretEncrypted: "encrypted-secret",
-    name: "Deploy key",
-    createdAt: new Date("2026-03-04T05:06:07.000Z"),
-    revokedAt: null
-  };
-
-  assert.deepEqual(mapApiKeyEntity(apiKey, "firstdraft_public"), {
-    keyId: apiKey.id,
-    userId: apiKey.userId,
-    apiKey: "firstdraft_public",
-    name: "Deploy key",
-    createdAt: "2026-03-04T05:06:07.000Z",
-    revokedAt: undefined
-  });
-}
-
 function testWorkerRecordMappingIncludesRuntimeState(): void {
   const row = {
     worker_id: "worker-1",
     user_id: "00000000-0000-0000-0000-000000000001",
-    api_key_id: "00000000-0000-0000-0000-000000000002",
     first_registered_at: new Date("2026-01-01T00:00:00.000Z"),
     last_registered_at: new Date("2026-01-02T00:00:00.000Z"),
     last_seen_at: new Date("2026-01-03T00:00:00.000Z"),
@@ -70,7 +46,6 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
   assert.deepEqual(mapWorkerRecord(row), {
     workerId: "worker-1",
     userId: "00000000-0000-0000-0000-000000000001",
-    apiKeyId: "00000000-0000-0000-0000-000000000002",
     firstRegisteredAt: "2026-01-01T00:00:00.000Z",
     lastRegisteredAt: "2026-01-02T00:00:00.000Z",
     lastSeenAt: "2026-01-03T00:00:00.000Z",
@@ -90,7 +65,6 @@ function testWorkerRecordMappingDefaultsEnabled(): void {
   const worker = mapWorkerRecord({
     worker_id: "worker-1",
     user_id: "user-1",
-    api_key_id: "api-key-1",
     first_registered_at: "2026-01-01T00:00:00.000Z",
     last_registered_at: "2026-01-02T00:00:00.000Z",
     last_seen_at: "2026-01-03T00:00:00.000Z",
@@ -111,7 +85,6 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
   const worker = mergeWorkerState({
     workerId: "worker-1",
     userId: "user-1",
-    apiKeyId: "api-key-1",
     firstRegisteredAt: "2026-01-01T00:00:00.000Z",
     lastRegisteredAt: "2026-01-02T00:00:00.000Z",
     lastSeenAt: "2026-01-03T00:00:00.000Z",
@@ -144,7 +117,6 @@ function testWorkerStateMergeIncludesEnabled(): void {
   const worker = mergeWorkerState({
     workerId: "worker-1",
     userId: "user-1",
-    apiKeyId: "api-key-1",
     firstRegisteredAt: "2026-01-01T00:00:00.000Z",
     lastRegisteredAt: "2026-01-02T00:00:00.000Z",
     lastSeenAt: "2026-01-03T00:00:00.000Z",
@@ -178,7 +150,6 @@ function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
   const worker = mergeWorkerState({
     workerId: "worker-1",
     userId: "user-1",
-    apiKeyId: "api-key-1",
     firstRegisteredAt: "2026-01-01T00:00:00.000Z",
     lastRegisteredAt: "2026-01-02T00:00:00.000Z",
     lastSeenAt: "2026-01-03T00:00:00.000Z",
@@ -209,7 +180,6 @@ function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
 }
 
 testUserEntityMapping();
-testApiKeyEntityMapping();
 testWorkerRecordMappingIncludesRuntimeState();
 testWorkerRecordMappingDefaultsEnabled();
 testWorkerStateMergeIncludesEnabled();

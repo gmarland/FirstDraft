@@ -19,14 +19,14 @@ namespace FirstDraft.Cli.Jira
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
 
-        public async Task TestConnection()
+        public async Task TestConnection(CancellationToken cancellationToken = default)
         {
-            await RequestJson("rest/api/3/myself");
+            await RequestJson("rest/api/3/myself", cancellationToken);
         }
 
-        public async Task<JiraBoardOption[]> ListBoards()
+        public async Task<JiraBoardOption[]> ListBoards(CancellationToken cancellationToken = default)
         {
-            JObject json = await RequestJson("rest/agile/1.0/board?maxResults=100");
+            JObject json = await RequestJson("rest/agile/1.0/board?maxResults=100", cancellationToken);
             return json["values"]?
                 .OfType<JObject>()
                 .Select(board => new JiraBoardOption(
@@ -39,9 +39,9 @@ namespace FirstDraft.Cli.Jira
                 .ToArray() ?? Array.Empty<JiraBoardOption>();
         }
 
-        public async Task<JiraBoardConfiguration> GetBoardConfiguration(int boardId)
+        public async Task<JiraBoardConfiguration> GetBoardConfiguration(int boardId, CancellationToken cancellationToken = default)
         {
-            JObject json = await RequestJson($"rest/agile/1.0/board/{boardId}/configuration");
+            JObject json = await RequestJson($"rest/agile/1.0/board/{boardId}/configuration", cancellationToken);
             int? filterId = json["filter"]?.Value<int?>("id");
             string[] statusIds = json["columnConfig"]?["columns"]?
                 .OfType<JObject>()
@@ -54,12 +54,12 @@ namespace FirstDraft.Cli.Jira
             return new JiraBoardConfiguration(boardId, filterId, statusIds);
         }
 
-        public async Task<JiraStatusOption[]> GetBoardStatuses(JiraBoardConfiguration configuration)
+        public async Task<JiraStatusOption[]> GetBoardStatuses(JiraBoardConfiguration configuration, CancellationToken cancellationToken = default)
         {
             List<JiraStatusOption> statuses = new List<JiraStatusOption>();
             foreach (string statusId in configuration.StatusIds)
             {
-                statuses.Add(await GetStatus(statusId));
+                statuses.Add(await GetStatus(statusId, cancellationToken));
             }
 
             return statuses
@@ -68,19 +68,59 @@ namespace FirstDraft.Cli.Jira
                 .ToArray();
         }
 
-        private async Task<JiraStatusOption> GetStatus(string statusId)
+        public async Task<JiraFieldOption[]> FindFields(string searchText, CancellationToken cancellationToken = default)
         {
-            JObject json = await RequestJson($"rest/api/3/status/{Uri.EscapeDataString(statusId)}");
+            JObject[] fields = (await RequestJsonArray("rest/api/3/field", cancellationToken))
+                .OfType<JObject>()
+                .ToArray();
+            string needle = searchText.Trim();
+
+            return fields
+                .Select(field => new JiraFieldOption(
+                    field.Value<string>("id") ?? string.Empty,
+                    field.Value<string>("key") ?? field.Value<string>("id") ?? string.Empty,
+                    field.Value<string>("name") ?? string.Empty))
+                .Where(field =>
+                    !string.IsNullOrWhiteSpace(field.Id) &&
+                    (field.Id.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                     field.Key.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                     field.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+        }
+
+        public async Task<JiraIssueSummary[]> SearchIssues(string jql, int maxResults, IEnumerable<string> fields, CancellationToken cancellationToken = default)
+        {
+            JObject body = new JObject
+            {
+                ["jql"] = jql,
+                ["maxResults"] = Math.Clamp(maxResults, 1, 100),
+                ["fields"] = new JArray(fields.Where(field => !string.IsNullOrWhiteSpace(field)).Distinct(StringComparer.OrdinalIgnoreCase))
+            };
+
+            JObject json = await PostJson("rest/api/3/search/jql", body, cancellationToken);
+            return json["issues"]?
+                .OfType<JObject>()
+                .Select(issue => new JiraIssueSummary(
+                    issue.Value<string>("id") ?? string.Empty,
+                    issue.Value<string>("key") ?? string.Empty,
+                    issue["fields"] as JObject ?? new JObject()))
+                .Where(issue => !string.IsNullOrWhiteSpace(issue.Id) && !string.IsNullOrWhiteSpace(issue.Key))
+                .ToArray() ?? Array.Empty<JiraIssueSummary>();
+        }
+
+        private async Task<JiraStatusOption> GetStatus(string statusId, CancellationToken cancellationToken)
+        {
+            JObject json = await RequestJson($"rest/api/3/status/{Uri.EscapeDataString(statusId)}", cancellationToken);
             return new JiraStatusOption(
                 json.Value<string>("id") ?? statusId,
                 json.Value<string>("name") ?? statusId,
                 json["statusCategory"]?.Value<string>("name") ?? string.Empty);
         }
 
-        private async Task<JObject> RequestJson(string path)
+        private async Task<JObject> RequestJson(string path, CancellationToken cancellationToken)
         {
-            using HttpResponseMessage response = await _httpClient.GetAsync(path);
-            string body = await response.Content.ReadAsStringAsync();
+            using HttpResponseMessage response = await _httpClient.GetAsync(path, cancellationToken);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 string message = string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase ?? "request failed" : body;
@@ -90,6 +130,47 @@ namespace FirstDraft.Cli.Jira
             try
             {
                 return JObject.Parse(body);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Jira API returned invalid JSON: {ex.Message}");
+            }
+        }
+
+        private async Task<JArray> RequestJsonArray(string path, CancellationToken cancellationToken)
+        {
+            using HttpResponseMessage response = await _httpClient.GetAsync(path, cancellationToken);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                string message = string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase ?? "request failed" : body;
+                throw new InvalidOperationException($"Jira API returned {(int)response.StatusCode}: {message}");
+            }
+
+            try
+            {
+                return JArray.Parse(body);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Jira API returned invalid JSON: {ex.Message}");
+            }
+        }
+
+        private async Task<JObject> PostJson(string path, JObject body, CancellationToken cancellationToken)
+        {
+            using StringContent content = new StringContent(body.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await _httpClient.PostAsync(path, content, cancellationToken);
+            string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                string message = string.IsNullOrWhiteSpace(responseBody) ? response.ReasonPhrase ?? "request failed" : responseBody;
+                throw new InvalidOperationException($"Jira API returned {(int)response.StatusCode}: {message}");
+            }
+
+            try
+            {
+                return string.IsNullOrWhiteSpace(responseBody) ? new JObject() : JObject.Parse(responseBody);
             }
             catch (Exception ex)
             {
@@ -108,4 +189,8 @@ namespace FirstDraft.Cli.Jira
     public sealed record JiraBoardConfiguration(int BoardId, int? FilterId, string[] StatusIds);
 
     public sealed record JiraStatusOption(string Id, string Name, string StatusCategory);
+
+    public sealed record JiraFieldOption(string Id, string Key, string Name);
+
+    public sealed record JiraIssueSummary(string Id, string Key, JObject Fields);
 }

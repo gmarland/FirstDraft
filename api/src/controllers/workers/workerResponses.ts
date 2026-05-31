@@ -6,7 +6,7 @@ import { Command, WorkerRegistration } from "../../types.js";
 export function toWorkerStateResponse(client: WorkerRegistration) {
   return {
     workerId: client.workerId,
-    apiKeyId: client.apiKeyId,
+    userId: client.userId,
     connectionId: client.connectionId,
     paths: client.paths,
     skills: client.skills,

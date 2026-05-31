@@ -11,7 +11,6 @@ import {
 } from "@mui/material";
 import AppsIcon from "@mui/icons-material/Apps";
 import HubIcon from "@mui/icons-material/Hub";
-import KeyIcon from "@mui/icons-material/VpnKey";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -24,7 +23,6 @@ export function AppShell() {
   const workersActive =
     location.pathname === "/workers" ||
     location.pathname.startsWith("/workers/");
-  const apiKeysActive = location.pathname === "/settings/api-keys";
   const profileActive = location.pathname === "/profile";
   const drawerWidth = 260;
 
@@ -68,16 +66,6 @@ export function AppShell() {
               <AppsIcon />
             </ListItemIcon>
             <ListItemText primary="Workers" />
-          </ListItemButton>
-          <ListItemButton
-            selected={apiKeysActive}
-            onClick={() => navigate("/settings/api-keys")}
-            sx={navSx}
-          >
-            <ListItemIcon sx={iconSx}>
-              <KeyIcon />
-            </ListItemIcon>
-            <ListItemText primary="API Keys" />
           </ListItemButton>
         </List>
 

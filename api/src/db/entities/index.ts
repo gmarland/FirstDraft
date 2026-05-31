@@ -1,4 +1,3 @@
-import { ApiKeySchema } from "./apiKey.js";
 import { ClientCommandSchema } from "./clientCommand.js";
 import { ClientWorkerSchema } from "./clientWorker.js";
 import { TenantSettingSchema } from "./tenantSetting.js";
@@ -7,8 +6,6 @@ import { WorkerGitRepositorySchema } from "./workerGitRepository.js";
 import { WorkerJiraIntegrationSchema } from "./workerJiraIntegration.js";
 import { WorkerRefreshTokenSchema } from "./workerRefreshToken.js";
 
-export { ApiKeySchema } from "./apiKey.js";
-export type { ApiKeyEntity } from "./apiKey.js";
 export { ClientCommandSchema } from "./clientCommand.js";
 export type { ClientCommandEntity } from "./clientCommand.js";
 export { ClientWorkerSchema } from "./clientWorker.js";
@@ -27,7 +24,6 @@ export type { WorkerRefreshTokenEntity } from "./workerRefreshToken.js";
 export const entities = [
   UserSchema,
   TenantSettingSchema,
-  ApiKeySchema,
   WorkerRefreshTokenSchema,
   ClientWorkerSchema,
   WorkerGitRepositorySchema,

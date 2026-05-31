@@ -80,7 +80,7 @@ dotnet run -- repos remove https://github.com/example/repo.git
 dotnet run -- repos delete https://github.com/example/repo.git
 ```
 
-The configured source and PR target branches are enforced by the API for manual and queued gitflow tasks.
+The configured source and PR target branches are enforced by the API for manual gitflow tasks and by the worker for Jira-claimed gitflow tasks.
 Branch options can be passed as either `--source main` / `--target main` or `--source=main` / `--target=main`.
 `repos delete` is accepted as a `repos remove` alias, but the nested and top-level help output currently lists `remove`.
 
@@ -99,6 +99,8 @@ The `add jira` command prompts for the Jira site URL, email, and API token, then
 Use `details <integration-id>` to inspect board/status configuration and whether an API token is stored. `detail` and `show` are accepted aliases for `details`; `update` is an alias for `configure`.
 `integrations delete` is accepted as an `integrations remove` alias, but the nested and top-level help output currently lists `remove`.
 
+When the worker is running, it polls enabled Jira integrations every 60 seconds. Ready issues are claimed through the API before execution, so only one worker can process a ticket; the worker then runs the matching gitflow task locally and reports output through the existing command history.
+
 Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
 
 `MaxConcurrentTasks` controls concurrent gitflow execution and must be between `1` and `8`.
@@ -110,7 +112,7 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `WorkerId`: stable worker identifier generated during configuration.
 - `Name` and `Tags`: optional labels shown to API and console users.
 - `AuthUserId`, `AuthEmail`, and `AuthName`: metadata for the user account that owns the worker.
-- `EncryptedWorkerRefreshToken` and `ConfigEncryptionKey`: encrypted worker refresh-token storage.
+- `EncryptedWorkerRefreshToken` and `ConfigEncryptionKey`: encrypted worker refresh-token storage and local credential encryption.
 - `ExternalAPI`: base URL for the FirstDraft API.
 - `ApplicationFolder`: local folder used by the worker application.
 - `LogsFolder`: local log output folder.

@@ -1,2 +1,2 @@
 export { createAppStore } from "../tenantStore.js";
-export { CreateApiKeyResult, CreateUserInput, AppStore } from "./tenantStoreTypes.js";
+export { CreateUserInput, AppStore } from "./tenantStoreTypes.js";

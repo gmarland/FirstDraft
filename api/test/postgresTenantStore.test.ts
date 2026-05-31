@@ -35,7 +35,7 @@ class DeleteUserDbClient implements CloseableDbClient {
 
 async function testDeleteUserDeletesDependentRecordsBeforeUser(): Promise<void> {
   const db = new DeleteUserDbClient(1);
-  const store = new PostgresAppStore(db, undefined as never, undefined as never, undefined as never);
+  const store = new PostgresAppStore(db, undefined as never, undefined as never);
 
   const deleted = await store.deleteUser("user-1");
 
@@ -53,7 +53,7 @@ async function testDeleteUserDeletesDependentRecordsBeforeUser(): Promise<void> 
 
 async function testListCommandOutputObjectKeysForUser(): Promise<void> {
   const db = new DeleteUserDbClient(1);
-  const store = new PostgresAppStore(db, undefined as never, undefined as never, undefined as never);
+  const store = new PostgresAppStore(db, undefined as never, undefined as never);
 
   const objectKeys = await store.listCommandOutputObjectKeysForUser("user-1");
 
@@ -68,7 +68,7 @@ async function testListCommandOutputObjectKeysForUser(): Promise<void> {
 
 async function testDeleteUserReturnsFalseWhenMissing(): Promise<void> {
   const db = new DeleteUserDbClient(0);
-  const store = new PostgresAppStore(db, undefined as never, undefined as never, undefined as never);
+  const store = new PostgresAppStore(db, undefined as never, undefined as never);
 
   assert.equal(await store.deleteUser("missing-user"), false);
 }

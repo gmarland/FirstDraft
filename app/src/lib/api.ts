@@ -6,9 +6,7 @@ import type {
   TaskQueueSortBy,
   TaskQueueSortDirection,
   PaginatedCommands,
-  CreatedApiKey,
   LoginResponse,
-  ApiKey,
   GitflowSuggestions,
   UpdateProfileInput,
 } from "../types/api";
@@ -245,28 +243,6 @@ export const api = {
     return readText(
       `/api/workers/${encodeURIComponent(workerId)}/commands/${encodeURIComponent(transactionId)}/output`,
       token,
-    );
-  },
-
-  listApiKeys(token: string) {
-    return request<ApiKey[]>("/api/me/api-keys", { token });
-  },
-
-  createApiKey(token: string, input: { name?: string }) {
-    return request<CreatedApiKey>("/api/me/api-keys", {
-      token,
-      method: "POST",
-      body: input,
-    });
-  },
-
-  revokeApiKey(token: string, keyId: string) {
-    return request<ApiKey>(
-      `/api/me/api-keys/${encodeURIComponent(keyId)}`,
-      {
-        token,
-        method: "DELETE",
-      },
     );
   },
 

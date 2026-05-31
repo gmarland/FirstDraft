@@ -1,7 +1,6 @@
 export type WorkerRegistration = {
   workerId: string;
   userId: string;
-  apiKeyId?: string;
   connectionId: string;
   paths: string[];
   skills: string[];
@@ -61,15 +60,6 @@ export type PaginatedCommands = {
   total: number;
   page: number;
   pageSize: number;
-};
-
-export type ApiKey = {
-  keyId: string;
-  userId: string;
-  apiKey: string;
-  name?: string;
-  createdAt: string;
-  revokedAt?: string;
 };
 
 export type UserRole = "admin" | "user";

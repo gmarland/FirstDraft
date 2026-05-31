@@ -7,7 +7,6 @@ import { configurePassport, createJwtConfigFromEnv } from "./auth/passport.js";
 import { createAuthRoutes } from "./routes/auth.js";
 import { createWorkerAuthRoutes } from "./routes/workerAuth.js";
 import { createWorkerRoutes } from "./routes/workers.js";
-import { createUserApiKeyRoutes } from "./routes/userApiKeys.js";
 import { SignalRHub } from "./signalr/signalRHub.js";
 import { createCommandOutputStorageFromEnv, getCommandOutputStorageProviderFromEnv } from "./storage/commandOutputStorage.js";
 import { publicConfigEncryptionKey, TenantCrypto } from "./security/tenantCrypto.js";
@@ -19,6 +18,7 @@ import { WorkerRefreshTokenStore } from "./store/workerAuth/workerRefreshTokenSt
 import { TenantSettingsStore } from "./store/tenants/tenantSettingsStore.js";
 import { JiraIntegrationStore } from "./store/integrations/jiraIntegrationStore.js";
 import { IntegrationIntakeEventStore } from "./store/integrations/integrationIntakeEventStore.js";
+import { JiraTicketClaimStore } from "./store/integrations/jiraTicketClaimStore.js";
 import { createDataSource } from "./db/dataSource.js";
 import { TypeOrmStoreContext } from "./db/typeOrmStoreContext.js";
 import { IntegrationLifecycleService } from "./integrations/integrationLifecycleService.js";
@@ -41,9 +41,10 @@ const workerRecords = new WorkerRecordStore(db);
 const gitRepositories = new GitRepositoryStore(db);
 const jiraIntegrations = new JiraIntegrationStore(db, tenantCrypto);
 const integrationIntakeEvents = new IntegrationIntakeEventStore(db);
+const jiraTicketClaims = new JiraTicketClaimStore(db);
 await workerRecords.markAllWorkersStopped();
 const store = createWorkerStore(commands, workerRecords, gitRepositories);
-const tenants = createAppStore(db, tenantCrypto);
+const tenants = createAppStore(db);
 const jwtConfig = createJwtConfigFromEnv();
 configurePassport(tenants, jwtConfig);
 const workerRefreshTokens = new WorkerRefreshTokenStore(db);
@@ -61,10 +62,11 @@ const app = createApp({
     apiToWorkerTokens,
     workerConfigEncryptionKey,
     integrationIntakeEvents,
-    jiraIntegrations
+    jiraIntegrations,
+    jiraTicketClaims,
+    integrationLifecycle
   ),
   workerRoutes: createWorkerRoutes(store, signalRHub, outputStorage, gitRepositories),
-  userApiKeyRoutes: createUserApiKeyRoutes(tenants),
   negotiateHandler: signalRHub.negotiate
 });
 const server = createServer(app);

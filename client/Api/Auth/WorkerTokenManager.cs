@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using FirstDraft.Configuration;
 
 namespace FirstDraft.Api.Auth
@@ -28,18 +30,12 @@ namespace FirstDraft.Api.Auth
 
             if (!string.IsNullOrEmpty(_refreshToken))
             {
-                try
-                {
-                    await RefreshAsync();
-                    return _accessToken!;
-                }
-                catch
-                {
-                    _refreshToken = null;
-                }
+                await RefreshAsync();
+                return _accessToken!;
             }
 
-            throw new InvalidOperationException("Worker is not authenticated. Run firstdraft init to log in or sign up.");
+            throw WorkerAuthenticationException.RequiresReauthentication(
+                "Worker is not authenticated. Run firstdraft init and choose 'Re-authenticate worker: yes' to log in or sign up.");
         }
 
         public async Task AuthenticateWithLoginAsync(string email, string password)
@@ -106,22 +102,94 @@ namespace FirstDraft.Api.Auth
                 request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
             }
 
-            using HttpResponseMessage response = await _http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            TokenResponse? tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>();
-            if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken) || string.IsNullOrEmpty(tokenResponse.RefreshToken))
+            HttpResponseMessage response;
+            try
             {
-                throw new InvalidOperationException("Worker auth response did not include tokens");
+                response = await _http.SendAsync(request);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new WorkerAuthenticationException(
+                    $"Unable to reach worker auth endpoint {_applicationData.ExternalAPI}{path}: {ex.Message}",
+                    reauthenticationRequired: false,
+                    ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                throw new WorkerAuthenticationException(
+                    $"Timed out connecting to worker auth endpoint {_applicationData.ExternalAPI}{path}.",
+                    reauthenticationRequired: false,
+                    ex);
             }
 
-            return tokenResponse;
+            using (response)
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    ThrowTokenResponseError(path, response.StatusCode);
+                }
+
+                TokenResponse? tokenResponse;
+                try
+                {
+                    tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>();
+                }
+                catch (JsonException ex)
+                {
+                    throw new WorkerAuthenticationException(
+                        $"Worker auth endpoint {_applicationData.ExternalAPI}{path} returned malformed JSON.",
+                        reauthenticationRequired: false,
+                        ex);
+                }
+
+                if (tokenResponse == null)
+                {
+                    throw new WorkerAuthenticationException(
+                        $"Worker auth endpoint {_applicationData.ExternalAPI}{path} returned an empty or malformed token response.",
+                        reauthenticationRequired: false);
+                }
+
+                string[] missingFields = GetMissingTokenResponseFields(tokenResponse);
+                if (missingFields.Length > 0)
+                {
+                    throw new WorkerAuthenticationException(
+                        $"Worker auth endpoint {_applicationData.ExternalAPI}{path} returned a token response missing: {string.Join(", ", missingFields)}.",
+                        reauthenticationRequired: false);
+                }
+
+                return tokenResponse;
+            }
+        }
+
+        private static string[] GetMissingTokenResponseFields(TokenResponse tokenResponse)
+        {
+            List<string> missingFields = new List<string>();
+
+            if (string.IsNullOrEmpty(tokenResponse.AccessToken)) missingFields.Add("accessToken");
+            if (!tokenResponse.AccessTokenExpiresIn.HasValue) missingFields.Add("accessTokenExpiresIn");
+            if (string.IsNullOrEmpty(tokenResponse.RefreshToken)) missingFields.Add("refreshToken");
+
+            return missingFields.ToArray();
+        }
+
+        private static void ThrowTokenResponseError(string path, HttpStatusCode statusCode)
+        {
+            if (path == "/api/worker-auth/refresh" && (statusCode == HttpStatusCode.BadRequest || statusCode == HttpStatusCode.Unauthorized))
+            {
+                throw WorkerAuthenticationException.RequiresReauthentication(
+                    $"Stored worker refresh token was rejected by the API ({(int)statusCode} {statusCode}). Run firstdraft init and choose 'Re-authenticate worker: yes'.");
+            }
+
+            throw new WorkerAuthenticationException(
+                $"Worker auth endpoint {path} failed with {(int)statusCode} {statusCode}.",
+                reauthenticationRequired: false);
         }
 
         private void Apply(TokenResponse response)
         {
             _accessToken = response.AccessToken;
             _refreshToken = response.RefreshToken;
-            _accessExpiresAt = DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, response.AccessTokenExpiresIn));
+            _accessExpiresAt = DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, response.AccessTokenExpiresIn!.Value));
         }
 
         private async Task StoreRefreshToken(TokenResponse response)
@@ -156,9 +224,25 @@ namespace FirstDraft.Api.Auth
         private sealed class TokenResponse
         {
             public string AccessToken { get; set; } = string.Empty;
-            public int AccessTokenExpiresIn { get; set; }
+            public int? AccessTokenExpiresIn { get; set; }
             public string RefreshToken { get; set; } = string.Empty;
             public string ConfigEncryptionKey { get; set; } = string.Empty;
+        }
+    }
+
+    internal sealed class WorkerAuthenticationException : Exception
+    {
+        public bool ReauthenticationRequired { get; }
+
+        public WorkerAuthenticationException(string message, bool reauthenticationRequired, Exception? innerException = null)
+            : base(message, innerException)
+        {
+            ReauthenticationRequired = reauthenticationRequired;
+        }
+
+        public static WorkerAuthenticationException RequiresReauthentication(string message)
+        {
+            return new WorkerAuthenticationException(message, reauthenticationRequired: true);
         }
     }
 }

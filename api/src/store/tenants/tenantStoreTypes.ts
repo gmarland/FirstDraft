@@ -1,16 +1,6 @@
-import { ApiKey, User } from "../../types.js";
-import {
-  AuthenticatedApiKey,
-  CreateApiKeyInput,
-  CreateApiKeyResult,
-} from "../tenantApiKeys/tenantApiKeyTypes.js";
+import { User } from "../../types.js";
 import { CreateUserInput, UpdateUserInput } from "../tenantUsers/tenantUserTypes.js";
 
-export type {
-  AuthenticatedApiKey,
-  CreateApiKeyInput,
-  CreateApiKeyResult,
-} from "../tenantApiKeys/tenantApiKeyTypes.js";
 export type { CreateUserInput, UpdateUserInput } from "../tenantUsers/tenantUserTypes.js";
 
 export type AppStore = {
@@ -27,16 +17,5 @@ export type AppStore = {
     password: string,
   ): Promise<User | undefined>;
   disableUser(userId: string): Promise<User | undefined>;
-  createApiKey(
-    input: CreateApiKeyInput,
-  ): Promise<CreateApiKeyResult>;
-  listApiKeys(): Promise<ApiKey[]>;
-  listApiKeysForUser(userId: string): Promise<ApiKey[]>;
-  authenticateApiKey(
-    apiKey: string,
-    apiSecret: string,
-  ): Promise<AuthenticatedApiKey | undefined>;
-  revokeApiKey(keyId: string): Promise<ApiKey | undefined>;
-  revokeApiKeyForUser(userId: string, keyId: string): Promise<ApiKey | undefined>;
   close(): Promise<void>;
 };

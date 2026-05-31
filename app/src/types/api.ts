@@ -11,7 +11,6 @@ export type TaskQueueSortDirection = "asc" | "desc";
 export type WorkerRegistration = {
   workerId: string;
   userId: string;
-  apiKeyId?: string;
   connectionId: string;
   paths: string[];
   skills: string[];
@@ -94,19 +93,6 @@ export type UpdateProfileInput = {
   email?: string;
   name?: string;
   password?: string;
-};
-
-export type ApiKey = {
-  keyId: string;
-  userId: string;
-  apiKey: string;
-  name?: string;
-  createdAt: string;
-  revokedAt?: string;
-};
-
-export type CreatedApiKey = ApiKey & {
-  apiSecret: string;
 };
 
 export type LoginResponse = {

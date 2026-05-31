@@ -261,7 +261,7 @@ class DispatchableQueueDbClient implements DbClient {
   }
 }
 
-async function testGetDispatchableQueuedCommandsScopesUnassignedCommandsToApiKeyOwner(): Promise<void> {
+async function testGetDispatchableQueuedCommandsScopesUnassignedCommandsToWorkerOwner(): Promise<void> {
   const db = new DispatchableQueueDbClient();
   const store = new CommandStore(db);
 
@@ -303,7 +303,7 @@ class ClaimCommandDbClient implements DbClient {
   }
 }
 
-async function testMarkWorkerCommandInProgressScopesClaimToApiKeyOwner(): Promise<void> {
+async function testMarkWorkerCommandInProgressScopesClaimToWorkerOwner(): Promise<void> {
   const db = new ClaimCommandDbClient();
   const store = new CommandStore(db);
 
@@ -404,7 +404,7 @@ await testListWorkerCommandsPaginatesAndCounts();
 await testListTaskQueueForUserPaginatesCountsAndPreservesUnassignedWorker();
 await testListTaskQueueForUserSortsByAllowlistedColumns();
 await testListTaskQueueForUserCountsEmptyPage();
-await testGetDispatchableQueuedCommandsScopesUnassignedCommandsToApiKeyOwner();
-await testMarkWorkerCommandInProgressScopesClaimToApiKeyOwner();
+await testGetDispatchableQueuedCommandsScopesUnassignedCommandsToWorkerOwner();
+await testMarkWorkerCommandInProgressScopesClaimToWorkerOwner();
 
 console.log("command store tests passed");
