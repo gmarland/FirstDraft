@@ -42,7 +42,7 @@ namespace FirstDraft.Cli.Jira
                 return 0;
             }
 
-            PrintRow("INTEGRATION ID", "SITE URL", "BOARD");
+            PrintRow("ID", "SITE URL", "BOARD");
             foreach (JiraIntegrationConfig integration in integrations)
             {
                 PrintRow(
