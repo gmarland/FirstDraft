@@ -88,7 +88,7 @@ export class WorkerAuthController {
       const attachment = readImageAttachmentMetadata(event.metadata, req.params.attachmentId);
       if (!attachment) return res.status(404).json({ error: "attachment not found" });
 
-      const credentials = await this.jiraIntegrations.getCredentials(participant.userId, participant.integrationId);
+      const credentials = await this.jiraIntegrations.getCredentials(participant.userId, participant.integrationId, worker.workerId);
       if (!credentials) return res.status(404).json({ error: "Jira integration not found" });
 
       const content = await new JiraClient(credentials).downloadAttachmentContent(attachment.contentUrl);

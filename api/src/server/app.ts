@@ -10,7 +10,6 @@ type CreateAppOptions = {
   workerAuthRoutes: Router;
   workerRoutes: Router;
   userApiKeyRoutes: Router;
-  integrationRoutes: Router;
   negotiateHandler: RequestHandler;
 };
 
@@ -19,7 +18,6 @@ export function createApp({
   workerAuthRoutes,
   workerRoutes,
   userApiKeyRoutes,
-  integrationRoutes,
   negotiateHandler
 }: CreateAppOptions): express.Express {
   const app = express();
@@ -45,18 +43,7 @@ export function createApp({
   app.use("/api/auth", authRoutes);
   app.use("/api/worker-auth", workerAuthRoutes);
   app.use("/api/me/api-keys", requireJwt, userApiKeyRoutes);
-  app.use("/api/integrations", requireJwtUnlessPublicJiraIntake, integrationRoutes);
   app.use("/api/workers", requireJwt, workerRoutes);
 
   return app;
 }
-
-const publicJiraIntakePattern = /^\/jira\/[^/]+\/intake$/;
-
-const requireJwtUnlessPublicJiraIntake: RequestHandler = (req, res, next) => {
-  if (req.method === "POST" && (req.path === "/jira/intake" || publicJiraIntakePattern.test(req.path))) {
-    return next();
-  }
-
-  return requireJwt(req, res, next);
-};

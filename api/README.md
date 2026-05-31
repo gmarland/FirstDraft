@@ -53,31 +53,7 @@ Workers and commands:
 - `GET /api/workers/:workerId/commands/:transactionId/output`
 - `GET /api/workers/:workerId/commands/:transactionId/responses`
 
-Jira integrations:
-
-- `GET /api/integrations`
-- `GET /api/integrations/jira`
-- `GET /api/integrations/jira/:integrationId`
-- `PUT /api/integrations/jira/connection`
-- `PUT /api/integrations/jira/:integrationId/connection`
-- `POST /api/integrations/jira/test-connection`
-- `POST /api/integrations/jira/:integrationId/test-connection`
-- `POST /api/integrations/jira/intake`
-- `POST /api/integrations/jira/:integrationId/intake`
-- `GET /api/integrations/jira/:integrationId/boards`
-- `PUT /api/integrations/jira/:integrationId/board`
-- `GET /api/integrations/jira/:integrationId/boards/:boardId/statuses`
-- `PUT /api/integrations/jira/:integrationId/ready-status`
-- `PUT /api/integrations/jira/:integrationId/workflow`
-- `PUT /api/integrations/jira/:integrationId/enabled`
-- `GET /api/integrations/jira/:integrationId/ready-issues/sample`
-- `GET /api/integrations/jira/:integrationId/issues/:issueKey/transitions`
-- `GET /api/integrations/jira/:integrationId/transitions/:issueKey`
-- `PUT /api/integrations/jira/:integrationId/processed-status`
-- `PUT /api/integrations/jira/:integrationId/processed-transition`
-- `PUT /api/integrations/jira/:integrationId/settings`
-- `POST /api/integrations/jira/:integrationId/test`
-- `DELETE /api/integrations/jira/:integrationId`
+Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for intake, attachment download, and lifecycle transitions. There is no public `/api/integrations` management surface.
 
 ## Commands
 

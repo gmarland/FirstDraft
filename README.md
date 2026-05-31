@@ -31,7 +31,7 @@ This repository contains the full FirstDraft stack:
 | Path | Purpose |
 | --- | --- |
 | `api/` | Express API, authentication, worker coordination, SignalR-compatible hub, OpenAPI docs, persistence, and integrations |
-| `app/` | React/Vite console for users, workers, repositories, integrations, API keys, and command history |
+| `app/` | React/Vite console for users, workers, repositories, API keys, and command history |
 | `client/` | .NET worker that connects to the API, advertises skills, and executes shell, AI, and gitflow commands |
 | `docker-compose.yml` | Local Postgres and MinIO services for development |
 
@@ -70,7 +70,7 @@ That makes FirstDraft useful as a shared execution layer, not just a chat interf
 
 ## Jira-Driven Automation
 
-FirstDraft can connect Jira intake to the worker fleet. Configure a Jira connection, choose the board and statuses that represent ready, processing, and processed work, then enable intake from the UI.
+FirstDraft can connect Jira intake to the worker fleet. Configure Jira connections on the worker CLI, choose the board and statuses that represent ready, processing, and processed work, then start the worker so it advertises those integrations to the API.
 
 When intake runs, FirstDraft finds eligible issues and queues repository-backed worker tasks. This is where the system becomes more than manual dispatch: Jira can become the trigger for remote AI engineering work, with status transitions and command output keeping the workflow visible.
 
@@ -152,7 +152,7 @@ For real use, run this worker on the remote machine that has the repository, net
 
 ### 5. Enable Jira intake
 
-Open the Integrations page, add a Jira connection, choose the board and workflow statuses, then enable intake. Once enabled, Jira issues in the selected ready status can be picked up and queued as worker tasks.
+On each worker that should handle Jira work, add a Jira integration with `dotnet run -- integrations add <integration-id> ...`, then start the worker. Once enabled, Jira issues in the selected ready status can be picked up and queued as worker tasks.
 
 ## Common Commands
 

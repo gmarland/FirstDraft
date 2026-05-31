@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { normalizeEnabledTaskTypes } from "../src/commandModes.js";
 import { readUpdateProfileInput, validateUpdateProfileInput, validateUserInput } from "../src/controllers/auth/authValidation.js";
-import { validateConnectionInput, validateWorkflowInput } from "../src/controllers/integrations/integrationRequests.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "../src/controllers/workers/workerRequests.js";
 
 function testAuthValidation(): void {
@@ -44,30 +43,7 @@ function testWorkerRequests(): void {
   assert.deepEqual(readTaskQueueSort({ sortBy: "task", sortDirection: "invalid" }), {});
 }
 
-function testIntegrationRequests(): void {
-  assert.equal(validateConnectionInput({ siteUrl: "", email: "user@example.com" }), "siteUrl is required");
-  assert.equal(validateConnectionInput({ siteUrl: "https://example.atlassian.net", email: "" }), "email is required");
-  assert.equal(validateConnectionInput({ siteUrl: "not a url", email: "user@example.com" }), "siteUrl must be a valid URL");
-  assert.equal(validateConnectionInput({ siteUrl: "https://example.atlassian.net", email: "user@example.com" }), undefined);
-  assert.equal(
-    validateWorkflowInput({
-      boardId: 1,
-      boardName: "Board",
-      boardType: "scrum",
-      readyStatusId: "1",
-      readyStatusName: "Ready",
-      processingStatusId: "",
-      processingStatusName: "",
-      processedStatusId: "",
-      processedStatusName: "",
-      enabled: false
-    }),
-    "processingStatusId is required"
-  );
-}
-
 testAuthValidation();
 testWorkerRequests();
-testIntegrationRequests();
 
 console.log("controller helper tests passed");

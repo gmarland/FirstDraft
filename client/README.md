@@ -28,6 +28,10 @@ dotnet run -- repos list
 dotnet run -- repos add <repository-url> --source <branch> --target <branch>
 dotnet run -- repos update <repository-url> --source <branch> --target <branch>
 dotnet run -- repos remove <repository-url>
+dotnet run -- integrations list
+dotnet run -- integrations add <integration-id> --site-url <url> --email <email> --api-token <token> --board-id <id> --board-name <name> --board-type <type> --ready-status-id <id> --ready-status-name <name> --processing-status-id <id> --processing-status-name <name> --processed-status-id <id> --processed-status-name <name>
+dotnet run -- integrations update <integration-id> [options]
+dotnet run -- integrations remove <integration-id>
 dotnet run -- run
 dotnet run -- run --task-types ai,shell,gitflow
 dotnet run -- help
@@ -41,6 +45,7 @@ Command details:
 - `taskTypes` or `task-types`: update which task types this worker accepts.
 - `enablePlanning`: configure whether AI commands use a planning pass.
 - `repos list|add|update|remove`: manage Git repositories and their enforced source/PR target branches for this worker.
+- `integrations list|add|update|remove`: manage Jira integrations for this worker. API tokens are encrypted in local config and are never printed by `list`.
 - `run`: start the worker and connect it to the API.
 - `run --task-types ai,shell,gitflow`: override enabled task types for this run only without changing saved configuration.
 - `help`: print command help.
@@ -71,6 +76,15 @@ dotnet run -- repos remove https://github.com/example/repo.git
 
 The configured source and PR target branches are enforced by the API for manual and queued gitflow tasks.
 
+Each worker also advertises its own Jira integrations from local configuration. Manage them with:
+
+```bash
+dotnet run -- integrations list
+dotnet run -- integrations add <integration-id> --site-url https://example.atlassian.net --email user@example.com --api-token <token> --board-id 1 --board-name Delivery --board-type scrum --ready-status-id ready --ready-status-name Ready --processing-status-id doing --processing-status-name "In Progress" --processed-status-id done --processed-status-name Done
+dotnet run -- integrations update <integration-id> --enabled false
+dotnet run -- integrations remove <integration-id>
+```
+
 Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
 
 `MaxConcurrentTasks` controls concurrent gitflow execution and must be between `1` and `8`.
@@ -95,6 +109,7 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `GitWorkspaceDirectory`: workspace root for gitflow repository work.
 - `MaxConcurrentTasks`: maximum concurrent gitflow tasks, from `1` to `8`.
 - `GitRepositories`: worker-local Git repositories with enforced source and PR target branches.
+- `JiraIntegrations`: worker-local Jira connections and workflow settings with encrypted API tokens.
 
 Credentials can be encrypted in the config. Keep the worker configuration private and run workers only on machines trusted to access the configured repositories, credentials, tools, and networks.
 

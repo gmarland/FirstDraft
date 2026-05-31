@@ -99,32 +99,34 @@ export class SchemaMigrator {
       create index if not exists worker_git_repositories_worker_last_used_idx
         on worker_git_repositories(worker_id, last_used_at desc);
 
-      create table if not exists tenant_jira_integration (
-        id uuid primary key,
+      create table if not exists worker_jira_integrations (
+        worker_id text not null references client_workers(worker_id) on delete cascade,
+        integration_id uuid not null,
         user_id uuid not null references users(id) on delete cascade,
-        site_url text,
-        email text,
-        api_token_encrypted text,
-        board_id integer,
-        board_name text,
-        board_type text,
+        site_url text not null,
+        email text not null,
+        api_token_encrypted text not null,
+        board_id integer not null,
+        board_name text not null,
+        board_type text not null,
         board_filter_id integer,
-        ready_status_id text,
-        ready_status_name text,
-        processing_status_id text,
-        processing_status_name text,
-        processed_status_id text,
-        processed_status_name text,
-        enabled boolean not null default false,
+        ready_status_id text not null,
+        ready_status_name text not null,
+        processing_status_id text not null,
+        processing_status_name text not null,
+        processed_status_id text not null,
+        processed_status_name text not null,
+        enabled boolean not null default true,
         created_at timestamptz not null default now(),
-        updated_at timestamptz not null default now()
+        updated_at timestamptz not null default now(),
+        primary key (worker_id, integration_id)
       );
 
-      create index if not exists tenant_jira_integration_user_id_idx
-        on tenant_jira_integration(user_id);
+      create index if not exists worker_jira_integrations_user_enabled_idx
+        on worker_jira_integrations(user_id, enabled);
 
-      create index if not exists tenant_jira_integration_user_enabled_idx
-        on tenant_jira_integration(user_id, enabled);
+      create index if not exists worker_jira_integrations_integration_idx
+        on worker_jira_integrations(integration_id);
 
       create table if not exists client_commands (
         transaction_id text primary key,

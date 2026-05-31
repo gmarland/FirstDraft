@@ -5,6 +5,7 @@ import { ApiToWorkerTokenIssuer, WorkerTokenService } from "../auth/workerTokens
 import { CommandOutputStorage } from "../storage/commandOutputStorage.js";
 import { WorkerStore } from "../store/clientStore.js";
 import { GitRepositoryStore } from "../store/gitRepositories/gitRepositoryStore.js";
+import { JiraIntegrationStore } from "../store/integrations/jiraIntegrationStore.js";
 import { CommandResultService } from "./commands/commandResultService.js";
 import { WorkerCommandDispatcher } from "./commands/workerCommandDispatcher.js";
 import { SignalRInvocationDispatcher } from "./invocations/signalRInvocationDispatcher.js";
@@ -43,9 +44,10 @@ export class SignalRHub {
     apiToWorkerTokens: ApiToWorkerTokenIssuer,
     outputStorage?: CommandOutputStorage,
     lifecycle?: CommandLifecycleObserver,
-    gitRepositories?: GitRepositoryStore
+    gitRepositories?: GitRepositoryStore,
+    jiraIntegrations?: JiraIntegrationStore
   ) {
-    this.workerRegistration = new WorkerRegistrationService(store, workerTokens, this.connections, gitRepositories);
+    this.workerRegistration = new WorkerRegistrationService(store, workerTokens, this.connections, gitRepositories, jiraIntegrations);
     this.commands = new WorkerCommandDispatcher(store, apiToWorkerTokens, this.connections, lifecycle);
 
     const commandResults = new CommandResultService(

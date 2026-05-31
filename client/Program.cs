@@ -47,6 +47,11 @@ namespace FirstDraft
                     GitRepositoryConfigurationService gitRepositoryConfigurationService = new GitRepositoryConfigurationService(reposApplicationDataService);
                     return await gitRepositoryConfigurationService.Repos(args.Skip(1).ToArray());
 
+                case "integrations":
+                    ApplicationDataService integrationsApplicationDataService = new ApplicationDataService();
+                    JiraIntegrationConfigurationService jiraIntegrationConfigurationService = new JiraIntegrationConfigurationService(integrationsApplicationDataService);
+                    return await jiraIntegrationConfigurationService.Integrations(args.Skip(1).ToArray());
+
                 case "run":
                     await CreateHostBuilder(args.Skip(1).ToArray()).Build().RunAsync();
                     return 0;
@@ -94,6 +99,7 @@ namespace FirstDraft
             Console.WriteLine("  firstdraft taskTypes  Update enabled task types interactively");
             Console.WriteLine("  firstdraft enablePlanning  Configure AI planning for this client");
             Console.WriteLine("  firstdraft repos list|add|update|remove  Manage Git repositories for this worker");
+            Console.WriteLine("  firstdraft integrations list|add|update|remove  Manage Jira integrations for this worker");
             Console.WriteLine("  firstdraft run [--task-types ai,shell,gitflow]  Start the FirstDraft client worker");
             Console.WriteLine("  firstdraft help    Show this help");
         }

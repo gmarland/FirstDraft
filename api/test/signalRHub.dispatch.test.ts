@@ -321,7 +321,8 @@ function createCommandDispatcher(store: WorkerStore, connections = new Map<strin
 function createWorkerRegistration(
   store: WorkerStore,
   connections = new Map<string, SignalRConnection>(),
-  gitRepositories?: { syncWorkerRepositories(workerId: string, repositories: unknown[]): Promise<void> }
+  gitRepositories?: { syncWorkerRepositories(workerId: string, repositories: unknown[]): Promise<void> },
+  jiraIntegrations?: { syncWorkerIntegrations(workerId: string, userId: string, integrations: unknown[]): Promise<void> }
 ): WorkerRegistrationService {
   return new WorkerRegistrationService(
     store,
@@ -333,7 +334,8 @@ function createWorkerRegistration(
       }
     } as WorkerTokenService,
     connections,
-    gitRepositories as never
+    gitRepositories as never,
+    jiraIntegrations as never
   );
 }
 
@@ -724,6 +726,77 @@ async function testRegistrationSyncsWorkerRepositories(): Promise<void> {
   ]);
 }
 
+async function testRegistrationSyncsWorkerJiraIntegrations(): Promise<void> {
+  const store = new FakeWorkerStore(1, []);
+  const connection = createConnection();
+  const syncCalls: Array<{ workerId: string; userId: string; integrations: unknown[] }> = [];
+  const registration = createWorkerRegistration(store, new Map(), undefined, {
+    async syncWorkerIntegrations(workerId: string, userId: string, integrations: unknown[]) {
+      syncCalls.push({ workerId, userId, integrations });
+    }
+  });
+
+  await registration.registerWorker(connection, [
+    "access:worker-1",
+    "connection-registered",
+    "worker-1",
+    "",
+    "git",
+    1,
+    "gitflow",
+    "[]",
+    JSON.stringify([
+      {
+        integrationId: "11111111-1111-4111-8111-111111111111",
+        enabled: true,
+        siteUrl: "https://example.atlassian.net",
+        email: "user@example.com",
+        apiToken: "secret",
+        boardId: 12,
+        boardName: "Delivery",
+        boardType: "scrum",
+        boardFilterId: 34,
+        readyStatusId: "ready",
+        readyStatusName: "Ready",
+        processingStatusId: "doing",
+        processingStatusName: "Doing",
+        processedStatusId: "done",
+        processedStatusName: "Done"
+      },
+      {
+        integrationId: "invalid",
+        enabled: true
+      }
+    ])
+  ]);
+
+  assert.deepEqual(syncCalls, [
+    {
+      workerId: "worker-1",
+      userId: "user-1",
+      integrations: [
+        {
+          integrationId: "11111111-1111-4111-8111-111111111111",
+          enabled: true,
+          siteUrl: "https://example.atlassian.net",
+          email: "user@example.com",
+          apiToken: "secret",
+          boardId: 12,
+          boardName: "Delivery",
+          boardType: "scrum",
+          boardFilterId: 34,
+          readyStatusId: "ready",
+          readyStatusName: "Ready",
+          processingStatusId: "doing",
+          processingStatusName: "Doing",
+          processedStatusId: "done",
+          processedStatusName: "Done"
+        }
+      ]
+    }
+  ]);
+}
+
 async function testDispatcherFailsDisabledCommandModes(): Promise<void> {
   const store = new FakeWorkerStore(2, ["gitflow", "ai"], ["ai"]);
   const connection = createConnection();
@@ -847,6 +920,7 @@ await testBackfillsAvailableSlotsAfterCompletionAndCancel();
 await testRegistrationRejectsMismatchedTokenAndRemapsConnection();
 await testRegistrationDefaultsTaskTypesForOlderClients();
 await testRegistrationSyncsWorkerRepositories();
+await testRegistrationSyncsWorkerJiraIntegrations();
 await testDispatcherFailsDisabledCommandModes();
 await testCommandResultCompletesOutputStorageAndMetadata();
 await testCommandOutputChunkRejectsQueuedAndNonOwnedCommands();

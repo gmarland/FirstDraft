@@ -207,6 +207,7 @@ export class IntegrationLifecycleService {
       credentials: await this.jiraIntegrations.getCredentials(
         participant.userId,
         participant.integrationId,
+        command.workerId,
       ),
     };
   }
