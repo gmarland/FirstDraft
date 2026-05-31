@@ -298,11 +298,21 @@ namespace FirstDraft.Api
         {
             if (_jiraTicketPolling != null) return;
 
+            int repositoryCount = GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories).Length;
+            int integrationCount = JiraIntegrationConfigService.BuildRegistrationPayload(_applicationData).Length;
+            int maxConcurrentTasks = GetMaxConcurrentTasks(_applicationData);
+            _logger.Info($"Starting Jira ticket polling; interval: {JiraTicketPollingService.PollIntervalSeconds}s, configured integrations: {integrationCount}, configured Git repositories: {repositoryCount}, available capacity: {_commandCapacity.CurrentCount}/{maxConcurrentTasks}");
+
             _jiraTicketPolling = new JiraTicketPollingService(
                 _logger,
                 _applicationData,
                 () => _tokens.EnsureAccessTokenAsync(),
-                () => _apiHubConnection?.State == HubConnectionState.Connected && _commandCapacity.CurrentCount > 0,
+                () =>
+                {
+                    if (_apiHubConnection?.State != HubConnectionState.Connected) return "SignalR connection is not connected";
+                    if (_commandCapacity.CurrentCount <= 0) return "no command capacity is available";
+                    return null;
+                },
                 ExecuteClaimedCommand);
             _jiraTicketPolling.Start();
         }

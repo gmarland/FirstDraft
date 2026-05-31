@@ -54,21 +54,16 @@ export class WorkerRefreshTokenStore {
             and users.disabled_at is null
         )
       `)
-      .returning(["id", "worker_id", "user_id"])
+      .returning(["id", "workerId", "userId"])
       .execute();
 
-    const row = result.raw[0] as { id?: unknown; worker_id?: unknown; user_id?: unknown } | undefined;
-    if (!row) return undefined;
+    const consumed = readConsumedRefreshToken(result.raw?.[0], result.generatedMaps?.[0]);
+    if (!consumed) return undefined;
 
-    const userId = String(row.user_id);
-    const user = await this.users.findOneBy({ id: userId, disabledAt: IsNull() });
+    const user = await this.users.findOneBy({ id: consumed.userId, disabledAt: IsNull() });
     if (!user) return undefined;
 
-    return {
-      id: String(row.id),
-      workerId: String(row.worker_id),
-      userId
-    };
+    return consumed;
   }
 
   public async markReplaced(id: string, replacementId: string): Promise<void> {
@@ -82,4 +77,32 @@ export class WorkerRefreshTokenStore {
 
 function hashRefreshToken(refreshToken: string): string {
   return createHash("sha256").update(refreshToken).digest("base64url");
+}
+
+type RefreshTokenUpdateRow = {
+  id?: unknown;
+  worker_id?: unknown;
+  workerId?: unknown;
+  user_id?: unknown;
+  userId?: unknown;
+};
+
+function readConsumedRefreshToken(rawRow: unknown, generatedMap: unknown): ConsumedRefreshToken | undefined {
+  const raw = rawRow as RefreshTokenUpdateRow | undefined;
+  const mapped = generatedMap as RefreshTokenUpdateRow | undefined;
+  const id = readRequiredString(raw?.id, mapped?.id);
+  const workerId = readRequiredString(raw?.worker_id, raw?.workerId, mapped?.worker_id, mapped?.workerId);
+  const userId = readRequiredString(raw?.user_id, raw?.userId, mapped?.user_id, mapped?.userId);
+
+  return id && workerId && userId ? { id, workerId, userId } : undefined;
+}
+
+function readRequiredString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+
+  return undefined;
 }

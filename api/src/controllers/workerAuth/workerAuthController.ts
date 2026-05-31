@@ -138,6 +138,7 @@ export class WorkerAuthController {
       if (!result.claimed) {
         return res.status(409).json({
           claimed: false,
+          ...(result.reason ? { reason: result.reason } : {}),
           event: result.event
             ? {
                 id: result.event.id,

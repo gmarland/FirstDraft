@@ -11,7 +11,7 @@ namespace FirstDraft.Cli.Jira
 {
     internal sealed class JiraTicketPollingService : IDisposable
     {
-        private const int PollIntervalSeconds = 60;
+        public const int PollIntervalSeconds = 60;
         private const int MaxIssuesPerIntegration = 25;
         private const int MaxImageAttachments = 5;
         private const long MaxImageAttachmentBytes = 10 * 1024 * 1024;
@@ -29,7 +29,7 @@ namespace FirstDraft.Cli.Jira
         private readonly Log _logger;
         private readonly ApplicationData _applicationData;
         private readonly Func<Task<string>> _getWorkerAccessToken;
-        private readonly Func<bool> _canClaimWork;
+        private readonly Func<string?> _getClaimBlockReason;
         private readonly Func<string, string, string, Task> _executeClaimedCommand;
         private readonly HttpClient _http = new HttpClient();
         private CancellationTokenSource? _cancellation;
@@ -39,13 +39,13 @@ namespace FirstDraft.Cli.Jira
             Log logger,
             ApplicationData applicationData,
             Func<Task<string>> getWorkerAccessToken,
-            Func<bool> canClaimWork,
+            Func<string?> getClaimBlockReason,
             Func<string, string, string, Task> executeClaimedCommand)
         {
             _logger = logger;
             _applicationData = applicationData;
             _getWorkerAccessToken = getWorkerAccessToken;
-            _canClaimWork = canClaimWork;
+            _getClaimBlockReason = getClaimBlockReason;
             _executeClaimedCommand = executeClaimedCommand;
         }
 
@@ -79,42 +79,82 @@ namespace FirstDraft.Cli.Jira
 
         private async Task Run(CancellationToken cancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await PollOnce(cancellationToken);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error("Error polling Jira tickets", ex);
-                }
+            _logger.Info($"Jira ticket polling loop started; interval: {PollIntervalSeconds}s");
 
-                await Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds), cancellationToken);
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await PollOnce(cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error("Error polling Jira tickets", ex);
+                    }
+
+                    await Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds), cancellationToken);
+                }
+            }
+            finally
+            {
+                _logger.Info("Jira ticket polling loop stopped");
             }
         }
 
         private async Task PollOnce(CancellationToken cancellationToken)
         {
-            if (!_canClaimWork()) return;
-            if (!WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(_applicationData.EnabledTaskTypes).Contains("gitflow", StringComparer.OrdinalIgnoreCase)) return;
-            if (!WorkerSkillRegistry.ResolveAvailableSkills(_applicationData.Skills).Contains("git", StringComparer.OrdinalIgnoreCase)) return;
+            _logger.Debug("Jira ticket polling tick");
 
-            JiraIntegrationConfig[] integrations = JiraIntegrationConfigService.NormalizeIntegrations(_applicationData.JiraIntegrations)
-                .Where(integration => integration.Enabled && JiraIntegrationConfigService.ValidateIntegration(_applicationData, integration) == null)
-                .ToArray();
-            if (integrations.Length == 0) return;
+            string? claimBlockReason = _getClaimBlockReason();
+            if (claimBlockReason != null)
+            {
+                _logger.Debug($"Skipping Jira ticket polling: {claimBlockReason}");
+                return;
+            }
+
+            string[] enabledTaskTypes = WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(_applicationData.EnabledTaskTypes);
+            if (!enabledTaskTypes.Contains("gitflow", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.Debug("Skipping Jira ticket polling: gitflow task type is disabled");
+                return;
+            }
+
+            string[] availableSkills = WorkerSkillRegistry.ResolveAvailableSkills(_applicationData.Skills);
+            if (!availableSkills.Contains("git", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.Debug("Skipping Jira ticket polling: git skill is not available");
+                return;
+            }
+
+            JiraIntegrationConfig[] integrations = ResolvePollableIntegrations();
+            if (integrations.Length == 0)
+            {
+                _logger.Debug("Skipping Jira ticket polling: no enabled and valid Jira integrations are configured");
+                return;
+            }
 
             GitRepositoryConfig[] repositories = GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories);
-            if (repositories.Length == 0) return;
+            if (repositories.Length == 0)
+            {
+                _logger.Debug("Skipping Jira ticket polling: no Git repositories are configured");
+                return;
+            }
 
             foreach (JiraIntegrationConfig integration in integrations)
             {
-                if (!_canClaimWork() || cancellationToken.IsCancellationRequested) return;
+                claimBlockReason = _getClaimBlockReason();
+                if (claimBlockReason != null)
+                {
+                    _logger.Debug($"Stopping Jira ticket polling tick: {claimBlockReason}");
+                    return;
+                }
+                if (cancellationToken.IsCancellationRequested) return;
                 await PollIntegration(integration, repositories, cancellationToken);
             }
         }
@@ -122,21 +162,31 @@ namespace FirstDraft.Cli.Jira
         private async Task PollIntegration(JiraIntegrationConfig integration, GitRepositoryConfig[] repositories, CancellationToken cancellationToken)
         {
             using JiraCliClient jira = new JiraCliClient(integration.SiteUrl, integration.Email, integration.GetApiToken(_applicationData));
-            string[] repositoryFieldKeys = await ResolveRepositoryFieldKeys(jira);
+            string[] repositoryFieldKeys = await ResolveRepositoryFieldKeys(jira, cancellationToken);
             string[] fields = new[] { "summary", "status", "description", "attachment", "repository" }
                 .Concat(repositoryFieldKeys)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            JiraIssueSummary[] issues = await jira.SearchIssues(BuildReadyJql(integration), MaxIssuesPerIntegration, fields);
+            string jql = BuildReadyJql(integration);
+
+            _logger.Info($"Polling Jira integration {integration.IntegrationId} ({integration.SiteUrl}) with JQL: {jql}");
+            JiraIssueSummary[] issues = await jira.SearchIssues(jql, MaxIssuesPerIntegration, fields, cancellationToken);
+            _logger.Info($"Jira integration {integration.IntegrationId} returned {issues.Length} ready issue(s)");
 
             foreach (JiraIssueSummary issue in issues)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!_canClaimWork()) return;
+                string? claimBlockReason = _getClaimBlockReason();
+                if (claimBlockReason != null)
+                {
+                    _logger.Debug($"Stopping Jira issue processing before {issue.Key}: {claimBlockReason}");
+                    return;
+                }
 
                 string? repositoryUrl = ReadRepositoryField(issue, new[] { "repository" }.Concat(repositoryFieldKeys));
                 if (string.IsNullOrWhiteSpace(repositoryUrl))
                 {
+                    _logger.Debug($"Skipping Jira issue {issue.Key}: no repository field value found");
                     continue;
                 }
 
@@ -145,6 +195,7 @@ namespace FirstDraft.Cli.Jira
                     string.Equals(candidate.NormalizedRepositoryUrl, normalizedRepositoryUrl, StringComparison.OrdinalIgnoreCase));
                 if (repository == null)
                 {
+                    _logger.Debug($"Skipping Jira issue {issue.Key}: repository {normalizedRepositoryUrl} is not configured for this worker");
                     continue;
                 }
 
@@ -163,6 +214,28 @@ namespace FirstDraft.Cli.Jira
 
                 if (claim == null || !claim.Claimed || string.IsNullOrWhiteSpace(claim.TransactionId))
                 {
+                    if (claim == null)
+                    {
+                        _logger.Debug($"Skipping Jira issue {issue.Key}: claim failed");
+                    }
+                    else if (!claim.Claimed)
+                    {
+                        if (claim.Event == null)
+                        {
+                            string reason = string.IsNullOrWhiteSpace(claim.Reason) ? "claim rejected by API" : claim.Reason;
+                            _logger.Info($"Skipping Jira issue {issue.Key}: {reason}");
+                        }
+                        else
+                        {
+                            string existingClaim = $"existing active claim {claim.Event.TransactionId ?? "without transaction"} for worker {claim.Event.WorkerId ?? "unknown"} with status {claim.Event.Status ?? "unknown"}";
+                            _logger.Info($"Skipping Jira issue {issue.Key}: already claimed ({existingClaim})");
+                        }
+                    }
+                    else
+                    {
+                        _logger.Debug($"Skipping Jira issue {issue.Key}: claim response did not include a transaction ID");
+                    }
+
                     continue;
                 }
 
@@ -177,6 +250,7 @@ namespace FirstDraft.Cli.Jira
                     .ToArray();
                 string executionCommand = BuildGitflowCommand(repository, issue, issueUrl, executionAttachments);
 
+                _logger.Info($"Claimed Jira issue {issue.Key}; dispatching gitflow command {claim.TransactionId}");
                 _ = Task.Run(async () =>
                 {
                     try
@@ -189,6 +263,30 @@ namespace FirstDraft.Cli.Jira
                     }
                 }, cancellationToken);
             }
+        }
+
+        private JiraIntegrationConfig[] ResolvePollableIntegrations()
+        {
+            List<JiraIntegrationConfig> integrations = new List<JiraIntegrationConfig>();
+            foreach (JiraIntegrationConfig integration in JiraIntegrationConfigService.NormalizeIntegrations(_applicationData.JiraIntegrations))
+            {
+                if (!integration.Enabled)
+                {
+                    _logger.Debug($"Skipping Jira integration {integration.IntegrationId}: integration is disabled");
+                    continue;
+                }
+
+                string? validationError = JiraIntegrationConfigService.ValidateIntegration(_applicationData, integration);
+                if (validationError != null)
+                {
+                    _logger.Debug($"Skipping Jira integration {integration.IntegrationId}: {validationError}");
+                    continue;
+                }
+
+                integrations.Add(integration);
+            }
+
+            return integrations.ToArray();
         }
 
         private async Task<JiraClaimResponse?> ClaimTicket(
@@ -221,12 +319,20 @@ namespace FirstDraft.Cli.Jira
             });
 
             using HttpResponseMessage response = await _http.SendAsync(request, cancellationToken);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (response.StatusCode == HttpStatusCode.Conflict)
             {
-                return new JiraClaimResponse { Claimed = false };
+                try
+                {
+                    return JsonConvert.DeserializeObject<JiraClaimResponse>(body) ?? new JiraClaimResponse { Claimed = false };
+                }
+                catch
+                {
+                    _logger.Debug($"Jira claim for {issue.Key} returned an unreadable conflict response: {body}");
+                    return new JiraClaimResponse { Claimed = false };
+                }
             }
 
-            string body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Debug($"Jira claim for {issue.Key} failed with {(int)response.StatusCode}: {body}");
@@ -236,11 +342,11 @@ namespace FirstDraft.Cli.Jira
             return JsonConvert.DeserializeObject<JiraClaimResponse>(body);
         }
 
-        private static async Task<string[]> ResolveRepositoryFieldKeys(JiraCliClient jira)
+        private static async Task<string[]> ResolveRepositoryFieldKeys(JiraCliClient jira, CancellationToken cancellationToken)
         {
             try
             {
-                JiraFieldOption[] fields = await jira.FindFields("repository");
+                JiraFieldOption[] fields = await jira.FindFields("repository", cancellationToken);
                 return fields
                     .SelectMany(field => new[] { field.Id, field.Key })
                     .Where(field => !string.IsNullOrWhiteSpace(field))
@@ -390,6 +496,15 @@ namespace FirstDraft.Cli.Jira
             public bool Claimed { get; set; }
             public string? TransactionId { get; set; }
             public string? EventId { get; set; }
+            public string? Reason { get; set; }
+            public JiraClaimEvent? Event { get; set; }
+        }
+
+        private sealed class JiraClaimEvent
+        {
+            public string? WorkerId { get; set; }
+            public string? TransactionId { get; set; }
+            public string? Status { get; set; }
         }
 
         private sealed record JiraAttachmentMetadata(string Id, string Filename, string MimeType, long? Size, string ContentUrl);

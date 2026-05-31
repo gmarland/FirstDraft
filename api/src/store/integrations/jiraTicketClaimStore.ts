@@ -27,12 +27,15 @@ export type ClaimJiraTicketResult =
   | {
       claimed: false;
       event?: IntegrationIntakeEvent;
+      reason?: string;
     };
 
 export class JiraTicketClaimStore {
   public constructor(private readonly pool: DbClient) {}
 
   public async claim(input: ClaimJiraTicketInput): Promise<ClaimJiraTicketResult> {
+    await this.expireStaleActiveClaim(input.sourceItemUrl);
+
     const transactionId = nanoid();
     const result = await this.pool.query(
       `
@@ -57,6 +60,10 @@ export class JiraTicketClaimStore {
               from client_commands active_commands
               where active_commands.worker_id = workers.worker_id
                 and active_commands.status = 'in_progress'
+                and (
+                  active_commands.claimed_at is null
+                  or active_commands.claimed_at >= now() - ($13::int * interval '1 minute')
+                )
             ) < workers.max_concurrent_tasks
             and exists (
               select 1
@@ -66,7 +73,37 @@ export class JiraTicketClaimStore {
             )
           limit 1
         ),
-        created_event as (
+        active_event as (
+          select ${prefixedEventReturningColumns("events")}
+          from integration_intake_events events
+          where events.provider = 'jira'
+            and events.source_item_url = $6
+            and events.status in ('queueing', 'queued', 'processing')
+          order by events.created_at asc, events.id asc
+          limit 1
+          for update of events
+        ),
+        claimable_existing_event as (
+          select *
+          from active_event
+          where not exists (
+            select 1
+            from client_commands active_commands
+            where active_commands.transaction_id = active_event.transaction_id
+              and active_commands.status = 'in_progress'
+          )
+        ),
+        updated_existing_event as (
+          update integration_intake_events events
+          set status = 'processing',
+            worker_id = worker_integration.worker_id,
+            transaction_id = $10,
+            updated_at = now()
+          from claimable_existing_event, worker_integration
+          where events.id = claimable_existing_event.id
+          returning ${prefixedEventReturningColumns("events")}
+        ),
+        inserted_event as (
           insert into integration_intake_events (
             provider,
             source_item_id,
@@ -74,6 +111,8 @@ export class JiraTicketClaimStore {
             source_item_url,
             repository_url,
             normalized_repository_url,
+            worker_id,
+            transaction_id,
             metadata,
             status,
             updated_at
@@ -85,15 +124,26 @@ export class JiraTicketClaimStore {
             $6,
             $7,
             $8,
+            worker_integration.worker_id,
+            $10,
             $9::jsonb,
-            'queueing',
+            'processing',
             now()
           from worker_integration
+          where not exists (select 1 from active_event)
           on conflict (provider, source_item_url)
             where source_item_url is not null
               and status in ('queueing', 'queued', 'processing')
           do nothing
           returning ${eventReturningColumns}
+        ),
+        claim_event as (
+          select *
+          from updated_existing_event
+          union all
+          select *
+          from inserted_event
+          limit 1
         ),
         created_command as (
           insert into client_commands (
@@ -122,23 +172,13 @@ export class JiraTicketClaimStore {
             'in_progress',
             now()
           from worker_integration
-          inner join created_event on true
+          inner join claim_event on true
           returning ${commandReturningColumns}
-        ),
-        updated_event as (
-          update integration_intake_events events
-          set status = 'processing',
-            worker_id = created_command.worker_id,
-            transaction_id = created_command.transaction_id,
-            updated_at = now()
-          from created_event, created_command
-          where events.id = created_event.id
-          returning ${prefixedEventReturningColumns("events")}
         ),
         event_participant as (
           insert into integration_intake_event_users (event_id, user_id, integration_id)
-          select updated_event.id, $2, $3
-          from updated_event
+          select claim_event.id, $2, $3
+          from claim_event
           on conflict do nothing
         ),
         command_participant as (
@@ -149,9 +189,9 @@ export class JiraTicketClaimStore {
         )
         select
           ${prefixedCommandReturningColumns("created_command")},
-          ${prefixedEventReturningColumns("updated_event", "event_")}
+          ${prefixedEventReturningColumns("claim_event", "event_")}
         from created_command
-        inner join updated_event on true
+        inner join claim_event on true
       `,
       [
         input.workerId,
@@ -166,6 +206,7 @@ export class JiraTicketClaimStore {
         transactionId,
         input.command,
         buildTaskSummary(input.command, "gitflow"),
+        staleClaimTimeoutMinutes,
       ],
     );
 
@@ -177,9 +218,11 @@ export class JiraTicketClaimStore {
       };
     }
 
+    const event = await this.getActiveJiraEvent(input.sourceItemUrl);
     return {
       claimed: false,
-      event: await this.getActiveJiraEvent(input.sourceItemUrl),
+      event,
+      reason: event ? "Jira issue already has an active intake event" : await this.getClaimRejectionReason(input),
     };
   }
 
@@ -199,7 +242,120 @@ export class JiraTicketClaimStore {
 
     return result.rows[0] ? mapEvent(result.rows[0]) : undefined;
   }
+
+  private async getClaimRejectionReason(input: ClaimJiraTicketInput): Promise<string> {
+    const result = await this.pool.query(
+      `
+        select
+          workers.worker_id is not null as worker_exists,
+          coalesce(workers.enabled, false) as worker_enabled,
+          integrations.integration_id is not null as integration_exists,
+          coalesce(integrations.enabled, false) as integration_enabled,
+          coalesce('gitflow' = any(workers.enabled_task_types), false) as gitflow_enabled,
+          coalesce('git' = any(workers.skills), false) as git_skill_enabled,
+          exists (
+            select 1
+            from worker_git_repositories repositories
+            where repositories.worker_id = $1
+              and repositories.normalized_repository_url = $4
+          ) as repository_configured,
+          coalesce(workers.max_concurrent_tasks, 0) as max_concurrent_tasks,
+          (
+            select count(*)::int
+            from client_commands active_commands
+            where active_commands.worker_id = $1
+              and active_commands.status = 'in_progress'
+              and (
+                active_commands.claimed_at is null
+                or active_commands.claimed_at >= now() - ($5::int * interval '1 minute')
+              )
+          ) as active_command_count
+        from (select 1) seed
+        left join client_workers workers
+          on workers.worker_id = $1
+          and workers.user_id = $2
+        left join worker_jira_integrations integrations
+          on integrations.worker_id = $1
+          and integrations.user_id = $2
+          and integrations.integration_id = $3
+        limit 1
+      `,
+      [
+        input.workerId,
+        input.userId,
+        input.integrationId,
+        input.normalizedRepositoryUrl,
+        staleClaimTimeoutMinutes,
+      ],
+    );
+
+    const row = result.rows[0];
+    if (!row?.worker_exists) return "worker is not registered for this user";
+    if (!row.worker_enabled) return "worker is disabled";
+    if (!row.integration_exists) return "Jira integration is not registered for this worker";
+    if (!row.integration_enabled) return "Jira integration is disabled";
+    if (!row.gitflow_enabled) return "worker is not enabled for gitflow tasks";
+    if (!row.git_skill_enabled) return "worker does not advertise the git skill";
+    if (!row.repository_configured) return "worker is not configured for this repository";
+
+    const activeCommandCount = Number(row.active_command_count ?? 0);
+    const maxConcurrentTasks = Number(row.max_concurrent_tasks ?? 0);
+    if (activeCommandCount >= maxConcurrentTasks) {
+      return `worker has no available capacity (${activeCommandCount}/${maxConcurrentTasks} active gitflow tasks)`;
+    }
+
+    return "worker is not eligible to claim this Jira issue";
+  }
+
+  private async expireStaleActiveClaim(sourceItemUrl: string): Promise<void> {
+    await this.pool.query(
+      `
+        with stale_events as (
+          select events.id,
+            events.transaction_id
+          from integration_intake_events events
+          left join client_commands commands
+            on commands.transaction_id = events.transaction_id
+          where events.provider = 'jira'
+            and events.source_item_url = $1
+            and events.status in ('queueing', 'queued', 'processing')
+            and (
+              (events.status = 'processing' and (events.worker_id is null or events.transaction_id is null))
+              or
+              events.updated_at < now() - ($2::int * interval '1 minute')
+              or (
+                commands.status = 'in_progress'
+                and commands.claimed_at is not null
+                and commands.claimed_at < now() - ($2::int * interval '1 minute')
+              )
+            )
+        ),
+        failed_commands as (
+          update client_commands commands
+          set status = 'failed',
+            error_message = $3,
+            completed_at = now()
+          from stale_events
+          where commands.transaction_id = stale_events.transaction_id
+            and commands.status in ('queued', 'in_progress')
+        )
+        update integration_intake_events events
+        set status = 'failed',
+          error_message = $3,
+          updated_at = now()
+        from stale_events
+        where events.id = stale_events.id
+      `,
+      [
+        sourceItemUrl,
+        staleClaimTimeoutMinutes,
+        `Jira ticket claim expired after ${staleClaimTimeoutMinutes} minutes without completion.`,
+      ],
+    );
+  }
 }
+
+const staleClaimTimeoutMinutes = 30;
 
 const commandColumnNames = [
   "transaction_id",
