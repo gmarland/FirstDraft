@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { normalizeEnabledTaskTypes } from "../src/commandModes.js";
 import { readUpdateProfileInput, validateUpdateProfileInput, validateUserInput } from "../src/controllers/auth/authValidation.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "../src/controllers/workers/workerRequests.js";
+import { readCleanString, readMetadata, readPlainObject } from "../src/shared/readers.js";
+import { selectColumns } from "../src/store/sqlColumns.js";
 
 function testAuthValidation(): void {
   assert.equal(validateUserInput("", "password123"), "email is required");
@@ -43,7 +45,22 @@ function testWorkerRequests(): void {
   assert.deepEqual(readTaskQueueSort({ sortBy: "task", sortDirection: "invalid" }), {});
 }
 
+function testSharedReadersAndColumns(): void {
+  assert.equal(readCleanString(" value "), "value");
+  assert.equal(readCleanString("   "), undefined);
+  assert.equal(readCleanString(123), undefined);
+  assert.deepEqual(readPlainObject({ key: "value" }), { key: "value" });
+  assert.equal(readPlainObject(["value"]), undefined);
+  assert.deepEqual(readMetadata('{"key":"value"}'), { key: "value" });
+  assert.deepEqual(readMetadata("[1,2,3]"), {});
+  assert.deepEqual(readMetadata("{"), {});
+  assert.equal(selectColumns(["id", "created_at"]), "id, created_at");
+  assert.equal(selectColumns(["id", "created_at"], "events"), "events.id, events.created_at");
+  assert.equal(selectColumns(["id", "created_at"], "events", "event_"), "events.id as event_id, events.created_at as event_created_at");
+}
+
 testAuthValidation();
 testWorkerRequests();
+testSharedReadersAndColumns();
 
 console.log("controller helper tests passed");
