@@ -1,5 +1,6 @@
 import { Box, Chip, List, ListItemButton, Stack, Typography } from "@mui/material";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import { formatCommandSummary } from "../lib/commands";
 import { formatDate, relativeTime } from "../lib/dates";
 import type { Command } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
@@ -30,7 +31,7 @@ export function CommandTimeline({ commands, selectedId, onSelect }: Props) {
               </Typography>
             </Stack>
             <Typography component="code" className="wrap-code" sx={{ display: "block" }}>
-              {formatCommand(command)}
+              {formatCommandSummary(command)}
             </Typography>
             {command.errorMessage && (
               <Typography color="error" variant="body2" sx={{ mt: 0.75 }}>
@@ -51,18 +52,4 @@ function CommandModeIcon({ mode }: { mode: Command["commandMode"] }) {
 
 function formatCommandMode(mode: Command["commandMode"]): string {
   return "Gitflow";
-}
-
-function formatCommand(command: Command): string {
-  try {
-    const payload = JSON.parse(command.command) as Partial<{
-      repositoryUrl: string;
-      sourceBranch: string;
-      ticketNumber: string;
-      description: string;
-    }>;
-    return `${payload.ticketNumber ?? "Gitflow"}: ${payload.description ?? payload.repositoryUrl ?? command.command}`;
-  } catch {
-    return command.command;
-  }
 }

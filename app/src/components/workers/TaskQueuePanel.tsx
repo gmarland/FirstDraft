@@ -28,6 +28,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { EmptyState } from "../EmptyState";
 import { StatusBadge } from "../StatusBadge";
+import { formatCommandSummary } from "../../lib/commands";
 import { formatDate, relativeTime } from "../../lib/dates";
 import type {
   Command,
@@ -437,27 +438,6 @@ function Field({
 
 function formatCommandMode(mode: Command["commandMode"]): string {
   return "Gitflow";
-}
-
-function formatCommandSummary(command: Command): string {
-  if (command.taskSummary) return command.taskSummary;
-
-  try {
-    const payload = JSON.parse(command.command) as Partial<{
-      repositoryUrl: string;
-      ticketNumber: string;
-      title: string;
-      description: string;
-    }>;
-    return `${payload.ticketNumber ?? "Gitflow"}: ${
-      payload.title ??
-      payload.description ??
-      payload.repositoryUrl ??
-      command.command
-    }`;
-  } catch {
-    return command.command;
-  }
 }
 
 function formatCommandDetail(command: Command): string {
