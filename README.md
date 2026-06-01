@@ -2,7 +2,7 @@
 
 FirstDraft is a reporting plane for AI-assisted engineering work on remote machines you control.
 
-Put workers next to the repositories, credentials, build tools, and internal networks they need. FirstDraft records what those workers are doing and exposes the history, output, and integration status in a browser.
+Run workers next to the repositories, credentials, build tools, and internal networks they need. The workers register with the API, advertise their Git repositories and Jira integrations, claim eligible Jira issues, run `gitflow` work locally, and report task history and output back to the web console.
 
 ## Interactive Demo
 
@@ -12,17 +12,15 @@ Click the image above to launch the full interactive walkthrough.
 
 ## Why FirstDraft
 
-AI coding tools are most useful when they can work where the real context lives: cloned repositories, local toolchains, internal services, private networks, and team-specific workflows. FirstDraft turns those machines into an on-demand worker fleet.
+AI coding tools are most useful when they can work where the real context lives: cloned repositories, local toolchains, internal services, private networks, and team-specific workflows. FirstDraft turns those machines into a worker fleet with a shared browser-visible audit trail.
 
-- Run multiple workers on remote machines and enable the right one for each job.
-- Use the web UI to inspect workers, task status, output, and history.
-- Let workers poll their own Jira integrations and claim ready issues without a developer babysitting the queue.
-- Let workers decide what to run and report task progress back to the API.
-- Watch command status, streamed output, parsed responses, and history from a web console.
-- Register worker capabilities and paths so tasks are sent only where they can run.
-- Run Codex or Claude through local CLI providers instead of building a new agent runtime.
-- Keep worker execution close to source code, credentials, and build environments you already manage.
-- Integrate repository workflows and worker-owned Jira polling so operational requests can become worker tasks.
+- Run multiple workers on remote machines and see which ones are alive.
+- Let workers advertise local paths, skills, repositories, Jira integrations, and task capacity.
+- Let workers poll their own Jira integrations and claim ready repository-backed issues.
+- Keep execution close to source code, CLI credentials, build tools, and internal networks.
+- Run repository-oriented `gitflow` tasks through a local Codex or Claude CLI provider.
+- Record task metadata, output, parsed responses, status, and history in one console.
+- Store durable command output in S3-compatible storage, Google Cloud Storage, or Azure Blob Storage.
 
 ## What You Get
 
@@ -30,32 +28,34 @@ This repository contains the full FirstDraft stack:
 
 | Path | Purpose |
 | --- | --- |
-| `api/` | Express API, authentication, worker reporting endpoints, OpenAPI docs, persistence, and integrations |
-| `app/` | React/Vite console for users, workers, repositories, API keys, and command history |
-| `client/` | .NET worker that connects to the API, advertises skills, and executes shell, AI, and gitflow commands |
+| `api/` | Express API, authentication, worker reporting endpoints, OpenAPI docs, persistence, Jira claim tracking, and command output storage |
+| `app/` | React/Vite console for users, workers, task queue visibility, command history, worker resources, and profile management |
+| `client/` | .NET worker that connects to the API, advertises resources, polls Jira, and executes `gitflow` work locally |
 | `docker-compose.yml` | Local Postgres and MinIO services for development |
 
 ## Architecture
 
 ```text
-Browser console / Jira / API clients
-            |
-            v
-      FirstDraft API
-      Express + Postgres
-            |
-            v
-   HTTP worker reports
-            |
-            v
-  firstdraft .NET workers
-  shell | Codex | Claude | gitflow
-            |
-            v
- local repositories and toolchains
+Browser console / Jira
+          |
+          v
+    FirstDraft API
+  Express + Postgres
+          ^
+          |
+ worker reports, heartbeats,
+ claims, output, completion
+          |
+          v
+ firstdraft .NET workers
+ Jira polling | gitflow
+ Codex or Claude CLI
+          |
+          v
+local repositories and toolchains
 ```
 
-Workers authenticate with a FirstDraft user account, maintain their own worker JWT, register over HTTP, send heartbeats, and report task start/output/completion from the machines where they are installed. The API records command metadata and worker runtime state in Postgres, and writes command output as NDJSON so runs can be audited after the fact.
+Workers authenticate with a FirstDraft user account, maintain their own worker JWT, register over HTTP, send heartbeats, and report task start/output/completion from the machines where they are installed. The API records worker runtime state and command metadata in Postgres, stores synced worker repository and Jira settings for visibility and claim checks, and writes command output as NDJSON for later review.
 
 ## Remote Worker Fleet
 
@@ -63,26 +63,38 @@ The main idea is simple: leave capable workers running on the machines that alre
 
 - A worker on a build server can run tests against heavyweight dependencies.
 - A worker inside a private network can reach internal services without exposing them.
-- A worker with a checked-out repository can run gitflow tasks and produce pull request-ready output.
-- Multiple workers can advertise different paths, skills, and capacity, then be selected from the UI or targeted by automation.
+- A worker with a checked-out or cloneable repository can run `gitflow` work and produce pull request-oriented output.
+- Multiple workers can advertise different repositories, skills, Jira integrations, and capacity.
 
-That makes FirstDraft useful as a shared execution layer, not just a chat interface for one laptop.
+That makes FirstDraft useful as a shared execution layer for repository work, not just a chat interface for one laptop.
 
 ## Jira-Driven Automation
 
 FirstDraft can connect Jira tickets to the worker fleet. Configure Jira connections on the worker CLI, choose the board and statuses that represent ready, processing, and processed work, then start the worker so it advertises those integrations to the API.
 
-Each worker polls its own enabled Jira integrations, filters issues to repositories configured on that worker, and reports a task start before doing work. The API rejects duplicate active reports for the same issue, while status transitions and command output keep the workflow visible.
+Each worker polls its enabled Jira integrations every 60 seconds, filters issues to repositories configured on that worker, downloads Jira image attachments directly with its local Jira credentials, and attempts to claim matching issues through the API before execution. The API rejects duplicate active claims for the same issue and records intake status, while the worker reports command output and final results through the normal task history.
+
+## Console Workflows
+
+The web console is the operational view for the fleet:
+
+- Sign in, create the first user, update profile details, or delete the current account.
+- View registered workers, runtime state, advertised paths, skills, task capacity, repositories, and Jira integrations.
+- Inspect worker command history, output streams, parsed responses, and status.
+- Review the global task queue with status filters and sortable source, task, worker, repository, and created columns.
+
+Repositories and Jira integrations are configured on each worker with the worker CLI. Current task execution is worker-owned and `gitflow`-only.
 
 ## Features
 
-- **Remote worker registry**: see connected workers, status, advertised skills, task capacity, and registered paths.
-- **Reporting console**: inspect worker-reported `ai`, `shell`, and `gitflow` task history from the console.
-- **Jira polling**: enable Jira workflows that let workers claim ready tickets for repository-backed gitflow tasks.
-- **Live output**: stream command output while retaining durable command history.
-- **Gitflow workflows**: let workers clone or reuse repository workspaces, run agent tasks, and format pull request-oriented results.
-- **Scoped worker config**: configure application paths, logs, AI working directory, skills, and concurrent gitflow capacity.
-- **User auth and API keys**: create users, sign in, and manage per-user API keys.
+- **Remote worker registry**: see connected workers, status, advertised skills, task capacity, registered paths, repositories, and Jira integrations.
+- **Task queue visibility**: inspect queued, in-progress, completed, and failed work across the current user's workers.
+- **Jira polling**: let workers claim ready Jira tickets for repository-backed `gitflow` tasks.
+- **Claim guarding**: prevent duplicate active work for the same Jira issue.
+- **Durable output**: retain NDJSON command output and expose streamed output and parsed responses.
+- **Gitflow workflows**: clone or reuse repository workspaces, run agent tasks, and format pull request-oriented results.
+- **Scoped worker config**: configure application paths, logs, AI working directory, Git workspace, skills, repositories, Jira integrations, planning, and concurrent `gitflow` capacity.
+- **User auth**: create users, sign in, update profile details, and delete account data.
 - **OpenAPI docs**: inspect the API at `/api/docs` and fetch the raw spec at `/swagger.json`.
 
 ## Quick Start
@@ -93,7 +105,8 @@ Each worker polls its own enabled Jira integrations, filters issues to repositor
 - npm
 - Docker and Docker Compose
 - .NET SDK 10
-- Codex CLI or Claude CLI if you want AI command execution
+- Codex CLI or Claude CLI for `gitflow` execution
+- `git` on `PATH` for workers that execute `gitflow`
 
 ### 1. Start local infrastructure
 
@@ -137,9 +150,23 @@ During `init`, set the external API to `http://localhost:5080`, log in or sign u
 
 For real use, run this worker on the remote machine that has the repository, network access, credentials, and toolchain needed for the jobs you want it to perform. Repeat the setup on additional machines to build a worker fleet.
 
-### 5. Enable Jira polling
+### 5. Configure repositories and Jira polling
 
-On each worker that should handle Jira work, create a Jira connection with `dotnet run -- integrations add jira`, then configure its board and statuses interactively with `dotnet run -- integrations configure <generated-id>`. The `add jira` command prompts for the Jira site URL, email, and API token, then prints the generated 5-character ID. Once enabled, the worker polls Jira every 60 seconds and claims matching ready issues through the API before running gitflow locally.
+Configure the repositories a worker is allowed to process:
+
+```bash
+cd client
+dotnet run -- repos add https://github.com/example/repo.git --source main --target main
+```
+
+On each worker that should handle Jira work, create a Jira connection and configure its board, statuses, and optional assignee filter:
+
+```bash
+dotnet run -- integrations add jira
+dotnet run -- integrations configure <generated-id>
+```
+
+Once enabled, the worker polls Jira every 60 seconds and claims matching ready issues through the API before running `gitflow` locally.
 
 ## Common Commands
 
@@ -162,6 +189,7 @@ npm install
 npm run dev
 npm run build
 npm run preview
+npm run lint
 ```
 
 Worker:
@@ -172,7 +200,6 @@ dotnet build
 dotnet run -- init
 dotnet run -- skills
 dotnet run -- capacity
-dotnet run -- taskTypes
 dotnet run -- enablePlanning
 dotnet run -- repos list
 dotnet run -- integrations list
@@ -186,13 +213,13 @@ docker compose up -d
 docker compose down
 ```
 
-## Task Modes
+## Task Mode
 
-Workers can report these task modes:
+Workers currently advertise and execute one task mode:
 
-- `ai`: run a prompt through the configured local Codex or Claude CLI.
-- `shell`: run a shell command through the worker.
-- `gitflow`: run repository-oriented agent workflows. Workers must advertise the `git` skill.
+- `gitflow`: repository-oriented implementation or follow-up work. Workers must advertise the `git` skill, have `git` available on `PATH`, and have the target repository configured locally.
+
+The worker source still contains legacy command handler classes for other modes, but runtime registration and API validation currently expose `gitflow` only.
 
 ## Configuration
 
@@ -222,10 +249,11 @@ Worker configuration is stored locally by the .NET client and can be edited thro
 firstdraft init
 firstdraft skills
 firstdraft capacity
-firstdraft taskTypes
 firstdraft enablePlanning
+firstdraft repos list|add|update|remove
+firstdraft integrations list|details|add|configure|remove
 ```
 
 ## Contributing
 
-Issues and pull requests are welcome. The most useful contributions are focused and reproducible: bug reports with command output, small feature slices, tests around worker dispatch and persistence, and documentation that helps people run the stack safely.
+Issues and pull requests are welcome. The most useful contributions are focused and reproducible: bug reports with command output, small feature slices, tests around worker reporting and persistence, and documentation that helps people run the stack safely.

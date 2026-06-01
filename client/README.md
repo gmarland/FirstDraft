@@ -1,15 +1,15 @@
 # FirstDraft Worker
 
-.NET worker that registers with the FirstDraft API, reports its task activity, and executes locally selected work on the machine where it is running. Workers should be installed next to the repositories, credentials, toolchains, and network access needed for the jobs they accept.
+.NET worker that registers with the FirstDraft API, reports its runtime state, polls worker-local Jira integrations, claims eligible Jira issues, and executes repository-oriented `gitflow` work on the machine where it is running. Workers should be installed next to the repositories, credentials, toolchains, and network access needed for the jobs they accept.
 
-The project targets `net10.0` and builds the `firstdraft` assembly. At runtime the worker uses worker-auth HTTP endpoints to register, heartbeat, and report task start/output/completion.
+The project targets `net10.0` and builds the `firstdraft` assembly. At runtime the worker uses worker-auth HTTP endpoints to register, heartbeat, claim tasks, append output, and report completion.
 
 ## Prerequisites
 
 - .NET SDK 10.
 - A FirstDraft user account.
 - Network access to the FirstDraft API.
-- Codex CLI or Claude CLI for gitflow implementation.
+- Codex CLI or Claude CLI for `gitflow` implementation.
 - `git` on `PATH` when advertising the `git` skill or running `gitflow` commands.
 - `npm` on `PATH` when advertising the `npm` skill.
 
@@ -45,21 +45,23 @@ Command details:
 
 - `init`: create or update the local worker configuration interactively.
 - `skills`: update advertised worker skills.
-- `capacity`: update the maximum number of concurrent gitflow tasks.
-- `enablePlanning`: configure whether gitflow AI execution uses a planning pass.
+- `capacity`: update the maximum number of concurrent `gitflow` tasks.
+- `enablePlanning`: configure whether `gitflow` AI execution uses a planning pass.
 - `repos list|add|update|remove|delete`: manage Git repositories and their enforced source/PR target branches for this worker. `add` only creates new entries; `update` only changes existing entries; `delete` is accepted as an alias for `remove`, although top-level help currently lists only `remove`.
-- `integrations list|details|add|configure|update|remove|delete`: manage Jira integrations for this worker. `detail` and `show` are aliases for `details`; `update` is an alias for `configure`; `delete` is an alias for `remove`. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board and workflow statuses interactively. `configure` re-runs board and status selection for an existing integration. API tokens are encrypted in local config and are never printed by `list` or `details`.
-- `run`: start the worker and connect it to the API.
+- `integrations list|details|add|configure|update|remove|delete`: manage Jira integrations for this worker. `detail` and `show` are aliases for `details`; `update` is an alias for `configure`; `delete` is an alias for `remove`. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board, workflow statuses, and assignee filter interactively. API tokens are encrypted in local config and are never printed by `list` or `details`.
+- `run`: start the worker, register it with the API, start heartbeats, and poll configured Jira integrations.
 - `help`: print command help.
 - `--help` or `-h`: print command help.
 
 Running with no command defaults to `run`.
 
-## Supported Command Mode
+## Supported Task Mode
 
-Workers only accept `gitflow` tasks, which execute repository-oriented implementation or follow-up work.
+Workers currently advertise and accept only `gitflow` tasks, which execute repository-oriented implementation or follow-up work.
 
-`gitflow` requires the worker to advertise the `git` skill. Configured skills are validated against executables on `PATH` before registration.
+`gitflow` requires the worker to advertise the `git` skill. Configured skills are validated against executables on `PATH` before registration. Runtime dependency injection currently wires only the `GitflowCommandHandler`, and the shared task type registry always resolves enabled task types to `gitflow`.
+
+The source tree still contains legacy handler classes for other command modes, but the current API and worker runtime do not expose them.
 
 ## Gitflow Workspaces
 
@@ -75,11 +77,13 @@ dotnet run -- repos remove https://github.com/example/repo.git
 dotnet run -- repos delete https://github.com/example/repo.git
 ```
 
-The configured source and PR target branches are enforced by the API for manual gitflow tasks and by the worker for Jira-claimed gitflow tasks.
+The configured source and PR target branches are enforced by the API for Jira-claimed `gitflow` tasks and by the worker when building prompts and workspaces.
 Branch options can be passed as either `--source main` / `--target main` or `--source=main` / `--target=main`.
 `repos delete` is accepted as a `repos remove` alias, but the nested and top-level help output currently lists `remove`.
 
-Each worker also advertises its own Jira integrations from local configuration. Manage them with:
+## Jira Integrations
+
+Each worker advertises its own Jira integrations from local configuration. Manage them with:
 
 ```bash
 dotnet run -- integrations list
@@ -91,14 +95,17 @@ dotnet run -- integrations delete <integration-id>
 ```
 
 The `add jira` command prompts for the Jira site URL, email, and API token, then immediately configures the board, workflow statuses, and assignee filter. Choose any assignee to pick up all matching tickets, or select one or more Jira users to only pick up tickets assigned to those users. If that configuration step fails, the saved connection can be retried with `configure <integration-id>`. Connection-only Jira integrations remain local-only and are not advertised to the API until fully configured.
+
 Use `details <integration-id>` to inspect board/status configuration and whether an API token is stored. `detail` and `show` are accepted aliases for `details`; `update` is an alias for `configure`.
 `integrations delete` is accepted as an `integrations remove` alias, but the nested and top-level help output currently lists `remove`.
 
-When the worker is running, it polls enabled Jira integrations every 60 seconds. Ready issues are claimed through the API before execution, so only one worker can process a ticket; the worker then runs the matching gitflow task locally and reports output through the existing command history.
+When the worker is running, it polls enabled Jira integrations every 60 seconds. Ready issues are filtered to repositories configured on that worker, then claimed through the API before execution so only one worker processes a ticket. The worker then runs the matching `gitflow` task locally and reports output through the existing command history.
 
 Jira image attachments are downloaded directly from Jira with the worker's locally configured Jira integration credentials before the AI prompt is built.
 
-`MaxConcurrentTasks` controls concurrent gitflow execution. Set it to `1` through `8`, or omit/set it to `null` for unlimited concurrency.
+## Capacity
+
+`MaxConcurrentTasks` controls concurrent `gitflow` execution. Set it to `1` through `8`, or omit/set it to `null` for unlimited concurrency. The worker advertises this value during registration, and Jira claims are rejected when the worker has no available bounded capacity.
 
 ## Configuration
 
@@ -111,14 +118,14 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `ExternalAPI`: base URL for the FirstDraft API.
 - `ApplicationFolder`: local folder used by the worker application.
 - `LogsFolder`: local log output folder.
-- `ApplicationPaths`: paths advertised to the API for worker selection.
+- `ApplicationPaths`: paths advertised to the API for worker selection and visibility.
 - `Skills`: configured skills such as `git` and `npm`.
 - `EnabledTaskTypes`: legacy setting ignored by current clients; workers always advertise `gitflow`.
 - `AIProvider`: `Codex` or `Claude`.
 - `PlanningEnabled`: whether AI execution performs a planning pass before implementation.
 - `AIWorkingDirectory`: base working directory for AI commands.
-- `GitWorkspaceDirectory`: workspace root for gitflow repository work.
-- `MaxConcurrentTasks`: maximum concurrent gitflow tasks, from `1` to `8`; missing or `null` means unlimited.
+- `GitWorkspaceDirectory`: workspace root for `gitflow` repository work.
+- `MaxConcurrentTasks`: maximum concurrent `gitflow` tasks, from `1` to `8`; missing or `null` means unlimited.
 - `GitRepositories`: worker-local Git repositories with enforced source and PR target branches.
 - `JiraIntegrations`: worker-local Jira connections and workflow settings with encrypted API tokens.
 
@@ -133,6 +140,18 @@ dotnet run -- init
 ```
 
 During setup, set the external API URL, log in or sign up with your FirstDraft user, choose the AI provider, and select the paths and skills this worker should advertise.
+
+Configure at least one repository before expecting Jira tickets to be claimable:
+
+```bash
+dotnet run -- repos add https://github.com/example/repo.git --source main --target main
+```
+
+Configure Jira if this worker should claim Jira work:
+
+```bash
+dotnet run -- integrations add jira
+```
 
 Start the worker:
 
