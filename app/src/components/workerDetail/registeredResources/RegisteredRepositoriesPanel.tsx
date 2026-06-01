@@ -1,10 +1,8 @@
 import { Chip, Stack, Typography } from "@mui/material";
-import { formatDate, relativeTime } from "../../lib/dates";
-import type { GitRepositorySuggestion } from "../../types/api";
-import {
-  RegisteredResourceItem,
-  RegisteredResourcePanel,
-} from "./RegisteredResourcePanel";
+import { formatDate, relativeTime } from "../../../lib/dates";
+import type { GitRepositorySuggestion } from "../../../types/api";
+import { RegisteredResourceItem } from "./RegisteredResourceItem";
+import { RegisteredResourcePanel } from "./RegisteredResourcePanel";
 
 type Props = {
   repositories: GitRepositorySuggestion[];

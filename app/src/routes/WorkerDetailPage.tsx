@@ -5,9 +5,11 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
 import HistoryIcon from "@mui/icons-material/History";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import { WorkerPanelsGrid } from "../components/workerDetail/WorkerPanelsGrid";
-import { WorkerSummaryGrid } from "../components/workerDetail/WorkerSummaryGrid";
-import { CommandHistoryPanel } from "../components/workerDetail/CommandHistoryPanel";
+import {
+  CommandHistoryPanel,
+  WorkerPanelsGrid,
+  WorkerSummaryGrid,
+} from "../components/workerDetail";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";

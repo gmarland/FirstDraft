@@ -1,11 +1,9 @@
 import { Divider, Stack, Typography } from "@mui/material";
-import { formatDate, relativeTime } from "../../lib/dates";
-import type { WorkerJiraIntegration } from "../../types/api";
-import {
-  RegisteredResourceItem,
-  RegisteredResourcePanel,
-  ResourceField,
-} from "./RegisteredResourcePanel";
+import { formatDate, relativeTime } from "../../../lib/dates";
+import type { WorkerJiraIntegration } from "../../../types/api";
+import { RegisteredResourceItem } from "./RegisteredResourceItem";
+import { RegisteredResourcePanel } from "./RegisteredResourcePanel";
+import { ResourceField } from "./ResourceField";
 
 type Props = {
   integrations: WorkerJiraIntegration[];

@@ -1,8 +1,6 @@
 import { Typography } from "@mui/material";
-import {
-  RegisteredResourceItem,
-  RegisteredResourcePanel,
-} from "./RegisteredResourcePanel";
+import { RegisteredResourceItem } from "./RegisteredResourceItem";
+import { RegisteredResourcePanel } from "./RegisteredResourcePanel";
 
 type Props = {
   paths: string[];

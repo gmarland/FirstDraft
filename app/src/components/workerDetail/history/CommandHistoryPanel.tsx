@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Box, Paper, Stack, TablePagination, Typography } from "@mui/material";
-import { CommandDetailPanel } from "../CommandDetailPanel";
-import { CommandTimeline } from "../CommandTimeline";
-import { EmptyState } from "../EmptyState";
-import type { Command } from "../../types/api";
+import { CommandDetailPanel } from "../../CommandDetailPanel";
+import { CommandTimeline } from "../../CommandTimeline";
+import { EmptyState } from "../../EmptyState";
+import type { Command } from "../../../types/api";
 
 type Props = {
   workerId: string;

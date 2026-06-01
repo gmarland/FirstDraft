@@ -1,11 +1,11 @@
-import { Box, Stack, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import { RegisteredIntegrationsPanel } from "./RegisteredIntegrationsPanel";
 import { RegisteredPathsPanel } from "./RegisteredPathsPanel";
 import { RegisteredRepositoriesPanel } from "./RegisteredRepositoriesPanel";
 import type {
   GitRepositorySuggestion,
   WorkerJiraIntegration,
-} from "../../types/api";
+} from "../../../types/api";
 
 type Props = {
   paths: string[];
