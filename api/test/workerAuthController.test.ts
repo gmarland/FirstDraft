@@ -340,7 +340,7 @@ async function testClaimJiraTicketRejectsUnownedIntegration(): Promise<void> {
     undefined,
     undefined,
     {
-      async getCredentials() {
+      async getSettings() {
         return undefined;
       },
     } as never,

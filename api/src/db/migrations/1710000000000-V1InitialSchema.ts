@@ -86,7 +86,6 @@ export class V1InitialSchema1710000000000 implements MigrationInterface {
         user_id uuid not null references users(id) on delete cascade,
         site_url text not null,
         email text not null,
-        api_token_encrypted text not null,
         board_id integer not null,
         board_name text not null,
         board_type text not null,

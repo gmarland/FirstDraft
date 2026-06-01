@@ -11,10 +11,7 @@ import {
   createCommandOutputStorageFromEnv,
   getCommandOutputStorageProviderFromEnv,
 } from "./storage/commandOutputStorage.js";
-import {
-  publicConfigEncryptionKey,
-  TenantCrypto,
-} from "./security/tenantCrypto.js";
+import { publicConfigEncryptionKey } from "./security/tenantCrypto.js";
 import { CommandStore } from "./store/commands/commandStore.js";
 import { WorkerRecordStore } from "./store/workers/workerRecordStore.js";
 import { GitRepositoryStore } from "./store/gitRepositories/gitRepositoryStore.js";
@@ -44,13 +41,12 @@ const db = new TypeOrmStoreContext(dataSource);
 const tenantEncryptionKey = await new TenantSettingsStore(
   db,
 ).ensureEncryptionKey();
-const tenantCrypto = new TenantCrypto(tenantEncryptionKey);
 const workerConfigEncryptionKey =
   publicConfigEncryptionKey(tenantEncryptionKey);
 const commands = new CommandStore(db);
 const workerRecords = new WorkerRecordStore(db);
 const gitRepositories = new GitRepositoryStore(db);
-const jiraIntegrations = new JiraIntegrationStore(db, tenantCrypto);
+const jiraIntegrations = new JiraIntegrationStore(db);
 const integrationIntakeEvents = new IntegrationIntakeEventStore(db);
 const jiraTicketClaims = new JiraTicketClaimStore(db);
 await workerRecords.markAllWorkersStopped();

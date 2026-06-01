@@ -6,7 +6,6 @@ export type WorkerJiraIntegrationEntity = {
   userId: string;
   siteUrl: string;
   email: string;
-  apiTokenEncrypted: string;
   boardId: number;
   boardName: string;
   boardType: string;
@@ -34,7 +33,6 @@ export const WorkerJiraIntegrationSchema = new EntitySchema<WorkerJiraIntegratio
     userId: { type: "uuid", name: "user_id" },
     siteUrl: { type: "text", name: "site_url" },
     email: { type: "text" },
-    apiTokenEncrypted: { type: "text", name: "api_token_encrypted" },
     boardId: { type: "integer", name: "board_id" },
     boardName: { type: "text", name: "board_name" },
     boardType: { type: "text", name: "board_type" },

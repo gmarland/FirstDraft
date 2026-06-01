@@ -1,6 +1,4 @@
 import { DbClient } from "../../db/dbClient.js";
-import { TenantCrypto } from "../../security/tenantCrypto.js";
-
 export type JiraIntegrationSettings = {
   id: string;
   workerId?: string;
@@ -33,7 +31,6 @@ export type WorkerJiraIntegrationInput = {
   enabled: boolean;
   siteUrl: string;
   email: string;
-  apiToken: string;
   boardId: number;
   boardName: string;
   boardType: string;
@@ -47,18 +44,12 @@ export type WorkerJiraIntegrationInput = {
   assignees?: JiraIntegrationAssignee[];
 };
 
-export type JiraIntegrationCredentials = JiraIntegrationSettings & {
-  userId: string;
-  apiToken: string;
-};
-
 type JiraIntegrationRow = {
   worker_id: string;
   integration_id: string;
   user_id: string;
   site_url: string;
   email: string;
-  api_token_encrypted: string;
   board_id: number;
   board_name: string;
   board_type: string;
@@ -77,10 +68,7 @@ type JiraIntegrationRow = {
 };
 
 export class JiraIntegrationStore {
-  public constructor(
-    private readonly pool: DbClient,
-    private readonly crypto: TenantCrypto,
-  ) {}
+  public constructor(private readonly pool: DbClient) {}
 
   public async syncWorkerIntegrations(
     workerId: string,
@@ -108,7 +96,6 @@ export class JiraIntegrationStore {
             user_id,
             site_url,
             email,
-            api_token_encrypted,
             board_id,
             board_name,
             board_type,
@@ -125,13 +112,12 @@ export class JiraIntegrationStore {
             enabled,
             updated_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, now())
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, now())
           on conflict (worker_id, integration_id)
           do update set
             user_id = excluded.user_id,
             site_url = excluded.site_url,
             email = excluded.email,
-            api_token_encrypted = excluded.api_token_encrypted,
             board_id = excluded.board_id,
             board_name = excluded.board_name,
             board_type = excluded.board_type,
@@ -154,7 +140,6 @@ export class JiraIntegrationStore {
           userId,
           integration.siteUrl,
           integration.email,
-          this.crypto.encrypt(integration.apiToken),
           integration.boardId,
           integration.boardName,
           integration.boardType,
@@ -188,10 +173,10 @@ export class JiraIntegrationStore {
     return result.rows.map((row) => this.mapSettings(row));
   }
 
-  public async listEnabledCredentials(
+  public async listEnabledSettings(
     userId: string,
     integrationId?: string,
-  ): Promise<JiraIntegrationCredentials[]> {
+  ): Promise<JiraIntegrationSettings[]> {
     const result = await this.pool.query<JiraIntegrationRow>(
       `
         select ${returningColumns}
@@ -204,12 +189,12 @@ export class JiraIntegrationStore {
       [userId, integrationId ?? null],
     );
 
-    return result.rows.map((row) => this.mapCredentials(row));
+    return result.rows.map((row) => this.mapSettings(row));
   }
 
-  public async listAllEnabledCredentials(
+  public async listAllEnabledSettings(
     integrationId?: string,
-  ): Promise<JiraIntegrationCredentials[]> {
+  ): Promise<JiraIntegrationSettings[]> {
     const result = await this.pool.query<JiraIntegrationRow>(
       `
         select ${returningColumns}
@@ -221,14 +206,14 @@ export class JiraIntegrationStore {
       [integrationId ?? null],
     );
 
-    return result.rows.map((row) => this.mapCredentials(row));
+    return result.rows.map((row) => this.mapSettings(row));
   }
 
-  public async getCredentials(
+  public async getSettings(
     userId: string,
     integrationId: string,
     workerId?: string,
-  ): Promise<JiraIntegrationCredentials | undefined> {
+  ): Promise<JiraIntegrationSettings | undefined> {
     const result = await this.pool.query<JiraIntegrationRow>(
       `
         select ${returningColumns}
@@ -242,22 +227,14 @@ export class JiraIntegrationStore {
       [userId, integrationId, workerId ?? null],
     );
 
-    return result.rows[0] ? this.mapCredentials(result.rows[0]) : undefined;
-  }
-
-  private mapCredentials(row: JiraIntegrationRow): JiraIntegrationCredentials {
-    return {
-      ...this.mapSettings(row),
-      userId: row.user_id,
-      apiToken: this.crypto.decrypt(row.api_token_encrypted),
-    };
+    return result.rows[0] ? this.mapSettings(result.rows[0]) : undefined;
   }
 
   private mapSettings(row: JiraIntegrationRow): JiraIntegrationSettings {
     return {
       id: row.integration_id,
       workerId: row.worker_id,
-      connected: Boolean(row.site_url && row.email && row.api_token_encrypted),
+      connected: Boolean(row.site_url && row.email),
       enabled: row.enabled,
       siteUrl: row.site_url,
       email: row.email,
@@ -287,7 +264,6 @@ const returningColumns = `
   user_id,
   site_url,
   email,
-  api_token_encrypted,
   board_id,
   board_name,
   board_type,
@@ -327,7 +303,6 @@ function normalizeWorkerJiraIntegrationInput(
 
   const siteUrl = clean(integration.siteUrl).replace(/\/+$/, "");
   const email = clean(integration.email);
-  const apiToken = clean(integration.apiToken);
   const boardName = clean(integration.boardName);
   const boardType = clean(integration.boardType);
   const readyStatusId = clean(integration.readyStatusId);
@@ -341,7 +316,6 @@ function normalizeWorkerJiraIntegrationInput(
   if (
     !siteUrl ||
     !email ||
-    !apiToken ||
     !Number.isInteger(integration.boardId) ||
     integration.boardId <= 0 ||
     !boardName ||
@@ -361,7 +335,6 @@ function normalizeWorkerJiraIntegrationInput(
     enabled: Boolean(integration.enabled),
     siteUrl,
     email,
-    apiToken,
     boardId: integration.boardId,
     boardName,
     boardType,

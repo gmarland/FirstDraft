@@ -303,7 +303,7 @@ export class WorkerAuthController {
       });
       return;
     }
-    const integration = await this.jiraIntegrations?.getCredentials(
+    const integration = await this.jiraIntegrations?.getSettings(
       worker.userId,
       input.integrationId,
       worker.workerId,
@@ -546,7 +546,6 @@ function readWorkerJiraIntegrations(value: unknown): WorkerJiraIntegrationInput[
         enabled: readBoolean(payload.enabled ?? payload.Enabled),
         siteUrl,
         email,
-        apiToken,
         boardId,
         boardName,
         boardType,
