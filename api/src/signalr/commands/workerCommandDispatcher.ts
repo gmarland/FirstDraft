@@ -1,6 +1,7 @@
 import { WebSocket } from "ws";
 import { ApiToWorkerTokenIssuer } from "../../auth/workerTokens.js";
 import { isTaskTypeEnabled } from "../../commandModes.js";
+import { workerHubClientMethods } from "../../contracts/workerHubContract.js";
 import { WorkerStore } from "../../store/clientStore.js";
 import { Command } from "../../types.js";
 import { canDispatchMoreCommands } from "../../workers/workerState.js";
@@ -93,7 +94,7 @@ export class WorkerCommandDispatcher {
 
           claimedCommand = true;
           await this.notifyCommandStarted(claimed);
-          this.sendInvocation(connection, "ExecuteCommand", [
+          this.sendInvocation(connection, workerHubClientMethods.executeCommand, [
             this.apiToWorkerTokens.signCommand(claimed.workerId, claimed.transactionId),
             claimed.transactionId,
             claimed.executionCommand ?? claimed.command,

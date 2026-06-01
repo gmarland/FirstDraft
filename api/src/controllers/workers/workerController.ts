@@ -4,6 +4,7 @@ import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore, normalizeRepositoryUrl } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { Command, User } from "../../types.js";
 import { isTaskTypeEnabled } from "../../commandModes.js";
+import { asyncHandler, requireUser, requireWorkerForUser } from "../controllerHelpers.js";
 import { getMissingSkills, parseCommandMode, parseGitflowPayload, readCancelReason, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "./workerRequests.js";
 import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from "./workerResponses.js";
 
@@ -24,222 +25,210 @@ export class WorkerController {
     private readonly gitRepositories?: GitRepositoryStore
   ) {}
 
-  public readonly listWorkers: RequestHandler = async (req, res, next) => {
-    try {
-      const user = req.user as User;
-      res.json(await this.store.listWorkersForUser(user.userId));
-    } catch (error) {
-      next(error);
+  public readonly listWorkers: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    res.json(await this.store.listWorkersForUser(user.userId));
+  });
+
+  public readonly getWorkerState: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const client = await requireWorkerForUser(this.store, user, req.params.workerId, res);
+    if (!client) return;
+
+    res.json(toWorkerStateResponse(client));
+  });
+
+  public readonly updateWorker: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const enabled = readWorkerEnabled(req.body);
+    if (enabled === undefined) {
+      res.status(400).json({ error: "enabled must be a boolean" });
+      return;
     }
-  };
 
-  public readonly getWorkerState: RequestHandler = async (req, res, next) => {
-    try {
-      const user = req.user as User;
-      const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
-      if (!client) {
-        return res.status(404).json({ error: "worker is not registered" });
-      }
-
-      res.json(toWorkerStateResponse(client));
-    } catch (error) {
-      next(error);
+    const client = await this.store.setWorkerEnabledForUser(user.userId, req.params.workerId, enabled);
+    if (!client) {
+      res.status(404).json({ error: "worker is not registered" });
+      return;
     }
-  };
 
-  public readonly updateWorker: RequestHandler = async (req, res, next) => {
-    try {
-      const user = req.user as User;
-      const enabled = readWorkerEnabled(req.body);
-      if (enabled === undefined) {
-        return res.status(400).json({ error: "enabled must be a boolean" });
-      }
-
-      const client = await this.store.setWorkerEnabledForUser(user.userId, req.params.workerId, enabled);
-      if (!client) {
-        return res.status(404).json({ error: "worker is not registered" });
-      }
-
-      if (enabled) {
-        await (this.dispatcher.dispatchQueuedCommands?.(client.workerId) ?? Promise.resolve());
-      }
-
-      res.json(toWorkerStateResponse(client));
-    } catch (error) {
-      next(error);
+    if (enabled) {
+      await (this.dispatcher.dispatchQueuedCommands?.(client.workerId) ?? Promise.resolve());
     }
-  };
 
-  public readonly disableAllWorkers: RequestHandler = async (req, res, next) => {
-    try {
-      const user = req.user as User;
-      res.json(await this.store.disableWorkersForUser(user.userId));
-    } catch (error) {
-      next(error);
+    res.json(toWorkerStateResponse(client));
+  });
+
+  public readonly disableAllWorkers: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    res.json(await this.store.disableWorkersForUser(user.userId));
+  });
+
+  public readonly listWorkerCommands: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const client = await requireWorkerForUser(this.store, user, req.params.workerId, res);
+    if (!client) return;
+
+    res.json(await this.store.listWorkerCommands(client.workerId, readCommandPagination(req.query)));
+  });
+
+  public readonly listTaskQueue: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    res.json(await this.store.listTaskQueueForUser(user.userId, {
+      ...readCommandPagination(req.query),
+      statuses: readTaskQueueStatuses(req.query),
+      ...readTaskQueueSort(req.query)
+    }));
+  });
+
+  public readonly listGitflowSuggestions: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const client = await requireWorkerForUser(this.store, user, req.params.workerId, res);
+    if (!client) return;
+
+    res.json({
+      repositories: this.gitRepositories
+        ? await this.gitRepositories.listGitflowSuggestions(client.workerId)
+        : []
+    });
+  });
+
+  public readonly createWorkerCommand: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const client = await requireWorkerForUser(this.store, user, req.params.workerId, res);
+    if (!client) return;
+
+    const { command, commandMode } = req.body as { command?: string; commandMode?: string };
+    if (!command) {
+      res.status(400).json({ error: "command is required" });
+      return;
     }
-  };
 
-  public readonly listWorkerCommands: RequestHandler = async (req, res, next) => {
-    try {
-      const user = req.user as User;
-      const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
-      if (!client) {
-        return res.status(404).json({ error: "worker is not registered" });
-      }
-
-      res.json(await this.store.listWorkerCommands(client.workerId, readCommandPagination(req.query)));
-    } catch (error) {
-      next(error);
+    const parsedCommandMode = parseCommandMode(commandMode);
+    if (!parsedCommandMode) {
+      res.status(400).json({ error: "commandMode must be ai, shell, or gitflow" });
+      return;
     }
-  };
-
-  public readonly listTaskQueue: RequestHandler = async (req, res, next) => {
-    try {
-      const user = req.user as User;
-      res.json(await this.store.listTaskQueueForUser(user.userId, {
-        ...readCommandPagination(req.query),
-        statuses: readTaskQueueStatuses(req.query),
-        ...readTaskQueueSort(req.query)
-      }));
-    } catch (error) {
-      next(error);
+    if (!isTaskTypeEnabled(client.enabledTaskTypes, parsedCommandMode)) {
+      res.status(400).json({ error: `worker is not enabled for commandMode ${parsedCommandMode}` });
+      return;
     }
-  };
 
-  public readonly listGitflowSuggestions: RequestHandler = async (req, res, next) => {
-    try {
-      const user = req.user;
-      if (!user) {
-        return res.status(401).json({ error: "authentication required" });
-      }
-
-      const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
-      if (!client) {
-        return res.status(404).json({ error: "worker is not registered" });
-      }
-
-      res.json({
-        repositories: this.gitRepositories
-          ? await this.gitRepositories.listGitflowSuggestions(client.workerId)
-          : []
-      });
-    } catch (error) {
-      next(error);
+    const missingSkills = getMissingSkills(client.skills, parsedCommandMode);
+    if (missingSkills.length > 0) {
+      res.status(400).json({ error: `commandMode ${parsedCommandMode} requires worker skill(s): ${missingSkills.join(", ")}` });
+      return;
     }
-  };
 
-  public readonly createWorkerCommand: RequestHandler = async (req, res, next) => {
-    try {
-      const user = req.user;
-      if (!user) {
-        return res.status(401).json({ error: "authentication required" });
+    const gitflowPayload = parsedCommandMode === "gitflow" ? parseGitflowPayload(command) : undefined;
+    if (parsedCommandMode === "gitflow") {
+      const payload = gitflowPayload;
+      if (!payload) {
+        res.status(400).json({ error: "gitflow command must be valid JSON with repositoryUrl and sourceBranch" });
+        return;
       }
 
-      const client = await this.store.getWorkerForUser(user.userId, req.params.workerId);
-      if (!client) {
-        return res.status(404).json({ error: "worker is not registered" });
+      const repository = await this.gitRepositories?.getWorkerRepository(client.workerId, payload.repositoryUrl);
+      if (!repository) {
+        res.status(400).json({ error: "worker is not configured for this gitflow repository" });
+        return;
       }
 
-      const { command, commandMode } = req.body as { command?: string; commandMode?: string };
-      if (!command) {
-        return res.status(400).json({ error: "command is required" });
+      if (payload.sourceBranch !== repository.sourceBranch || (payload.targetBranch ?? payload.sourceBranch) !== repository.targetBranch) {
+        res.status(400).json({ error: "gitflow sourceBranch and targetBranch must match the worker repository configuration" });
+        return;
       }
 
-      const parsedCommandMode = parseCommandMode(commandMode);
-      if (!parsedCommandMode) {
-        return res.status(400).json({ error: "commandMode must be ai, shell, or gitflow" });
-      }
-      if (!isTaskTypeEnabled(client.enabledTaskTypes, parsedCommandMode)) {
-        return res.status(400).json({ error: `worker is not enabled for commandMode ${parsedCommandMode}` });
-      }
-
-      const missingSkills = getMissingSkills(client.skills, parsedCommandMode);
-      if (missingSkills.length > 0) {
-        return res.status(400).json({ error: `commandMode ${parsedCommandMode} requires worker skill(s): ${missingSkills.join(", ")}` });
-      }
-
-      const gitflowPayload = parsedCommandMode === "gitflow" ? parseGitflowPayload(command) : undefined;
-      if (parsedCommandMode === "gitflow") {
-        const payload = gitflowPayload;
-        if (!payload) {
-          return res.status(400).json({ error: "gitflow command must be valid JSON with repositoryUrl and sourceBranch" });
-        }
-
-        const repository = await this.gitRepositories?.getWorkerRepository(client.workerId, payload.repositoryUrl);
-        if (!repository) {
-          return res.status(400).json({ error: "worker is not configured for this gitflow repository" });
-        }
-
-        if (payload.sourceBranch !== repository.sourceBranch || (payload.targetBranch ?? payload.sourceBranch) !== repository.targetBranch) {
-          return res.status(400).json({ error: "gitflow sourceBranch and targetBranch must match the worker repository configuration" });
-        }
-
-        await this.gitRepositories?.touchWorkerRepository(client.workerId, payload.repositoryUrl);
-      }
-
-      const queued = await this.store.createQueuedCommand({
-        userId: user.userId,
-        workerId: client.workerId,
-        command,
-        commandMode: parsedCommandMode,
-        repositoryUrl: gitflowPayload?.repositoryUrl,
-        normalizedRepositoryUrl: gitflowPayload ? normalizeRepositoryUrl(gitflowPayload.repositoryUrl) : undefined
-      });
-      await this.dispatcher.dispatchCommand(client.workerId, queued.transactionId, { allowDisabledWorker: true });
-
-      res.status(202).json(queued);
-    } catch (error) {
-      next(error);
+      await this.gitRepositories?.touchWorkerRepository(client.workerId, payload.repositoryUrl);
     }
-  };
 
-  public readonly getWorkerCommand: RequestHandler = async (req, res, next) => {
-    try {
-      const command = await this.getVisibleCommand(req.user as User, req.params.workerId, req.params.transactionId);
-      if (!command) return res.status(404).json({ error: "command not found" });
-      res.json(command);
-    } catch (error) {
-      next(error);
+    const queued = await this.store.createQueuedCommand({
+      userId: user.userId,
+      workerId: client.workerId,
+      command,
+      commandMode: parsedCommandMode,
+      repositoryUrl: gitflowPayload?.repositoryUrl,
+      normalizedRepositoryUrl: gitflowPayload ? normalizeRepositoryUrl(gitflowPayload.repositoryUrl) : undefined
+    });
+    await this.dispatcher.dispatchCommand(client.workerId, queued.transactionId, { allowDisabledWorker: true });
+
+    res.status(202).json(queued);
+  });
+
+  public readonly getWorkerCommand: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const command = await this.getVisibleCommand(user, req.params.workerId, req.params.transactionId);
+    if (!command) {
+      res.status(404).json({ error: "command not found" });
+      return;
     }
-  };
 
-  public readonly cancelWorkerCommand: RequestHandler = async (req, res, next) => {
-    try {
-      const command = await this.getVisibleCommand(req.user as User, req.params.workerId, req.params.transactionId);
-      if (!command) return res.status(404).json({ error: "command not found" });
+    res.json(command);
+  });
 
-      const cancelled = await this.store.cancelWorkerCommand({
-        transactionId: command.transactionId,
-        workerId: req.params.workerId,
-        reason: readCancelReason(req.body)
-      });
+  public readonly cancelWorkerCommand: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
 
-      await (this.dispatcher.dispatchQueuedCommands?.(req.params.workerId) ?? Promise.resolve());
-      res.json(cancelled);
-    } catch (error) {
-      next(error);
+    const command = await this.getVisibleCommand(user, req.params.workerId, req.params.transactionId);
+    if (!command) {
+      res.status(404).json({ error: "command not found" });
+      return;
     }
-  };
 
-  public readonly streamWorkerCommandOutput: RequestHandler = async (req, res, next) => {
-    try {
-      const command = await this.getVisibleCommand(req.user as User, req.params.workerId, req.params.transactionId);
-      if (!command) return res.status(404).json({ error: "command not found" });
-      await streamCommandOutput(command, res, this.outputStorage);
-    } catch (error) {
-      next(error);
-    }
-  };
+    const cancelled = await this.store.cancelWorkerCommand({
+      transactionId: command.transactionId,
+      workerId: req.params.workerId,
+      reason: readCancelReason(req.body)
+    });
 
-  public readonly getWorkerCommandResponses: RequestHandler = async (req, res, next) => {
-    try {
-      const command = await this.getVisibleCommand(req.user as User, req.params.workerId, req.params.transactionId);
-      if (!command) return res.status(404).json({ error: "command not found" });
-      await sendCommandResponses(command, res, this.outputStorage);
-    } catch (error) {
-      next(error);
+    await (this.dispatcher.dispatchQueuedCommands?.(req.params.workerId) ?? Promise.resolve());
+    res.json(cancelled);
+  });
+
+  public readonly streamWorkerCommandOutput: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const command = await this.getVisibleCommand(user, req.params.workerId, req.params.transactionId);
+    if (!command) {
+      res.status(404).json({ error: "command not found" });
+      return;
     }
-  };
+
+    await streamCommandOutput(command, res, this.outputStorage);
+  });
+
+  public readonly getWorkerCommandResponses: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const command = await this.getVisibleCommand(user, req.params.workerId, req.params.transactionId);
+    if (!command) {
+      res.status(404).json({ error: "command not found" });
+      return;
+    }
+
+    await sendCommandResponses(command, res, this.outputStorage);
+  });
 
   private async getVisibleCommand(user: User, workerId: string, transactionId: string): Promise<Command | undefined> {
     const client = await this.store.getWorkerForUser(user.userId, workerId);

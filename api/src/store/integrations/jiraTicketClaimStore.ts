@@ -2,8 +2,13 @@ import { nanoid } from "nanoid";
 import { DbClient } from "../../db/dbClient.js";
 import { Command } from "../../types.js";
 import { buildTaskSummary } from "../commands/commandSummary.js";
-import { mapCommand } from "../commands/commandRowMappers.js";
-import { IntegrationIntakeEvent } from "./integrationIntakeEventStore.js";
+import { commandColumns, mapCommand, prefixedCommandColumns } from "../commands/commandRowMappers.js";
+import {
+  integrationIntakeEventColumns,
+  mapIntegrationIntakeEvent,
+  prefixedIntegrationIntakeEventColumns,
+} from "./integrationIntakeEventRowMappers.js";
+import { IntegrationIntakeEvent } from "./integrationIntakeEventTypes.js";
 
 export type ClaimJiraTicketInput = {
   workerId: string;
@@ -74,7 +79,7 @@ export class JiraTicketClaimStore {
           limit 1
         ),
         active_event as (
-          select ${prefixedEventReturningColumns("events")}
+          select ${prefixedIntegrationIntakeEventColumns("events")}
           from integration_intake_events events
           where events.provider = 'jira'
             and events.source_item_url = $6
@@ -101,7 +106,7 @@ export class JiraTicketClaimStore {
             updated_at = now()
           from claimable_existing_event, worker_integration
           where events.id = claimable_existing_event.id
-          returning ${prefixedEventReturningColumns("events")}
+          returning ${prefixedIntegrationIntakeEventColumns("events")}
         ),
         inserted_event as (
           insert into integration_intake_events (
@@ -135,7 +140,7 @@ export class JiraTicketClaimStore {
             where source_item_url is not null
               and status in ('queueing', 'queued', 'processing')
           do nothing
-          returning ${eventReturningColumns}
+          returning ${integrationIntakeEventColumns}
         ),
         claim_event as (
           select *
@@ -173,7 +178,7 @@ export class JiraTicketClaimStore {
             now()
           from worker_integration
           inner join claim_event on true
-          returning ${commandReturningColumns}
+          returning ${commandColumns}
         ),
         event_participant as (
           insert into integration_intake_event_users (event_id, user_id, integration_id)
@@ -188,8 +193,8 @@ export class JiraTicketClaimStore {
           on conflict do nothing
         )
         select
-          ${prefixedCommandReturningColumns("created_command")},
-          ${prefixedEventReturningColumns("claim_event", "event_")}
+          ${prefixedCommandColumns("created_command")},
+          ${prefixedIntegrationIntakeEventColumns("claim_event", "event_")}
         from created_command
         inner join claim_event on true
       `,
@@ -214,7 +219,7 @@ export class JiraTicketClaimStore {
       return {
         claimed: true,
         command: mapCommand(result.rows[0]),
-        event: mapEvent(result.rows[0], "event_"),
+        event: mapIntegrationIntakeEvent(result.rows[0], "event_"),
       };
     }
 
@@ -229,7 +234,7 @@ export class JiraTicketClaimStore {
   private async getActiveJiraEvent(sourceItemUrl: string): Promise<IntegrationIntakeEvent | undefined> {
     const result = await this.pool.query(
       `
-        select ${eventReturningColumns}
+        select ${integrationIntakeEventColumns}
         from integration_intake_events
         where provider = 'jira'
           and source_item_url = $1
@@ -240,7 +245,7 @@ export class JiraTicketClaimStore {
       [sourceItemUrl],
     );
 
-    return result.rows[0] ? mapEvent(result.rows[0]) : undefined;
+    return result.rows[0] ? mapIntegrationIntakeEvent(result.rows[0]) : undefined;
   }
 
   private async getClaimRejectionReason(input: ClaimJiraTicketInput): Promise<string> {
@@ -356,98 +361,3 @@ export class JiraTicketClaimStore {
 }
 
 const staleClaimTimeoutMinutes = 30;
-
-const commandColumnNames = [
-  "transaction_id",
-  "user_id",
-  "worker_id",
-  "command",
-  "task_summary",
-  "execution_command",
-  "command_mode",
-  "repository_url",
-  "normalized_repository_url",
-  "status",
-  "result",
-  "agent_response",
-  "error_message",
-  "output_object_key",
-  "output_bytes",
-  "output_started_at",
-  "output_updated_at",
-  "created_at",
-  "claimed_at",
-  "completed_at",
-];
-
-const eventColumnNames = [
-  "id",
-  "provider",
-  "source_item_id",
-  "source_item_key",
-  "source_item_url",
-  "repository_url",
-  "normalized_repository_url",
-  "worker_id",
-  "transaction_id",
-  "status",
-  "error_message",
-  "metadata",
-  "created_at",
-  "updated_at",
-];
-
-const commandReturningColumns = commandColumnNames.join(", ");
-const eventReturningColumns = eventColumnNames.join(", ");
-
-function prefixedCommandReturningColumns(prefix: string): string {
-  return commandColumnNames.map((column) => `${prefix}.${column}`).join(", ");
-}
-
-function prefixedEventReturningColumns(prefix: string, aliasPrefix = ""): string {
-  return eventColumnNames
-    .map((column) => `${prefix}.${column} as ${aliasPrefix}${column}`)
-    .join(", ");
-}
-
-function mapEvent(row: Record<string, unknown>, prefix = ""): IntegrationIntakeEvent {
-  return {
-    id: String(row[`${prefix}id`]),
-    provider: String(row[`${prefix}provider`]),
-    sourceItemId: String(row[`${prefix}source_item_id`]),
-    sourceItemKey: String(row[`${prefix}source_item_key`]),
-    sourceItemUrl: row[`${prefix}source_item_url`] ? String(row[`${prefix}source_item_url`]) : undefined,
-    repositoryUrl: String(row[`${prefix}repository_url`]),
-    normalizedRepositoryUrl: String(row[`${prefix}normalized_repository_url`]),
-    workerId: row[`${prefix}worker_id`] ? String(row[`${prefix}worker_id`]) : undefined,
-    transactionId: row[`${prefix}transaction_id`] ? String(row[`${prefix}transaction_id`]) : undefined,
-    status: String(row[`${prefix}status`]) as IntegrationIntakeEvent["status"],
-    errorMessage: row[`${prefix}error_message`] ? String(row[`${prefix}error_message`]) : undefined,
-    metadata: readMetadata(row[`${prefix}metadata`]),
-    createdAt: toIsoString(row[`${prefix}created_at`]),
-    updatedAt: toIsoString(row[`${prefix}updated_at`]),
-  };
-}
-
-function readMetadata(value: unknown): Record<string, unknown> {
-  if (!value) return {};
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      return isPlainObject(parsed) ? parsed : {};
-    } catch {
-      return {};
-    }
-  }
-  return isPlainObject(value) ? value : {};
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function toIsoString(value: unknown): string {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return new Date(value).toISOString();
-  return new Date().toISOString();
-}

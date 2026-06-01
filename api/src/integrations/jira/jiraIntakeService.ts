@@ -13,8 +13,6 @@ import {
   JiraIntegrationStore,
 } from "../../store/integrations/jiraIntegrationStore.js";
 import { IntegrationIntakeEventStore } from "../../store/integrations/integrationIntakeEventStore.js";
-import { WorkerRegistration } from "../../types.js";
-import { isTaskTypeEnabled } from "../../commandModes.js";
 
 type CommandDispatcher = {
   dispatchQueuedCommands(workerId?: string): Promise<void>;
@@ -56,6 +54,33 @@ export type JiraIntakeResult = {
   items: JiraIntakeResultItem[];
 };
 
+type JiraIntakeRunContext = {
+  input: RunJiraIntakeInput;
+  maxIssues: number;
+  dryRun: boolean;
+};
+
+type ReadyJiraIssueBatch = {
+  integration: JiraIntegrationCredentials;
+  repositoryFieldKeys: string[];
+  issues: JiraIssueSummary[];
+};
+
+type JiraIssueWorkflowInput = {
+  userId: string;
+  integration: JiraIntegrationCredentials;
+  issue: JiraIssueSummary;
+  repositoryFieldKeys: string[];
+  dryRun: boolean;
+};
+
+type RepositoryResolution = {
+  repositoryUrl: string;
+  normalizedRepositoryUrl: string;
+};
+
+type IntakeBeginResult = Awaited<ReturnType<IntegrationIntakeEventStore["begin"]>>;
+
 export class JiraIntakeService {
   public constructor(
     private readonly jiraIntegrations: JiraIntegrationStore,
@@ -66,14 +91,49 @@ export class JiraIntakeService {
   ) {}
 
   public async run(input: RunJiraIntakeInput): Promise<JiraIntakeResult> {
-    const maxIssues = normalizeMaxIssues(input.maxIssues);
+    const context = createRunContext(input);
     logJiraIntake("run started", {
       userId: input.userId,
       integrationId: input.integrationId,
       requestedMaxIssues: input.maxIssues,
-      maxIssues,
-      dryRun: Boolean(input.dryRun),
+      maxIssues: context.maxIssues,
+      dryRun: context.dryRun,
     });
+
+    const integrations = await this.loadEnabledIntegrations(context);
+    const items: JiraIntakeResultItem[] = [];
+    for (const integration of integrations) {
+      const issueBatch = await this.loadReadyIssueBatch(context, integration);
+      for (const issue of issueBatch.issues) {
+        const item = await this.runIssueWorkflow({
+          userId: issueBatch.integration.userId,
+          integration: issueBatch.integration,
+          issue,
+          repositoryFieldKeys: ["repository", ...issueBatch.repositoryFieldKeys],
+          dryRun: context.dryRun,
+        });
+        items.push(item);
+        logJiraIntake("issue result", item);
+      }
+    }
+
+    const result = buildResult(context, items);
+    logJiraIntake("run finished", {
+      userId: input.userId,
+      integrationId: input.integrationId,
+      processed: result.processed,
+      queued: result.queued,
+      skipped: result.skipped,
+      failed: result.failed,
+      dryRun: result.dryRun,
+    });
+    return result;
+  }
+
+  private async loadEnabledIntegrations(
+    context: JiraIntakeRunContext,
+  ): Promise<JiraIntegrationCredentials[]> {
+    const { input } = context;
     const integrations = input.userId
       ? await this.jiraIntegrations.listEnabledCredentials(
           input.userId,
@@ -88,91 +148,66 @@ export class JiraIntakeService {
       integrationCount: integrations.length,
       integrationIds: integrations.map((integration) => integration.id),
     });
-    const items: JiraIntakeResultItem[] = [];
-
-    for (const integration of integrations) {
-      const client = new JiraClient(integration);
-      const jql = buildReadyJql(
-        integration.boardFilterId,
-        integration.readyStatusName,
-      );
-      logJiraIntake("searching ready issues", {
-        userId: input.userId,
-        integrationId: integration.id,
-        siteUrl: integration.siteUrl,
-        boardId: integration.boardId,
-        boardName: integration.boardName,
-        boardFilterId: integration.boardFilterId,
-        readyStatusId: integration.readyStatusId,
-        readyStatusName: integration.readyStatusName,
-        maxIssues,
-        jql,
-      });
-
-      const repositoryFieldKeys = await resolveRepositoryFieldKeys(client);
-      logJiraIntake("repository fields resolved", {
-        userId: input.userId,
-        integrationId: integration.id,
-        repositoryFieldKeys,
-      });
-
-      const issues = await client.searchIssues(jql, maxIssues, [
-        "summary",
-        "status",
-        "description",
-        "attachment",
-        ...(repositoryFieldKeys.length ? repositoryFieldKeys : ["repository"]),
-      ]);
-      logJiraIntake("ready issues received", {
-        userId: input.userId,
-        integrationId: integration.id,
-        issueCount: issues.length,
-        issueKeys: issues.map((issue) => issue.key),
-      });
-
-      for (const issue of issues) {
-        const item = await this.processIssue(
-          integration.userId,
-          integration,
-          issue,
-          ["repository", ...repositoryFieldKeys],
-          Boolean(input.dryRun),
-        );
-        items.push(item);
-        logJiraIntake("issue result", item);
-      }
-    }
-
-    const result = {
-      processed: items.length,
-      queued: items.filter((item) => item.status === "queued").length,
-      skipped: items.filter((item) => item.status === "skipped").length,
-      failed: items.filter((item) => item.status === "failed").length,
-      dryRun: Boolean(input.dryRun),
-      items,
-    };
-    logJiraIntake("run finished", {
-      userId: input.userId,
-      integrationId: input.integrationId,
-      processed: result.processed,
-      queued: result.queued,
-      skipped: result.skipped,
-      failed: result.failed,
-      dryRun: result.dryRun,
-    });
-    return result;
+    return integrations;
   }
 
-  private async processIssue(
-    userId: string,
+  private async loadReadyIssueBatch(
+    context: JiraIntakeRunContext,
     integration: JiraIntegrationCredentials,
-    issue: JiraIssueSummary,
-    repositoryFieldKeys: string[],
-    dryRun: boolean,
+  ): Promise<ReadyJiraIssueBatch> {
+    const client = new JiraClient(integration);
+    const jql = buildReadyJql(
+      integration.boardFilterId,
+      integration.readyStatusName,
+    );
+    logJiraIntake("searching ready issues", {
+      userId: context.input.userId,
+      integrationId: integration.id,
+      siteUrl: integration.siteUrl,
+      boardId: integration.boardId,
+      boardName: integration.boardName,
+      boardFilterId: integration.boardFilterId,
+      readyStatusId: integration.readyStatusId,
+      readyStatusName: integration.readyStatusName,
+      maxIssues: context.maxIssues,
+      jql,
+    });
+
+    const repositoryFieldKeys = await resolveRepositoryFieldKeys(client);
+    logJiraIntake("repository fields resolved", {
+      userId: context.input.userId,
+      integrationId: integration.id,
+      repositoryFieldKeys,
+    });
+
+    const issues = await client.searchIssues(jql, context.maxIssues, [
+      "summary",
+      "status",
+      "description",
+      "attachment",
+      ...(repositoryFieldKeys.length ? repositoryFieldKeys : ["repository"]),
+    ]);
+    logJiraIntake("ready issues received", {
+      userId: context.input.userId,
+      integrationId: integration.id,
+      issueCount: issues.length,
+      issueKeys: issues.map((issue) => issue.key),
+    });
+
+    return {
+      integration,
+      repositoryFieldKeys,
+      issues,
+    };
+  }
+
+  private async runIssueWorkflow(
+    workflow: JiraIssueWorkflowInput,
   ): Promise<JiraIntakeResultItem> {
+    const { userId, integration, issue, repositoryFieldKeys, dryRun } = workflow;
     logJiraIntake("processing issue", issue);
-    const repositoryUrl = readRepositoryField(issue, repositoryFieldKeys);
-    if (!repositoryUrl) {
+    const repository = resolveIssueRepository(issue, repositoryFieldKeys);
+    if (!repository) {
       console.warn("[jira-intake] handling issue without repository", {
         userId,
         integrationId: integration.id,
@@ -182,32 +217,63 @@ export class JiraIntakeService {
       return handleMissingRepositoryIssue(integration, issue, dryRun);
     }
 
-    const normalizedRepositoryUrl = normalizeRepositoryUrl(repositoryUrl);
     logJiraIntake("repository field read", {
       userId,
       integrationId: integration.id,
       issueKey: issue.key,
-      repositoryUrl,
-      normalizedRepositoryUrl,
+      repositoryUrl: repository.repositoryUrl,
+      normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
     });
     if (dryRun) {
       logJiraIntake("dry-run issue would queue", {
         userId,
         integrationId: integration.id,
         issueKey: issue.key,
-        repositoryUrl,
-        normalizedRepositoryUrl,
+        repositoryUrl: repository.repositoryUrl,
+        normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
       });
       return {
         integrationId: integration.id,
         issueKey: issue.key,
         issueId: issue.id,
-        repositoryUrl,
-        normalizedRepositoryUrl,
+        repositoryUrl: repository.repositoryUrl,
+        normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
         status: "dry_run",
       };
     }
 
+    const intake = await this.beginIntakeEvent(workflow, repository);
+    if (!intake.created) {
+      console.warn("[jira-intake] skipping existing intake event", {
+        userId,
+        integrationId: integration.id,
+        issueKey: issue.key,
+        intakeEventId: intake.event.id,
+        status: intake.event.status,
+        workerId: intake.event.workerId,
+        transactionId: intake.event.transactionId,
+      });
+      return {
+        integrationId: integration.id,
+        issueKey: issue.key,
+        issueId: issue.id,
+        repositoryUrl: repository.repositoryUrl,
+        normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
+        workerId: intake.event.workerId,
+        transactionId: intake.event.transactionId,
+        status: "skipped",
+        reason: `already ${intake.event.status}`,
+      };
+    }
+
+    return this.queueGitflowCommand(workflow, repository, intake);
+  }
+
+  private async beginIntakeEvent(
+    workflow: JiraIssueWorkflowInput,
+    repository: RepositoryResolution,
+  ): Promise<IntakeBeginResult> {
+    const { userId, integration, issue } = workflow;
     const intake = await this.intakeEvents.begin({
       userId,
       provider: "jira",
@@ -215,8 +281,8 @@ export class JiraIntakeService {
       sourceItemId: issue.id,
       sourceItemKey: issue.key,
       sourceItemUrl: buildIssueUrl(integration.siteUrl, issue.key),
-      repositoryUrl,
-      normalizedRepositoryUrl,
+      repositoryUrl: repository.repositoryUrl,
+      normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
       metadata: {
         issueId: issue.id,
         issueKey: issue.key,
@@ -233,30 +299,15 @@ export class JiraIntakeService {
       workerId: intake.event.workerId,
       transactionId: intake.event.transactionId,
     });
+    return intake;
+  }
 
-    if (!intake.created) {
-      console.warn("[jira-intake] skipping existing intake event", {
-        userId,
-        integrationId: integration.id,
-        issueKey: issue.key,
-        intakeEventId: intake.event.id,
-        status: intake.event.status,
-        workerId: intake.event.workerId,
-        transactionId: intake.event.transactionId,
-      });
-      return {
-        integrationId: integration.id,
-        issueKey: issue.key,
-        issueId: issue.id,
-        repositoryUrl,
-        normalizedRepositoryUrl,
-        workerId: intake.event.workerId,
-        transactionId: intake.event.transactionId,
-        status: "skipped",
-        reason: `already ${intake.event.status}`,
-      };
-    }
-
+  private async queueGitflowCommand(
+    workflow: JiraIssueWorkflowInput,
+    repository: RepositoryResolution,
+    intake: IntakeBeginResult,
+  ): Promise<JiraIntakeResultItem> {
+    const { userId, integration, issue } = workflow;
     try {
       const sourceBranch = "main";
       const targetBranch = "main";
@@ -265,15 +316,15 @@ export class JiraIntakeService {
         integrationId: integration.id,
         issueKey: issue.key,
         intakeEventId: intake.event.id,
-        repositoryUrl,
-        normalizedRepositoryUrl,
+        repositoryUrl: repository.repositoryUrl,
+        normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
         sourceBranch,
         targetBranch,
       });
       const command = await this.workers.createQueuedCommand({
         userId,
         command: JSON.stringify({
-          repositoryUrl,
+          repositoryUrl: repository.repositoryUrl,
           sourceBranch,
           targetBranch,
           ticketNumber: issue.key,
@@ -282,15 +333,15 @@ export class JiraIntakeService {
           description: readJiraText(issue.fields?.description),
           attachments: buildGitflowAttachments(intake.event.id, issue),
         }),
-        repositoryUrl,
-        normalizedRepositoryUrl,
+        repositoryUrl: repository.repositoryUrl,
+        normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
         commandMode: "gitflow",
       });
       logJiraIntake("queued gitflow command", {
         userId,
         integrationId: integration.id,
         issueKey: issue.key,
-        repositoryUrl,
+        repositoryUrl: repository.repositoryUrl,
         sourceBranch,
       });
       await this.intakeEvents.markQueued(
@@ -316,8 +367,8 @@ export class JiraIntakeService {
         integrationId: integration.id,
         issueKey: issue.key,
         issueId: issue.id,
-        repositoryUrl,
-        normalizedRepositoryUrl,
+        repositoryUrl: repository.repositoryUrl,
+        normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
         transactionId: command.transactionId,
         status: "queued",
       };
@@ -335,13 +386,35 @@ export class JiraIntakeService {
         integrationId: integration.id,
         issueKey: issue.key,
         issueId: issue.id,
-        repositoryUrl,
-        normalizedRepositoryUrl,
+        repositoryUrl: repository.repositoryUrl,
+        normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
         status: "failed",
         reason,
       };
     }
   }
+}
+
+function createRunContext(input: RunJiraIntakeInput): JiraIntakeRunContext {
+  return {
+    input,
+    maxIssues: normalizeMaxIssues(input.maxIssues),
+    dryRun: Boolean(input.dryRun),
+  };
+}
+
+function buildResult(
+  context: JiraIntakeRunContext,
+  items: JiraIntakeResultItem[],
+): JiraIntakeResult {
+  return {
+    processed: items.length,
+    queued: items.filter((item) => item.status === "queued").length,
+    skipped: items.filter((item) => item.status === "skipped").length,
+    failed: items.filter((item) => item.status === "failed").length,
+    dryRun: context.dryRun,
+    items,
+  };
 }
 
 async function handleMissingRepositoryIssue(
@@ -435,6 +508,18 @@ function readRepositoryField(
   return undefined;
 }
 
+function resolveIssueRepository(
+  issue: JiraIssueSummary,
+  repositoryFieldKeys: string[],
+): RepositoryResolution | undefined {
+  const repositoryUrl = readRepositoryField(issue, repositoryFieldKeys);
+  if (!repositoryUrl) return undefined;
+  return {
+    repositoryUrl,
+    normalizedRepositoryUrl: normalizeRepositoryUrl(repositoryUrl),
+  };
+}
+
 function readRepositoryFieldValue(value: unknown): string | undefined {
   if (typeof value === "string") return value.trim() || undefined;
   if (Array.isArray(value)) {
@@ -526,28 +611,6 @@ function readJiraText(value: unknown): string {
   const text = typeof payload.text === "string" ? payload.text.trim() : "";
   const content = readJiraText(payload.content);
   return [text, content].filter(Boolean).join("\n");
-}
-
-function isAvailableGitWorker(worker: WorkerRegistration): boolean {
-  return (
-    worker.state !== "stopped" &&
-    worker.enabled &&
-    isTaskTypeEnabled(worker.enabledTaskTypes, "gitflow") &&
-    worker.skills.map((skill) => skill.toLowerCase()).includes("git") &&
-    activeTaskCount(worker) < maxConcurrentTasks(worker)
-  );
-}
-
-function activeTaskCount(worker: WorkerRegistration): number {
-  return (
-    worker.activeTaskCount ??
-    worker.activeTransactionIds?.length ??
-    (worker.currentTransactionId ? 1 : 0)
-  );
-}
-
-function maxConcurrentTasks(worker: WorkerRegistration): number {
-  return Math.max(1, worker.maxConcurrentTasks ?? 1);
 }
 
 function normalizeMaxIssues(value: number | undefined): number {

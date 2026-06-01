@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "contracts:generate": "node ../tools/generate-worker-hub-contracts.mjs",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "test": "tsx test/signalRHub.dispatch.test.ts && tsx test/controllerHelpers.test.ts && tsx test/typeOrmStoreMapping.test.ts && tsx test/jiraIntakeService.test.ts && tsx test/integrationLifecycleService.test.ts && tsx test/workerAuthController.test.ts && tsx test/workerRefreshTokenStore.test.ts && tsx test/commandOutputStorage.test.ts && tsx test/commandStore.test.ts && tsx test/integrationIntakeEventStore.test.ts && tsx test/jiraTicketClaimStore.test.ts && tsx test/postgresTenantStore.test.ts",

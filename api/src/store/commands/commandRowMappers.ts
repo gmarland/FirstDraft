@@ -1,6 +1,36 @@
 import { QueryResultRow } from "pg";
 import { Command } from "../../types.js";
 import { toIsoString } from "../tenants/tenantRowMappers.js";
+import { selectColumns } from "../sqlColumns.js";
+
+export const commandColumnNames = [
+  "transaction_id",
+  "user_id",
+  "worker_id",
+  "command",
+  "task_summary",
+  "execution_command",
+  "command_mode",
+  "repository_url",
+  "normalized_repository_url",
+  "status",
+  "result",
+  "agent_response",
+  "error_message",
+  "output_object_key",
+  "output_bytes",
+  "output_started_at",
+  "output_updated_at",
+  "created_at",
+  "claimed_at",
+  "completed_at"
+];
+
+export const commandColumns = selectColumns(commandColumnNames);
+
+export function prefixedCommandColumns(prefix: string, aliasPrefix = ""): string {
+  return selectColumns(commandColumnNames, prefix, aliasPrefix);
+}
 
 export function mapCommand(row: QueryResultRow): Command {
   return {

@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 import { WorkerAccessPayload } from "../../auth/workerAuthTypes.js";
 import { WorkerTokenService } from "../../auth/workerTokens.js";
 import { normalizeEnabledTaskTypes } from "../../commandModes.js";
+import { workerHubRegisterArguments } from "../../contracts/workerHubContract.js";
 import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore, WorkerGitRepositoryInput } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { JiraIntegrationStore, WorkerJiraIntegrationInput } from "../../store/integrations/jiraIntegrationStore.js";
@@ -20,22 +21,22 @@ export class WorkerRegistrationService {
 
   public async registerWorker(connection: SignalRConnection, args: unknown[]): Promise<void> {
     const previousConnectionId = connection.connectionId;
-    const access = await this.readWorkerAccess(args[0]);
-    const connectionId = readString(args[1]) || connection.connectionId;
-    const workerId = readRequiredString(args[2], "workerId");
+    const access = await this.readWorkerAccess(args[workerHubRegisterArguments.accessToken]);
+    const connectionId = readString(args[workerHubRegisterArguments.connectionId]) || connection.connectionId;
+    const workerId = readRequiredString(args[workerHubRegisterArguments.workerId], "workerId");
     if (access.workerId !== workerId) {
       throw new Error("access token does not belong to this worker");
     }
 
-    const paths = readString(args[3])
+    const paths = readString(args[workerHubRegisterArguments.paths])
       .split("|")
       .map((path) => path.trim())
       .filter(Boolean);
-    const skills = normalizeSkills(readString(args[4]));
-    const maxConcurrentTasks = normalizeMaxConcurrentTasks(args[5]);
-    const enabledTaskTypes = normalizeEnabledTaskTypes(args[6]);
-    const repositories = readWorkerRepositories(args[7]);
-    const integrations = readWorkerJiraIntegrations(args[8]);
+    const skills = normalizeSkills(readString(args[workerHubRegisterArguments.skills]));
+    const maxConcurrentTasks = normalizeMaxConcurrentTasks(args[workerHubRegisterArguments.maxConcurrentTasks]);
+    const enabledTaskTypes = normalizeEnabledTaskTypes(args[workerHubRegisterArguments.enabledTaskTypes]);
+    const repositories = readWorkerRepositories(args[workerHubRegisterArguments.gitRepositories]);
+    const integrations = readWorkerJiraIntegrations(args[workerHubRegisterArguments.jiraIntegrations]);
 
     await this.markStaleWorkerStopped(workerId, connectionId);
 

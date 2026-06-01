@@ -1,38 +1,21 @@
 import { DbClient } from "../../db/dbClient.js";
-import { toIsoString } from "../tenants/tenantRowMappers.js";
+import {
+  integrationIntakeEventColumns,
+  mapIntegrationIntakeEvent,
+  mapIntegrationIntakeEventParticipant,
+  prefixedIntegrationIntakeEventColumns,
+} from "./integrationIntakeEventRowMappers.js";
+import {
+  IntegrationIntakeEvent,
+  IntegrationIntakeEventParticipant,
+  IntegrationIntakeStatus,
+} from "./integrationIntakeEventTypes.js";
 
-type QueryResultRow = Record<string, unknown>;
-
-export type IntegrationIntakeStatus =
-  | "queueing"
-  | "queued"
-  | "processing"
-  | "processed"
-  | "skipped"
-  | "failed";
-
-export type IntegrationIntakeEvent = {
-  id: string;
-  provider: string;
-  sourceItemId: string;
-  sourceItemKey: string;
-  sourceItemUrl?: string;
-  repositoryUrl: string;
-  normalizedRepositoryUrl: string;
-  workerId?: string;
-  transactionId?: string;
-  status: IntegrationIntakeStatus;
-  errorMessage?: string;
-  metadata: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type IntegrationIntakeEventParticipant = {
-  eventId: string;
-  userId: string;
-  integrationId: string;
-};
+export type {
+  IntegrationIntakeEvent,
+  IntegrationIntakeEventParticipant,
+  IntegrationIntakeStatus,
+} from "./integrationIntakeEventTypes.js";
 
 export type BeginIntegrationIntakeInput = {
   userId: string;
@@ -69,7 +52,7 @@ export class IntegrationIntakeEventStore {
             where source_item_url is not null
               and status in ('queueing', 'queued', 'processing')
           do nothing
-          returning ${returningColumns}
+          returning ${integrationIntakeEventColumns}
         `,
         [
           input.provider,
@@ -123,7 +106,7 @@ export class IntegrationIntakeEventStore {
   public async getByTransactionId(transactionId: string): Promise<IntegrationIntakeEvent | undefined> {
     const result = await this.pool.query(
       `
-        select ${returningColumns}
+        select ${integrationIntakeEventColumns}
         from integration_intake_events
         where transaction_id = $1
         order by
@@ -145,7 +128,7 @@ export class IntegrationIntakeEventStore {
   ): Promise<IntegrationIntakeEvent | undefined> {
     const result = await this.pool.query(
       `
-        select ${returningColumns}
+        select ${integrationIntakeEventColumns}
           from integration_intake_events
         where provider = $1
           and source_item_id = $2
@@ -166,7 +149,7 @@ export class IntegrationIntakeEventStore {
     const result = await this.pool.query(
       `
         select
-          ${prefixedReturningColumns("events")},
+          ${prefixedIntegrationIntakeEventColumns("events")},
           participants.user_id as participant_user_id,
           participants.integration_id as participant_integration_id
         from integration_intake_events events
@@ -228,7 +211,7 @@ export class IntegrationIntakeEventStore {
     if (input.sourceItemUrl) {
       const result = await this.pool.query(
         `
-          select ${returningColumns}
+          select ${integrationIntakeEventColumns}
           from integration_intake_events
           where provider = $1
             and source_item_url = $2
@@ -244,7 +227,7 @@ export class IntegrationIntakeEventStore {
 
     const result = await this.pool.query(
       `
-        select ${returningColumns}
+        select ${integrationIntakeEventColumns}
         from integration_intake_events
         where provider = $1
           and source_item_key = $2
@@ -328,7 +311,7 @@ export class IntegrationIntakeEventStore {
                 and command_users.user_id = assigned_worker.user_id
             )
           )
-        returning ${returningColumns}
+        returning ${integrationIntakeEventColumns}
       `,
       [id, status, errorMessage ?? null, workerId ?? null, transactionId ?? null]
     );
@@ -336,78 +319,4 @@ export class IntegrationIntakeEventStore {
     if (!result.rows[0]) throw new Error("Integration intake event not found");
     return mapIntegrationIntakeEvent(result.rows[0]);
   }
-}
-
-const returningColumns = `
-  id,
-  provider,
-  source_item_id,
-  source_item_key,
-  source_item_url,
-  repository_url,
-  normalized_repository_url,
-  worker_id,
-  transaction_id,
-  status,
-  error_message,
-  metadata,
-  created_at,
-  updated_at
-`;
-
-function prefixedReturningColumns(prefix: string): string {
-  return returningColumns
-    .split(",")
-    .map((column) => column.trim())
-    .filter(Boolean)
-    .map((column) => `${prefix}.${column}`)
-    .join(", ");
-}
-
-function mapIntegrationIntakeEvent(row: QueryResultRow): IntegrationIntakeEvent {
-  return {
-    id: String(row.id),
-    provider: String(row.provider),
-    sourceItemId: String(row.source_item_id),
-    sourceItemKey: String(row.source_item_key),
-    sourceItemUrl: row.source_item_url ? String(row.source_item_url) : undefined,
-    repositoryUrl: String(row.repository_url),
-    normalizedRepositoryUrl: String(row.normalized_repository_url),
-    workerId: row.worker_id ? String(row.worker_id) : undefined,
-    transactionId: row.transaction_id ? String(row.transaction_id) : undefined,
-    status: String(row.status) as IntegrationIntakeStatus,
-    errorMessage: row.error_message ? String(row.error_message) : undefined,
-    metadata: readMetadata(row.metadata),
-    createdAt: toIsoString(row.created_at),
-    updatedAt: toIsoString(row.updated_at)
-  };
-}
-
-function mapIntegrationIntakeEventParticipant(
-  row: QueryResultRow,
-  eventId: string
-): IntegrationIntakeEventParticipant {
-  return {
-    eventId,
-    userId: String(row.participant_user_id),
-    integrationId: String(row.participant_integration_id),
-  };
-}
-
-function readMetadata(value: unknown): Record<string, unknown> {
-  if (!value) return {};
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      return isPlainObject(parsed) ? parsed : {};
-    } catch {
-      return {};
-    }
-  }
-
-  return isPlainObject(value) ? value : {};
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import { Command, CommandMode, PaginatedCommands } from "../../types.js";
 import { DbClient } from "../../db/dbClient.js";
 import type { CancelCommandInput, CommandOutputMetadataInput, CommandPagination, CompleteCommandInput, TaskQueueQuery } from "../clientStore.js";
-import { mapCommand } from "./commandRowMappers.js";
+import { commandColumns, mapCommand, prefixedCommandColumns } from "./commandRowMappers.js";
 import { buildTaskSummary } from "./commandSummary.js";
 
 export type CreateQueuedCommandInput = {
@@ -109,7 +109,7 @@ export class CommandStore {
     const supportsGitflow = workerSkills.map((skill) => skill.toLowerCase()).includes("git");
     const result = await this.pool.query(
       `
-        select ${prefixedCommandColumns},
+        select ${prefixedCommandColumns("commands")},
           worker_repos.normalized_repository_url is not null as worker_repository_match
         from client_commands commands
         inner join client_command_users command_users
@@ -231,7 +231,7 @@ export class CommandStore {
     const offset = query.page * query.pageSize;
     const commandsResult = await this.pool.query(
       `
-        select ${prefixedCommandColumns},
+        select ${prefixedCommandColumns("commands")},
           worker_owner.id as worker_owner_user_id,
           worker_owner.name as worker_owner_name,
           worker_owner.email as worker_owner_email,
@@ -315,7 +315,7 @@ export class CommandStore {
           and command_users.transaction_id = client_commands.transaction_id
           and client_commands.status = 'queued'
           and (client_commands.worker_id is null or client_commands.worker_id = $2)
-        returning ${clientCommandColumns}
+        returning ${prefixedCommandColumns("client_commands")}
       `,
       [command.transactionId, assignedWorkerId]
     );
@@ -444,37 +444,6 @@ export class CommandStore {
     return result.rows.map(mapCommand);
   }
 }
-
-const commandColumnNames = [
-  "transaction_id",
-  "user_id",
-  "worker_id",
-  "command",
-  "task_summary",
-  "execution_command",
-  "command_mode",
-  "repository_url",
-  "normalized_repository_url",
-  "status",
-  "result",
-  "agent_response",
-  "error_message",
-  "output_object_key",
-  "output_bytes",
-  "output_started_at",
-  "output_updated_at",
-  "created_at",
-  "claimed_at",
-  "completed_at"
-];
-
-const commandColumns = commandColumnNames.join(", ");
-const prefixedCommandColumns = commandColumnNames
-  .map((column) => `commands.${column}`)
-  .join(", ");
-const clientCommandColumns = commandColumnNames
-  .map((column) => `client_commands.${column}`)
-  .join(", ");
 
 function taskQueueOrderBy(query: TaskQueueQuery): string {
   if (!query.sortBy) return defaultTaskQueueOrderBy();

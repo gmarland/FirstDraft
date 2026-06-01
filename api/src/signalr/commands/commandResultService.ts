@@ -1,3 +1,9 @@
+import {
+  workerHubCommandOutputChunkArguments,
+  workerHubCommandResultArguments,
+  workerHubRefreshCommandTokenArguments,
+  workerHubRejectCommandArguments
+} from "../../contracts/workerHubContract.js";
 import { ApiToWorkerTokenIssuer } from "../../auth/workerTokens.js";
 import { CommandOutputStorage } from "../../storage/commandOutputStorage.js";
 import { WorkerStore } from "../../store/clientStore.js";
@@ -23,10 +29,10 @@ export class CommandResultService {
   ) {}
 
   public async recordCommandResult(connection: SignalRConnection, args: unknown[]): Promise<void> {
-    await this.workerRegistration.requireConnectionAccess(connection, args[0]);
-    const transactionId = readRequiredString(args[1], "transactionId");
-    const result = readNullableString(args[2]);
-    let errorMessage = readNullableString(args[3]);
+    await this.workerRegistration.requireConnectionAccess(connection, args[workerHubCommandResultArguments.accessToken]);
+    const transactionId = readRequiredString(args[workerHubCommandResultArguments.transactionId], "transactionId");
+    const result = readNullableString(args[workerHubCommandResultArguments.result]);
+    let errorMessage = readNullableString(args[workerHubCommandResultArguments.errorMessage]);
     const command = await this.store.getWorkerCommand(transactionId);
     if (!command) {
       throw new Error("command not found");
@@ -68,12 +74,12 @@ export class CommandResultService {
   }
 
   public async recordCommandOutputChunk(connection: SignalRConnection, args: unknown[]): Promise<void> {
-    await this.workerRegistration.requireConnectionAccess(connection, args[0]);
+    await this.workerRegistration.requireConnectionAccess(connection, args[workerHubCommandOutputChunkArguments.accessToken]);
     if (!this.outputStorage) {
       return;
     }
 
-    const transactionId = readRequiredString(args[1], "transactionId");
+    const transactionId = readRequiredString(args[workerHubCommandOutputChunkArguments.transactionId], "transactionId");
     const command = await this.store.getWorkerCommand(transactionId);
     if (!command) {
       throw new Error("command not found");
@@ -94,16 +100,16 @@ export class CommandResultService {
     await this.outputStorage.appendChunk({
       workerId: command.workerId,
       transactionId,
-      sequence: readRequiredNumber(args[2], "sequence"),
-      stream: readOutputStream(args[3]),
-      text: readString(args[4]),
-      emittedAt: readString(args[5]) || new Date().toISOString()
+      sequence: readRequiredNumber(args[workerHubCommandOutputChunkArguments.sequence], "sequence"),
+      stream: readOutputStream(args[workerHubCommandOutputChunkArguments.stream]),
+      text: readString(args[workerHubCommandOutputChunkArguments.text]),
+      emittedAt: readString(args[workerHubCommandOutputChunkArguments.emittedAt]) || new Date().toISOString()
     });
   }
 
   public async refreshCommandToken(connection: SignalRConnection, args: unknown[]): Promise<string> {
-    await this.workerRegistration.requireConnectionAccess(connection, args[0]);
-    const transactionId = readRequiredString(args[1], "transactionId");
+    await this.workerRegistration.requireConnectionAccess(connection, args[workerHubRefreshCommandTokenArguments.accessToken]);
+    const transactionId = readRequiredString(args[workerHubRefreshCommandTokenArguments.transactionId], "transactionId");
     const command = await this.store.getWorkerCommand(transactionId);
     if (!command) {
       throw new Error("command not found");
@@ -121,9 +127,9 @@ export class CommandResultService {
   }
 
   public async rejectCommand(connection: SignalRConnection, args: unknown[]): Promise<void> {
-    await this.workerRegistration.requireConnectionAccess(connection, args[0]);
-    const transactionId = readRequiredString(args[1], "transactionId");
-    const reason = readString(args[2]) || "worker rejected command";
+    await this.workerRegistration.requireConnectionAccess(connection, args[workerHubRejectCommandArguments.accessToken]);
+    const transactionId = readRequiredString(args[workerHubRejectCommandArguments.transactionId], "transactionId");
+    const reason = readString(args[workerHubRejectCommandArguments.reason]) || "worker rejected command";
     const command = await this.store.getWorkerCommand(transactionId);
     if (!command) {
       throw new Error("command not found");

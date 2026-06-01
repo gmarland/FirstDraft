@@ -1,6 +1,6 @@
-using FirstDraft.AI;
 using FirstDraft.Commands;
 using FirstDraft.Configuration;
+using FirstDraft.Features.AI;
 
 namespace FirstDraft.Commands.Handlers
 {
