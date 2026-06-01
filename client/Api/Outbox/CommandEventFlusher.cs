@@ -1,5 +1,6 @@
 using FirstDraft.Api.Contracts;
 using FirstDraft.Api.Auth;
+using FirstDraft.Api.Hub;
 using FirstDraft.Infrastructure.Logging;
 
 namespace FirstDraft.Api.Outbox

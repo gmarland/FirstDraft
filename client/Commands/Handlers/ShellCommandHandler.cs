@@ -1,5 +1,5 @@
 using FirstDraft.Commands;
-using FirstDraft.Shell;
+using FirstDraft.Features.Shell;
 
 namespace FirstDraft.Commands.Handlers
 {

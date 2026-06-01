@@ -1,5 +1,8 @@
 using FirstDraft.Api.Contracts;
 using FirstDraft.Api.Auth;
+using FirstDraft.Api.Execution;
+using FirstDraft.Api.Hub;
+using FirstDraft.Api.Integrations.Jira;
 using FirstDraft.Api.Outbox;
 using FirstDraft.Commands;
 using FirstDraft.Configuration;
