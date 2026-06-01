@@ -1,3 +1,4 @@
+using FirstDraft.Api.Contracts;
 using Microsoft.AspNetCore.SignalR.Client;
 using FirstDraft.Configuration;
 using FirstDraft.Infrastructure.Logging;
@@ -43,7 +44,7 @@ namespace FirstDraft.Api
                 _connection = null;
             }
 
-            _connection = new HubConnectionBuilder().WithUrl(_applicationData.ExternalAPI + $"/WorkerHub").Build();
+            _connection = new HubConnectionBuilder().WithUrl(_applicationData.ExternalAPI + WorkerHubContract.HubPath).Build();
             _connection.ServerTimeout = TimeSpan.FromMinutes(2);
             _connection.KeepAliveInterval = TimeSpan.FromSeconds(15);
 
@@ -63,7 +64,7 @@ namespace FirstDraft.Api
                 if (Reconnect) await reconnectAsync();
             };
 
-            _connection.On("ExecuteCommand", (string apiCommandToken, string transactionId, string command, string commandMode) =>
+            _connection.On(WorkerHubContract.ClientMethods.ExecuteCommand, (string apiCommandToken, string transactionId, string command, string commandMode) =>
             {
                 _ = Task.Run(async () =>
                 {

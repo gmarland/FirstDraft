@@ -1,3 +1,4 @@
+using FirstDraft.Api.Contracts;
 using FirstDraft.Api.Auth;
 using FirstDraft.Infrastructure.Logging;
 
@@ -80,31 +81,34 @@ namespace FirstDraft.Api.Outbox
             switch (pendingEvent.Type)
             {
                 case CommandEventType.OutputChunk:
-                    await _hub.InvokeAsync(
-                        "CommandOutputChunk",
-                        accessToken,
-                        pendingEvent.TransactionId,
-                        pendingEvent.Sequence,
-                        pendingEvent.Stream,
-                        pendingEvent.Text,
-                        pendingEvent.EmittedAt);
+                    object?[] outputChunkArguments = new object?[WorkerHubContract.CommandOutputChunkArguments.EmittedAt + 1];
+                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.AccessToken] = accessToken;
+                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.TransactionId] = pendingEvent.TransactionId;
+                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.Sequence] = pendingEvent.Sequence;
+                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.Stream] = pendingEvent.Stream;
+                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.Text] = pendingEvent.Text;
+                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.EmittedAt] = pendingEvent.EmittedAt;
+
+                    await _hub.InvokeAsync(WorkerHubContract.ServerMethods.CommandOutputChunk, outputChunkArguments);
                     return;
 
                 case CommandEventType.CommandResult:
-                    await _hub.InvokeAsync(
-                        "ExecuteCommandResult",
-                        accessToken,
-                        pendingEvent.TransactionId,
-                        pendingEvent.Result,
-                        pendingEvent.ErrorMessage);
+                    object?[] commandResultArguments = new object?[WorkerHubContract.CommandResultArguments.ErrorMessage + 1];
+                    commandResultArguments[WorkerHubContract.CommandResultArguments.AccessToken] = accessToken;
+                    commandResultArguments[WorkerHubContract.CommandResultArguments.TransactionId] = pendingEvent.TransactionId;
+                    commandResultArguments[WorkerHubContract.CommandResultArguments.Result] = pendingEvent.Result;
+                    commandResultArguments[WorkerHubContract.CommandResultArguments.ErrorMessage] = pendingEvent.ErrorMessage;
+
+                    await _hub.InvokeAsync(WorkerHubContract.ServerMethods.ExecuteCommandResult, commandResultArguments);
                     return;
 
                 case CommandEventType.CommandRejected:
-                    await _hub.InvokeAsync(
-                        "RejectCommand",
-                        accessToken,
-                        pendingEvent.TransactionId,
-                        pendingEvent.ErrorMessage ?? "worker rejected command");
+                    object?[] rejectCommandArguments = new object?[WorkerHubContract.RejectCommandArguments.Reason + 1];
+                    rejectCommandArguments[WorkerHubContract.RejectCommandArguments.AccessToken] = accessToken;
+                    rejectCommandArguments[WorkerHubContract.RejectCommandArguments.TransactionId] = pendingEvent.TransactionId;
+                    rejectCommandArguments[WorkerHubContract.RejectCommandArguments.Reason] = pendingEvent.ErrorMessage ?? "worker rejected command";
+
+                    await _hub.InvokeAsync(WorkerHubContract.ServerMethods.RejectCommand, rejectCommandArguments);
                     return;
 
                 default:

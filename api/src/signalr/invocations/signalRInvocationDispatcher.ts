@@ -1,3 +1,4 @@
+import { workerHubServerMethods } from "../../contracts/workerHubContract.js";
 import { completionMessage, SignalRInvocationMessage } from "../protocol.js";
 import { CommandResultService } from "../commands/commandResultService.js";
 import { WorkerCommandDispatcher } from "../commands/workerCommandDispatcher.js";
@@ -15,12 +16,12 @@ export class SignalRInvocationDispatcher {
     private readonly commands: WorkerCommandDispatcher
   ) {
     this.handlers = new Map<string, InvocationHandler>([
-      ["Handshake", this.handleHandshake],
-      ["Register", this.handleRegister],
-      ["ExecuteCommandResult", this.handleExecuteCommandResult],
-      ["CommandOutputChunk", this.handleCommandOutputChunk],
-      ["RefreshCommandToken", this.handleRefreshCommandToken],
-      ["RejectCommand", this.handleRejectCommand],
+      [workerHubServerMethods.handshake, this.handleHandshake],
+      [workerHubServerMethods.register, this.handleRegister],
+      [workerHubServerMethods.executeCommandResult, this.handleExecuteCommandResult],
+      [workerHubServerMethods.commandOutputChunk, this.handleCommandOutputChunk],
+      [workerHubServerMethods.refreshCommandToken, this.handleRefreshCommandToken],
+      [workerHubServerMethods.rejectCommand, this.handleRejectCommand],
     ]);
   }
 

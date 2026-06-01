@@ -1,3 +1,4 @@
+using FirstDraft.Api.Contracts;
 using FirstDraft.Api.Auth;
 using FirstDraft.Api.Outbox;
 using FirstDraft.Commands;
@@ -144,10 +145,13 @@ namespace FirstDraft.Api
             try
             {
                 _logger.Info($"API command token expired for {transactionId}, requesting replacement");
+                object?[] refreshArguments = new object?[WorkerHubContract.RefreshCommandTokenArguments.TransactionId + 1];
+                refreshArguments[WorkerHubContract.RefreshCommandTokenArguments.AccessToken] = await _tokens.EnsureAccessTokenAsync();
+                refreshArguments[WorkerHubContract.RefreshCommandTokenArguments.TransactionId] = transactionId;
+
                 string refreshedToken = await _hub.InvokeAsync<string>(
-                    "RefreshCommandToken",
-                    await _tokens.EnsureAccessTokenAsync(),
-                    transactionId);
+                    WorkerHubContract.ServerMethods.RefreshCommandToken,
+                    refreshArguments);
 
                 CommandTokenValidationResult refreshedValidation = _apiCommandTokens.Validate(refreshedToken, transactionId);
                 if (refreshedValidation == CommandTokenValidationResult.InvalidSignature)

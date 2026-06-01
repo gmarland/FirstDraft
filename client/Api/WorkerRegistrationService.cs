@@ -1,3 +1,4 @@
+using FirstDraft.Api.Contracts;
 using FirstDraft.Api.Auth;
 using FirstDraft.Cli.Git;
 using FirstDraft.Cli.Jira;
@@ -30,7 +31,7 @@ namespace FirstDraft.Api
         {
             _logger.Debug($"Connection ID: {_hub.ConnectionId}");
 
-            await _hub.InvokeAsync<string>("Handshake", "1234");
+            await _hub.InvokeAsync<string>(WorkerHubContract.ServerMethods.Handshake, "1234");
 
             string appPathsParam = ((_applicationData.ApplicationPaths != null) && (_applicationData.ApplicationPaths.Length > 0)) ? string.Join("|", _applicationData.ApplicationPaths) : string.Empty;
             string skillsParam = string.Join("|", WorkerSkillRegistry.ResolveAvailableSkills(_applicationData.Skills));
@@ -38,17 +39,18 @@ namespace FirstDraft.Api
             string gitRepositoriesParam = JsonConvert.SerializeObject(GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories));
             string jiraIntegrationsParam = JsonConvert.SerializeObject(JiraIntegrationConfigService.BuildRegistrationPayload(_applicationData));
 
-            await _hub.InvokeAsync(
-                "Register",
-                await _tokens.EnsureAccessTokenAsync(),
-                _hub.ConnectionId,
-                _applicationData.WorkerId,
-                appPathsParam,
-                skillsParam,
-                WorkerApiSettings.GetMaxConcurrentTasks(_applicationData),
-                enabledTaskTypesParam,
-                gitRepositoriesParam,
-                jiraIntegrationsParam);
+            object?[] registerArguments = new object?[WorkerHubContract.RegisterArguments.JiraIntegrations + 1];
+            registerArguments[WorkerHubContract.RegisterArguments.AccessToken] = await _tokens.EnsureAccessTokenAsync();
+            registerArguments[WorkerHubContract.RegisterArguments.ConnectionId] = _hub.ConnectionId;
+            registerArguments[WorkerHubContract.RegisterArguments.WorkerId] = _applicationData.WorkerId;
+            registerArguments[WorkerHubContract.RegisterArguments.Paths] = appPathsParam;
+            registerArguments[WorkerHubContract.RegisterArguments.Skills] = skillsParam;
+            registerArguments[WorkerHubContract.RegisterArguments.MaxConcurrentTasks] = WorkerApiSettings.GetMaxConcurrentTasks(_applicationData);
+            registerArguments[WorkerHubContract.RegisterArguments.EnabledTaskTypes] = enabledTaskTypesParam;
+            registerArguments[WorkerHubContract.RegisterArguments.GitRepositories] = gitRepositoriesParam;
+            registerArguments[WorkerHubContract.RegisterArguments.JiraIntegrations] = jiraIntegrationsParam;
+
+            await _hub.InvokeAsync(WorkerHubContract.ServerMethods.Register, registerArguments);
 
             _hub.HandshakeComplete = true;
 
