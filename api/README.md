@@ -32,6 +32,9 @@ Worker authentication:
 - `POST /api/worker-auth/refresh`
 - `GET /api/worker-auth/public-key`
 - `GET /api/worker-auth/jira-attachments/:eventId/:attachmentId`
+- `POST /api/worker-auth/integration-tickets/jira/claim`
+
+Workers authenticate through token issuance and refresh, and use the public-key endpoint for API-to-worker command token verification. Worker credentials are not user-managed key records.
 
 Workers and commands:
 

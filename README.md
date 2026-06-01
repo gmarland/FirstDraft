@@ -31,7 +31,7 @@ This repository contains the full FirstDraft stack:
 | Path | Purpose |
 | --- | --- |
 | `api/` | Express API, authentication, worker coordination, SignalR-compatible hub, OpenAPI docs, persistence, and integrations |
-| `app/` | React/Vite console for users, workers, repositories, API keys, and command history |
+| `app/` | React/Vite console for users, profiles, workers, task queues, commands, output, and history |
 | `client/` | .NET worker that connects to the API, advertises skills, and executes shell, AI, and gitflow commands |
 | `docker-compose.yml` | Local Postgres and MinIO services for development |
 
@@ -82,7 +82,7 @@ Each worker polls its own enabled Jira integrations, filters issues to repositor
 - **Live output**: stream command output while retaining durable command history.
 - **Gitflow workflows**: let workers clone or reuse repository workspaces, run agent tasks, and format pull request-oriented results.
 - **Scoped worker config**: configure application paths, logs, AI working directory, skills, and concurrent gitflow capacity.
-- **User auth and API keys**: create users, sign in, and manage per-user API keys.
+- **User auth and profiles**: create users, sign in, update profile details, and delete accounts.
 - **OpenAPI docs**: inspect the API at `/api/docs` and fetch the raw spec at `/swagger.json`.
 
 ## Quick Start

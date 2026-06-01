@@ -15,7 +15,7 @@ The project targets `net10.0` and builds the `firstdraft` assembly. At runtime t
 
 ## Commands
 
-Run commands from the `client/` directory:
+During development, run commands from the `client/` directory with `dotnet run --`:
 
 ```bash
 dotnet run -- init
@@ -56,6 +56,8 @@ Command details:
 - `--help` or `-h`: print command help.
 
 Running with no command defaults to `run`.
+
+When the worker is installed or built as the `firstdraft` executable, use the same arguments without `dotnet run --`, for example `firstdraft init`, `firstdraft integrations list`, or `firstdraft run`.
 
 ## Supported Command Modes
 
