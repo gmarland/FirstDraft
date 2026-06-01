@@ -36,7 +36,7 @@ namespace FirstDraft.Bootstrap
             Console.WriteLine("  firstdraft skills  Update worker skills interactively");
             Console.WriteLine("  firstdraft capacity  Update max concurrent gitflow tasks interactively");
             Console.WriteLine("  firstdraft enablePlanning  Configure AI planning for this client");
-            Console.WriteLine("  firstdraft repos list|add|update|remove  Manage Git repositories for this worker");
+            Console.WriteLine("  firstdraft repos list|add|update|delete  Manage Git repositories for this worker");
             Console.WriteLine("  firstdraft integrations list|details|add|configure|remove  Manage Jira integrations for this worker");
             Console.WriteLine("  firstdraft run    Start the FirstDraft client worker");
             Console.WriteLine("  firstdraft help    Show this help");

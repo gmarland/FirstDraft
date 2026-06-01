@@ -22,8 +22,7 @@ namespace FirstDraft.Cli.Git
                 "list" => await List(),
                 "add" => await Add(args.Skip(1).ToArray()),
                 "update" => await Save(args.Skip(1).ToArray(), createOnly: false),
-                "remove" => await Remove(args.Skip(1).ToArray()),
-                "delete" => await Remove(args.Skip(1).ToArray()),
+                "delete" => await Delete(args.Skip(1).ToArray()),
                 _ => PrintReposHelp($"Unknown repos command: {args[0]}")
             };
         }
@@ -140,7 +139,7 @@ namespace FirstDraft.Cli.Git
             return 0;
         }
 
-        private async Task<int> Remove(string[] args)
+        private async Task<int> Delete(string[] args)
         {
             if (args.Length == 0) return PrintReposHelp("Repository URL is required.");
 
@@ -159,7 +158,7 @@ namespace FirstDraft.Cli.Git
             applicationData.GitRepositories = repositories.ToArray();
             await _applicationDataService.Save(applicationData);
 
-            Console.WriteLine($"Removed repository {args[0].Trim()}");
+            Console.WriteLine($"Deleted repository {args[0].Trim()}");
             return 0;
         }
 
@@ -293,7 +292,7 @@ namespace FirstDraft.Cli.Git
                 "  firstdraft repos list",
                 "  firstdraft repos add",
                 "  firstdraft repos update <repository-url> --source <branch> --target <branch>",
-                "  firstdraft repos remove <repository-url>");
+                "  firstdraft repos delete <repository-url>");
         }
     }
 }
