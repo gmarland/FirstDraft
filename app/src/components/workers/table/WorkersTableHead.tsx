@@ -7,7 +7,6 @@ export function WorkersTableHead() {
         <TableCell>Worker</TableCell>
         <TableCell>State</TableCell>
         <TableCell>Task slots</TableCell>
-        <TableCell>Task types</TableCell>
         <TableCell>Skills</TableCell>
         <TableCell>Paths</TableCell>
         <TableCell>Last seen</TableCell>

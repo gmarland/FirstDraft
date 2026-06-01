@@ -1,8 +1,6 @@
 import type { CommandMode } from "../../types.js";
 
 export function buildTaskSummary(command: string, commandMode: CommandMode): string {
-  if (commandMode !== "gitflow") return command;
-
   try {
     const payload = JSON.parse(command) as Partial<{
       repositoryUrl: unknown;

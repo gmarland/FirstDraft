@@ -121,13 +121,6 @@ namespace FirstDraft.Cli.Jira
                 return;
             }
 
-            string[] enabledTaskTypes = WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(_applicationData.EnabledTaskTypes);
-            if (!enabledTaskTypes.Contains("gitflow", StringComparer.OrdinalIgnoreCase))
-            {
-                _logger.Debug("Skipping Jira ticket polling: gitflow task type is disabled");
-                return;
-            }
-
             string[] availableSkills = WorkerSkillRegistry.ResolveAvailableSkills(_applicationData.Skills);
             if (!availableSkills.Contains("git", StringComparer.OrdinalIgnoreCase))
             {

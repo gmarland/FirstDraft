@@ -70,7 +70,6 @@ namespace FirstDraft.Cli.Setup
             applicationData.ApplicationFolder = PromptRequired("Application folder", applicationData.ApplicationFolder);
             applicationData.LogsFolder = PromptRequired("Logs folder", applicationData.LogsFolder);
             applicationData.ApplicationPaths = PromptApplicationPaths(applicationData.ApplicationPaths);
-            applicationData.EnabledTaskTypes = PromptTaskTypes(applicationData.EnabledTaskTypes);
             applicationData.Skills = PromptSkills(applicationData.Skills);
             applicationData.MaxConcurrentTasks = PromptOptionalInt("Max concurrent gitflow tasks", ClampOptionalCapacity(applicationData.MaxConcurrentTasks), 1, 8, "unlimited");
 
@@ -121,22 +120,6 @@ namespace FirstDraft.Cli.Setup
             Console.WriteLine("Configure this client's max concurrent gitflow tasks.");
 
             applicationData.MaxConcurrentTasks = PromptOptionalInt("Max concurrent gitflow tasks", ClampOptionalCapacity(applicationData.MaxConcurrentTasks), 1, 8, "unlimited");
-
-            await _applicationDataService.Save(applicationData);
-
-            Console.WriteLine();
-
-            return 0;
-        }
-
-        public async Task<int> TaskTypes()
-        {
-            ApplicationData applicationData = await _applicationDataService.GetApplicationData();
-
-            Console.WriteLine("firstdraft taskTypes");
-            Console.WriteLine("Configure this client's enabled task types.");
-
-            applicationData.EnabledTaskTypes = PromptTaskTypes(applicationData.EnabledTaskTypes);
 
             await _applicationDataService.Save(applicationData);
 
@@ -239,33 +222,6 @@ namespace FirstDraft.Cli.Setup
                 try
                 {
                     return WorkerSkillRegistry.ResolveAvailableSkills(selectedSkills);
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine(ex.Message);
-                }
-            }
-        }
-
-        private static string[] PromptTaskTypes(string[]? defaultTaskTypes)
-        {
-            string[] knownTaskTypes = WorkerTaskTypeRegistry.KnownTaskTypes;
-            string[] selectedTaskTypes = WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(defaultTaskTypes);
-
-            while (true)
-            {
-                selectedTaskTypes = PromptCheckboxes(
-                    "Task types",
-                    knownTaskTypes,
-                    selectedTaskTypes,
-                    input => input.Length == 1 && string.Equals(input[0], "all", StringComparison.OrdinalIgnoreCase)
-                        ? WorkerTaskTypeRegistry.KnownTaskTypes
-                        : WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(input),
-                    "all for all task types");
-
-                try
-                {
-                    return WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(selectedTaskTypes);
                 }
                 catch (Exception ex)
                 {

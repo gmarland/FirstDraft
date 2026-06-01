@@ -21,8 +21,6 @@ namespace FirstDraft.Bootstrap
             return Host.CreateDefaultBuilder(args).ConfigureServices((hostContext, services) =>
             {
                 services.AddSingleton<ApplicationDataService>();
-                services.AddSingleton<ICommandHandler, ShellCommandHandler>();
-                services.AddSingleton<ICommandHandler, AICommandHandler>();
                 services.AddSingleton<ICommandHandler, GitflowCommandHandler>();
                 services.AddSingleton<CommandDispatcher>();
                 services.AddHostedService<Worker>();
@@ -37,7 +35,6 @@ namespace FirstDraft.Bootstrap
             Console.WriteLine("  firstdraft init    Create or update config.json interactively");
             Console.WriteLine("  firstdraft skills  Update worker skills interactively");
             Console.WriteLine("  firstdraft capacity  Update max concurrent gitflow tasks interactively");
-            Console.WriteLine("  firstdraft taskTypes  Update enabled task types interactively");
             Console.WriteLine("  firstdraft enablePlanning  Configure AI planning for this client");
             Console.WriteLine("  firstdraft repos list|add|update|remove  Manage Git repositories for this worker");
             Console.WriteLine("  firstdraft integrations list|details|add|configure|remove  Manage Jira integrations for this worker");

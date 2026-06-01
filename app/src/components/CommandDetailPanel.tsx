@@ -284,14 +284,10 @@ function shortId(value: string): string {
 }
 
 function formatCommandMode(mode: Command["commandMode"]): string {
-  if (mode === "shell") return "Shell";
-  if (mode === "gitflow") return "Gitflow";
-  return "AI";
+  return "Gitflow";
 }
 
 function formatCommand(command: Command): string {
-  if (command.commandMode !== "gitflow") return command.command;
-
   try {
     const payload = JSON.parse(command.command) as Partial<{
       repositoryUrl: string;

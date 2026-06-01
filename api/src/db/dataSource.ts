@@ -11,6 +11,7 @@ import { RemoveWorkerEnabled1770000000000 } from "./migrations/1770000000000-Rem
 import { NullableWorkerMaxConcurrentTasks1780000000000 } from "./migrations/1780000000000-NullableWorkerMaxConcurrentTasks.js";
 import { JiraIntegrationAssigneeFilters1790000000000 } from "./migrations/1790000000000-JiraIntegrationAssigneeFilters.js";
 import { RemoveWorkerJiraIntegrationToken1800000000000 } from "./migrations/1800000000000-RemoveWorkerJiraIntegrationToken.js";
+import { GitflowOnlyTaskModel1810000000000 } from "./migrations/1810000000000-GitflowOnlyTaskModel.js";
 
 export function createDataSource(databaseUrl: string): DataSource {
   return new DataSource({
@@ -28,6 +29,7 @@ export function createDataSource(databaseUrl: string): DataSource {
       NullableWorkerMaxConcurrentTasks1780000000000,
       JiraIntegrationAssigneeFilters1790000000000,
       RemoveWorkerJiraIntegrationToken1800000000000,
+      GitflowOnlyTaskModel1810000000000,
     ],
     synchronize: false,
     migrationsRun: false,

@@ -9,7 +9,7 @@ The project targets `net10.0` and builds the `firstdraft` assembly. At runtime t
 - .NET SDK 10.
 - A FirstDraft user account.
 - Network access to the FirstDraft API.
-- Codex CLI or Claude CLI when using `ai` commands.
+- Codex CLI or Claude CLI for gitflow implementation.
 - `git` on `PATH` when advertising the `git` skill or running `gitflow` commands.
 - `npm` on `PATH` when advertising the `npm` skill.
 
@@ -21,7 +21,6 @@ Run commands from the `client/` directory:
 dotnet run -- init
 dotnet run -- skills
 dotnet run -- capacity
-dotnet run -- taskTypes
 dotnet run -- enablePlanning
 dotnet run -- repos list
 dotnet run -- repos add <repository-url> --source <branch> --target <branch>
@@ -47,8 +46,7 @@ Command details:
 - `init`: create or update the local worker configuration interactively.
 - `skills`: update advertised worker skills.
 - `capacity`: update the maximum number of concurrent gitflow tasks.
-- `taskTypes`: update which task types this worker accepts.
-- `enablePlanning`: configure whether AI commands use a planning pass.
+- `enablePlanning`: configure whether gitflow AI execution uses a planning pass.
 - `repos list|add|update|remove|delete`: manage Git repositories and their enforced source/PR target branches for this worker. `add` only creates new entries; `update` only changes existing entries; `delete` is accepted as an alias for `remove`, although top-level help currently lists only `remove`.
 - `integrations list|details|add|configure|update|remove|delete`: manage Jira integrations for this worker. `detail` and `show` are aliases for `details`; `update` is an alias for `configure`; `delete` is an alias for `remove`. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board and workflow statuses interactively. `configure` re-runs board and status selection for an existing integration. API tokens are encrypted in local config and are never printed by `list` or `details`.
 - `run`: start the worker and connect it to the API.
@@ -57,14 +55,11 @@ Command details:
 
 Running with no command defaults to `run`.
 
-## Supported Command Modes
+## Supported Command Mode
 
-- `ai`: executes a prompt through the configured Codex or Claude CLI provider.
-- `shell`: executes a shell command on the worker machine.
-- `gitflow`: executes repository-oriented implementation or follow-up work.
+Workers only accept `gitflow` tasks, which execute repository-oriented implementation or follow-up work.
 
 `gitflow` requires the worker to advertise the `git` skill. Configured skills are validated against executables on `PATH` before registration.
-Workers accept all command modes by default. Configure `EnabledTaskTypes` to restrict a worker to specific modes.
 
 ## Gitflow Workspaces
 
@@ -118,7 +113,7 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `LogsFolder`: local log output folder.
 - `ApplicationPaths`: paths advertised to the API for worker selection.
 - `Skills`: configured skills such as `git` and `npm`.
-- `EnabledTaskTypes`: accepted task types. Missing or empty values default to `ai`, `shell`, and `gitflow`.
+- `EnabledTaskTypes`: legacy setting ignored by current clients; workers always advertise `gitflow`.
 - `AIProvider`: `Codex` or `Claude`.
 - `PlanningEnabled`: whether AI execution performs a planning pass before implementation.
 - `AIWorkingDirectory`: base working directory for AI commands.
@@ -137,7 +132,7 @@ Create or update configuration:
 dotnet run -- init
 ```
 
-During setup, set the external API URL, log in or sign up with your FirstDraft user, choose the AI provider, and select the task types, paths, and skills this worker should advertise.
+During setup, set the external API URL, log in or sign up with your FirstDraft user, choose the AI provider, and select the paths and skills this worker should advertise.
 
 Start the worker:
 

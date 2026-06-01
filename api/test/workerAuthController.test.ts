@@ -127,7 +127,7 @@ async function testRegisterWorkerAcceptsUnlimitedCapacity(): Promise<void> {
       body: {
         workerId: "worker-1",
         skills: ["git"],
-        enabledTaskTypes: ["gitflow"],
+        enabledTaskTypes: ["ai", "shell"],
         maxConcurrentTasks: null,
       },
     } as never,
@@ -139,6 +139,7 @@ async function testRegisterWorkerAcceptsUnlimitedCapacity(): Promise<void> {
 
   assert.equal(response.statusCode, 200);
   assert.equal((registrations[0] as { maxConcurrentTasks?: number | null }).maxConcurrentTasks, null);
+  assert.deepEqual((registrations[0] as { enabledTaskTypes?: string[] }).enabledTaskTypes, ["gitflow"]);
   assert.deepEqual((response.body as { maxConcurrentTasks?: number | null }).maxConcurrentTasks, null);
 }
 

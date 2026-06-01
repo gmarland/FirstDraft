@@ -29,7 +29,7 @@ namespace FirstDraft.Api.Hub
         {
             string[] appPaths = _applicationData.ApplicationPaths ?? Array.Empty<string>();
             string[] skills = WorkerSkillRegistry.ResolveAvailableSkills(_applicationData.Skills);
-            string[] enabledTaskTypes = WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(_applicationData.EnabledTaskTypes);
+            string[] enabledTaskTypes = WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(null);
             GitRepositoryConfig[] gitRepositories = GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories);
             object[] jiraIntegrations = JiraIntegrationConfigService.BuildRegistrationPayload(_applicationData);
 
@@ -44,10 +44,9 @@ namespace FirstDraft.Api.Hub
                 jiraIntegrations
             });
 
-            string enabledTaskTypesParam = string.Join("|", enabledTaskTypes);
             _logger.Info("Worker registered with API");
             _logger.Info($"Max concurrent tasks: {WorkerApiSettings.FormatMaxConcurrentTasks(_applicationData)}");
-            _logger.Info($"Enabled task types: {enabledTaskTypesParam}");
+            _logger.Info("Enabled task types: gitflow");
             _logger.Info($"Configured Git repositories: {gitRepositories.Length}");
             _logger.Info($"Configured Jira integrations: {jiraIntegrations.Length}");
         }

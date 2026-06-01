@@ -43,7 +43,7 @@ export function mapCommand(row: QueryResultRow): Command {
     command: String(row.command),
     taskSummary: row.task_summary ? String(row.task_summary) : undefined,
     executionCommand: row.execution_command ?? undefined,
-    commandMode: row.command_mode === "shell" || row.command_mode === "gitflow" ? row.command_mode : "ai",
+    commandMode: "gitflow",
     repositoryUrl: row.repository_url ? String(row.repository_url) : undefined,
     normalizedRepositoryUrl: row.normalized_repository_url ? String(row.normalized_repository_url) : undefined,
     sourceProvider: row.source_provider ? String(row.source_provider) : undefined,

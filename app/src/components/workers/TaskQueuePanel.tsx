@@ -436,14 +436,11 @@ function Field({
 }
 
 function formatCommandMode(mode: Command["commandMode"]): string {
-  if (mode === "shell") return "Shell";
-  if (mode === "gitflow") return "Gitflow";
-  return "AI";
+  return "Gitflow";
 }
 
 function formatCommandSummary(command: Command): string {
   if (command.taskSummary) return command.taskSummary;
-  if (command.commandMode !== "gitflow") return command.command;
 
   try {
     const payload = JSON.parse(command.command) as Partial<{
@@ -464,8 +461,6 @@ function formatCommandSummary(command: Command): string {
 }
 
 function formatCommandDetail(command: Command): string {
-  if (command.commandMode !== "gitflow") return command.command;
-
   try {
     const payload = JSON.parse(command.command) as Partial<{
       repositoryUrl: string;
@@ -497,9 +492,7 @@ function formatCommandDetail(command: Command): string {
 function formatSource(command: Command): { provider: string; key?: string } {
   const provider = command.sourceProvider
     ? titleCase(command.sourceProvider)
-    : command.commandMode === "gitflow"
-      ? "Manual"
-      : "-";
+    : "Manual";
   return { provider, key: command.sourceItemKey };
 }
 

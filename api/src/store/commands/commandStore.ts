@@ -26,7 +26,7 @@ export class CommandStore {
     userId: string,
     workerId: string,
     command: string,
-    commandMode: CommandMode = "ai",
+    commandMode: CommandMode = "gitflow",
     executionCommand?: string
   ): Promise<Command> {
     return this.createQueuedCommand({
@@ -62,9 +62,9 @@ export class CommandStore {
         input.userId,
         input.workerId ?? null,
         input.command,
-        buildTaskSummary(input.command, input.commandMode ?? "ai"),
+        buildTaskSummary(input.command, input.commandMode ?? "gitflow"),
         input.executionCommand ?? null,
-        input.commandMode ?? "ai",
+        input.commandMode ?? "gitflow",
         input.repositoryUrl ?? null,
         input.normalizedRepositoryUrl ?? null
       ]
@@ -107,9 +107,9 @@ export class CommandStore {
         input.userId,
         input.workerId,
         input.command,
-        buildTaskSummary(input.command, input.commandMode ?? "ai"),
+        buildTaskSummary(input.command, input.commandMode ?? "gitflow"),
         input.executionCommand ?? input.command,
-        input.commandMode ?? "ai",
+        input.commandMode ?? "gitflow",
         input.repositoryUrl ?? null,
         input.normalizedRepositoryUrl ?? null
       ]
@@ -171,15 +171,10 @@ export class CommandStore {
         where commands.status = 'queued'
           and command_users.user_id = claiming_worker.user_id
           and (commands.worker_id = $1 or commands.worker_id is null)
-          and (
-            commands.command_mode in ('ai', 'shell')
-            or (
-              $2::boolean
-              and commands.command_mode = 'gitflow'
-              and commands.normalized_repository_url is not null
-              and worker_repos.normalized_repository_url is not null
-            )
-          )
+          and $2::boolean
+          and commands.command_mode = 'gitflow'
+          and commands.normalized_repository_url is not null
+          and worker_repos.normalized_repository_url is not null
         order by
           case when commands.worker_id = $1 then 0 else 1 end,
           case when worker_repos.normalized_repository_url is not null then 0 else 1 end,

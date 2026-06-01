@@ -33,7 +33,7 @@ export const ClientCommandSchema = new EntitySchema<ClientCommandEntity>({
     command: { type: "text" },
     taskSummary: { type: "text", name: "task_summary", nullable: true },
     executionCommand: { type: "text", name: "execution_command", nullable: true },
-    commandMode: { type: "text", name: "command_mode", default: "'ai'" },
+    commandMode: { type: "text", name: "command_mode", default: "'gitflow'" },
     repositoryUrl: { type: "text", name: "repository_url", nullable: true },
     normalizedRepositoryUrl: { type: "text", name: "normalized_repository_url", nullable: true },
     status: { type: "text" },

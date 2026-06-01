@@ -1,7 +1,5 @@
 import { Box, Chip, List, ListItemButton, Stack, Typography } from "@mui/material";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import TerminalIcon from "@mui/icons-material/Terminal";
 import { formatDate, relativeTime } from "../lib/dates";
 import type { Command } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
@@ -48,20 +46,14 @@ export function CommandTimeline({ commands, selectedId, onSelect }: Props) {
 
 function CommandModeIcon({ mode }: { mode: Command["commandMode"] }) {
   const sx = { mr: 1.25, mt: 0.4 };
-  if (mode === "shell") return <TerminalIcon fontSize="small" sx={sx} />;
-  if (mode === "gitflow") return <AccountTreeIcon fontSize="small" sx={sx} />;
-  return <AutoAwesomeIcon fontSize="small" sx={sx} />;
+  return <AccountTreeIcon fontSize="small" sx={sx} />;
 }
 
 function formatCommandMode(mode: Command["commandMode"]): string {
-  if (mode === "shell") return "Shell";
-  if (mode === "gitflow") return "Gitflow";
-  return "AI";
+  return "Gitflow";
 }
 
 function formatCommand(command: Command): string {
-  if (command.commandMode !== "gitflow") return command.command;
-
   try {
     const payload = JSON.parse(command.command) as Partial<{
       repositoryUrl: string;

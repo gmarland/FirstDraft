@@ -34,7 +34,6 @@ namespace FirstDraft.Cli.Commands
                 new DelegateCliCommand("init", args => CreateConfigurationWizard().Init()),
                 new DelegateCliCommand("skills", args => CreateConfigurationWizard().Skills()),
                 new DelegateCliCommand("capacity", args => CreateConfigurationWizard().Capacity()),
-                new DelegateCliCommand("tasktypes", args => CreateConfigurationWizard().TaskTypes()),
                 new DelegateCliCommand("enableplanning", args => CreateConfigurationWizard().EnablePlanning()),
                 new DelegateCliCommand("repos", args => new GitRepositoryConfigurationService(new ApplicationDataService()).Repos(args)),
                 new DelegateCliCommand("integrations", args => new JiraIntegrationConfigurationService(new ApplicationDataService()).Integrations(args)),
