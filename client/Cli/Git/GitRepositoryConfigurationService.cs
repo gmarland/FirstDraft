@@ -20,7 +20,7 @@ namespace FirstDraft.Cli.Git
             return command switch
             {
                 "list" => await List(),
-                "add" => await Save(args.Skip(1).ToArray(), createOnly: true),
+                "add" => await Add(args.Skip(1).ToArray()),
                 "update" => await Save(args.Skip(1).ToArray(), createOnly: false),
                 "remove" => await Remove(args.Skip(1).ToArray()),
                 "delete" => await Remove(args.Skip(1).ToArray()),
@@ -51,6 +51,27 @@ namespace FirstDraft.Cli.Git
             return 0;
         }
 
+        private async Task<int> Add(string[] args)
+        {
+            if (args.Length > 0)
+            {
+                return PrintReposHelp("Repository details are collected interactively. Use: firstdraft repos add");
+            }
+
+            if (Console.IsInputRedirected || Console.IsOutputRedirected)
+            {
+                Console.Error.WriteLine("Interactive repository setup requires a terminal.");
+                return 1;
+            }
+
+            Console.WriteLine("Add Git repository");
+            string repositoryUrl = ConsolePrompt.PromptUntilValid("Repository URL", string.Empty, ValidateRepositoryUrl);
+            string sourceBranch = ConsolePrompt.PromptUntilValid("Source branch", "main", value => ValidateBranchName(value, "source"));
+            string targetBranch = ConsolePrompt.PromptUntilValid("PR target branch", "main", value => ValidateBranchName(value, "target"));
+
+            return await SaveRepository(repositoryUrl, sourceBranch, targetBranch, createOnly: true);
+        }
+
         private async Task<int> Save(string[] args, bool createOnly)
         {
             if (args.Length == 0) return PrintReposHelp("Repository URL is required.");
@@ -72,6 +93,15 @@ namespace FirstDraft.Cli.Git
             string? targetError = ValidateBranchName(targetBranch, "target");
             if (targetError != null) return PrintReposHelp(targetError);
 
+            return await SaveRepository(repositoryUrl, sourceBranch, targetBranch, createOnly);
+        }
+
+        private async Task<int> SaveRepository(
+            string repositoryUrl,
+            string sourceBranch,
+            string targetBranch,
+            bool createOnly)
+        {
             ApplicationData applicationData = await _applicationDataService.GetApplicationData();
             List<GitRepositoryConfig> repositories = NormalizeRepositories(applicationData.GitRepositories).ToList();
             string normalizedRepositoryUrl = NormalizeRepositoryUrl(repositoryUrl);
@@ -261,7 +291,7 @@ namespace FirstDraft.Cli.Git
             return CliOutput.PrintHelp(
                 error,
                 "  firstdraft repos list",
-                "  firstdraft repos add <repository-url> --source <branch> --target <branch>",
+                "  firstdraft repos add",
                 "  firstdraft repos update <repository-url> --source <branch> --target <branch>",
                 "  firstdraft repos remove <repository-url>");
         }

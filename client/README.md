@@ -23,8 +23,7 @@ dotnet run -- skills
 dotnet run -- capacity
 dotnet run -- enablePlanning
 dotnet run -- repos list
-dotnet run -- repos add <repository-url> --source <branch> --target <branch>
-dotnet run -- repos add <repository-url> --source=<branch> --target=<branch>
+dotnet run -- repos add
 dotnet run -- repos update <repository-url> --source <branch> --target <branch>
 dotnet run -- repos remove <repository-url>
 dotnet run -- repos delete <repository-url>
@@ -47,7 +46,7 @@ Command details:
 - `skills`: update advertised worker skills.
 - `capacity`: update the maximum number of concurrent `gitflow` tasks.
 - `enablePlanning`: configure whether `gitflow` AI execution uses a planning pass.
-- `repos list|add|update|remove|delete`: manage Git repositories and their enforced source/PR target branches for this worker. `add` only creates new entries; `update` only changes existing entries; `delete` is accepted as an alias for `remove`, although top-level help currently lists only `remove`.
+- `repos list|add|update|remove|delete`: manage Git repositories and their enforced source/PR target branches for this worker. `add` prompts for repository details and only creates new entries; `update` only changes existing entries; `delete` is accepted as an alias for `remove`, although top-level help currently lists only `remove`.
 - `integrations list|details|add|configure|update|remove|delete`: manage Jira integrations for this worker. `detail` and `show` are aliases for `details`; `update` is an alias for `configure`; `delete` is an alias for `remove`. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board, workflow statuses, and assignee filter interactively. API tokens are encrypted in local config and are never printed by `list` or `details`.
 - `run`: start the worker, register it with the API, start heartbeats, and poll configured Jira integrations.
 - `help`: print command help.
@@ -71,14 +70,15 @@ Each worker advertises its own Git repositories from local configuration. Manage
 
 ```bash
 dotnet run -- repos list
-dotnet run -- repos add https://github.com/example/repo.git --source main --target main
+dotnet run -- repos add
 dotnet run -- repos update https://github.com/example/repo.git --source develop --target main
 dotnet run -- repos remove https://github.com/example/repo.git
 dotnet run -- repos delete https://github.com/example/repo.git
 ```
 
 The configured source and PR target branches are enforced by the API for Jira-claimed `gitflow` tasks and by the worker when building prompts and workspaces.
-Branch options can be passed as either `--source main` / `--target main` or `--source=main` / `--target=main`.
+The `repos add` command prompts for the repository URL, source branch, and PR target branch. Source and target branch prompts default to `main`.
+For `repos update`, branch options can be passed as either `--source main` / `--target main` or `--source=main` / `--target=main`.
 `repos delete` is accepted as a `repos remove` alias, but the nested and top-level help output currently lists `remove`.
 
 ## Jira Integrations
@@ -144,7 +144,7 @@ During setup, set the external API URL, log in or sign up with your FirstDraft u
 Configure at least one repository before expecting Jira tickets to be claimable:
 
 ```bash
-dotnet run -- repos add https://github.com/example/repo.git --source main --target main
+dotnet run -- repos add
 ```
 
 Configure Jira if this worker should claim Jira work:
