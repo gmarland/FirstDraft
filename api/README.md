@@ -32,6 +32,7 @@ Worker authentication:
 - `POST /api/worker-auth/refresh`
 - `GET /api/worker-auth/public-key`
 - `GET /api/worker-auth/jira-attachments/:eventId/:attachmentId`
+- `POST /api/worker-auth/integration-tickets/jira/claim`
 
 Workers and commands:
 

@@ -31,7 +31,7 @@ This repository contains the full FirstDraft stack:
 | Path | Purpose |
 | --- | --- |
 | `api/` | Express API, authentication, worker coordination, SignalR-compatible hub, OpenAPI docs, persistence, and integrations |
-| `app/` | React/Vite console for users, workers, repositories, API keys, and command history |
+| `app/` | React/Vite console for users, workers, task queues, profiles, and command history |
 | `client/` | .NET worker that connects to the API, advertises skills, and executes shell, AI, and gitflow commands |
 | `docker-compose.yml` | Local Postgres and MinIO services for development |
 
@@ -82,7 +82,7 @@ Each worker polls its own enabled Jira integrations, filters issues to repositor
 - **Live output**: stream command output while retaining durable command history.
 - **Gitflow workflows**: let workers clone or reuse repository workspaces, run agent tasks, and format pull request-oriented results.
 - **Scoped worker config**: configure application paths, logs, AI working directory, skills, and concurrent gitflow capacity.
-- **User auth and API keys**: create users, sign in, and manage per-user API keys.
+- **User auth and worker tokens**: create users, sign in, and let workers authenticate through the user-backed worker token flow.
 - **OpenAPI docs**: inspect the API at `/api/docs` and fetch the raw spec at `/swagger.json`.
 
 ## Quick Start
@@ -211,6 +211,15 @@ Important API environment variables:
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `JWT_SECRET` | Yes | Secret used to sign user JWTs |
+| `JWT_EXPIRES_IN` | No | User JWT lifetime, defaults to `1h` |
+| `JWT_ISSUER` | No | User JWT issuer |
+| `JWT_AUDIENCE` | No | User JWT audience |
+| `WORKER_JWT_SECRET` | No | Worker JWT secret; falls back to `JWT_SECRET` outside production |
+| `WORKER_JWT_ISSUER` | No | Worker JWT issuer, defaults to `firstdraft-api` |
+| `WORKER_JWT_AUDIENCE` | No | Worker JWT audience, defaults to `firstdraft-worker-api` |
+| `TENANT_ADMIN_KEY` | No | Admin key used by tenant administration flows |
+| `API_TO_WORKER_PRIVATE_KEY` | No | Optional PEM private key for API-to-worker command tokens, with escaped newlines |
+| `API_TO_WORKER_PUBLIC_KEY` | No | Optional PEM public key paired with `API_TO_WORKER_PRIVATE_KEY` |
 | `PORT` | No | API port, defaults to `5080` |
 | `COMMAND_OUTPUT_BUCKET` | No | Bucket or Azure Blob container for command output |
 | `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws`, `gcs`/`google`, or `azure`/`az`; defaults to `s3` |

@@ -1,10 +1,10 @@
 # FirstDraft Console
 
-React and Vite console for operating a FirstDraft worker fleet. It lets users sign in, create the first user, inspect workers, queue commands, review command history and output, update their profile, and create API keys for workers.
+React and Vite console for operating a FirstDraft worker fleet. It lets users sign in, create the first user, inspect workers, queue commands, review command history and output, and manage their profile.
 
 ## Main Workflows
 
-- Sign in, create the first user, and update the current user's profile.
+- Sign in, create the first user, update the current user's profile, and delete the profile when needed.
 - List workers and inspect worker detail, runtime state, registered paths, advertised skills, accepted task types, and task capacity.
 - Enable or disable individual workers, or disable all enabled workers at once.
 - Review the active task queue across workers.
@@ -12,7 +12,6 @@ React and Vite console for operating a FirstDraft worker fleet. It lets users si
 - Use gitflow repository suggestions when creating repository-backed tasks.
 - Review command history, command metadata, streamed output, parsed responses, and cancellation state.
 - Cancel queued or running commands when the API and worker can honor the request.
-- Create and revoke user API keys for worker authentication.
 
 ## Routes
 
@@ -20,7 +19,6 @@ React and Vite console for operating a FirstDraft worker fleet. It lets users si
 - `/create-user`
 - `/workers`
 - `/workers/:workerId`
-- `/settings/api-keys`
 - `/profile`
 
 The root route redirects authenticated users to `/workers`. Unknown routes also redirect to `/workers`.

@@ -31,6 +31,8 @@ dotnet run -- repos remove <repository-url>
 dotnet run -- repos delete <repository-url>
 dotnet run -- integrations list
 dotnet run -- integrations details <integration-id>
+dotnet run -- integrations detail <integration-id>
+dotnet run -- integrations show <integration-id>
 dotnet run -- integrations add jira
 dotnet run -- integrations configure <integration-id>
 dotnet run -- integrations update <integration-id>
@@ -89,8 +91,11 @@ Each worker also advertises its own Jira integrations from local configuration. 
 ```bash
 dotnet run -- integrations list
 dotnet run -- integrations details <integration-id>
+dotnet run -- integrations detail <integration-id>
+dotnet run -- integrations show <integration-id>
 dotnet run -- integrations add jira
 dotnet run -- integrations configure <integration-id>
+dotnet run -- integrations update <integration-id>
 dotnet run -- integrations remove <integration-id>
 dotnet run -- integrations delete <integration-id>
 ```
