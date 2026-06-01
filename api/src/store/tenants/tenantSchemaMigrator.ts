@@ -203,27 +203,5 @@ export class SchemaMigrator {
         where transaction_id is not null;
     `);
 
-    await this.pool.query(`
-      create index if not exists worker_refresh_tokens_user_idx
-        on worker_refresh_tokens(user_id);
-
-      create index if not exists client_workers_user_idx
-        on client_workers(user_id);
-
-      alter table worker_git_repositories
-        add column if not exists source_branch text,
-        add column if not exists target_branch text;
-
-      update worker_git_repositories
-      set source_branch = coalesce(source_branch, last_source_branch, 'main'),
-        target_branch = coalesce(target_branch, source_branch, last_source_branch, 'main');
-
-      alter table worker_git_repositories
-        alter column source_branch set not null,
-        alter column target_branch set not null;
-
-      drop index if exists user_git_repositories_user_last_used_idx;
-      drop table if exists user_git_repositories;
-    `);
   }
 }

@@ -44,7 +44,6 @@ create table if not exists client_workers (
   last_connection_id text,
   paths text[] not null default '{}',
   skills text[] not null default '{}',
-  enabled boolean not null default true,
   enabled_task_types text[] not null default '{gitflow}',
   max_concurrent_tasks integer default 1,
   state text not null default 'stopped',
