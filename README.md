@@ -31,7 +31,7 @@ This repository contains the full FirstDraft stack:
 | Path | Purpose |
 | --- | --- |
 | `api/` | Express API, authentication, worker coordination, SignalR-compatible hub, OpenAPI docs, persistence, and integrations |
-| `app/` | React/Vite console for users, workers, repositories, API keys, and command history |
+| `app/` | React/Vite console for users, workers, task queues, profile management, and command history |
 | `client/` | .NET worker that connects to the API, advertises skills, and executes shell, AI, and gitflow commands |
 | `docker-compose.yml` | Local Postgres and MinIO services for development |
 
@@ -82,7 +82,7 @@ Each worker polls its own enabled Jira integrations, filters issues to repositor
 - **Live output**: stream command output while retaining durable command history.
 - **Gitflow workflows**: let workers clone or reuse repository workspaces, run agent tasks, and format pull request-oriented results.
 - **Scoped worker config**: configure application paths, logs, AI working directory, skills, and concurrent gitflow capacity.
-- **User auth and API keys**: create users, sign in, and manage per-user API keys.
+- **User profile management**: create users, sign in, update profile details, and delete accounts.
 - **OpenAPI docs**: inspect the API at `/api/docs` and fetch the raw spec at `/swagger.json`.
 
 ## Quick Start
@@ -149,6 +149,7 @@ API:
 cd api
 npm install
 npm run dev
+npm run contracts:generate
 npm test
 npm run build
 npm start
@@ -161,6 +162,7 @@ cd app
 npm install
 npm run dev
 npm run build
+npm run lint
 npm run preview
 ```
 
@@ -212,6 +214,15 @@ Important API environment variables:
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `JWT_SECRET` | Yes | Secret used to sign user JWTs |
 | `PORT` | No | API port, defaults to `5080` |
+| `JWT_EXPIRES_IN` | No | User JWT lifetime |
+| `JWT_ISSUER` | No | User JWT issuer |
+| `JWT_AUDIENCE` | No | User JWT audience |
+| `WORKER_JWT_SECRET` | No | Worker JWT secret; falls back to `JWT_SECRET` outside production |
+| `WORKER_JWT_ISSUER` | No | Worker JWT issuer |
+| `WORKER_JWT_AUDIENCE` | No | Worker JWT audience |
+| `TENANT_ADMIN_KEY` | No | Admin key for tenant administration flows |
+| `API_TO_WORKER_PRIVATE_KEY` | No | Optional PEM private key for API-to-worker command tokens |
+| `API_TO_WORKER_PUBLIC_KEY` | No | Optional PEM public key paired with `API_TO_WORKER_PRIVATE_KEY` |
 | `COMMAND_OUTPUT_BUCKET` | No | Bucket or Azure Blob container for command output |
 | `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws`, `gcs`/`google`, or `azure`/`az`; defaults to `s3` |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |
@@ -233,6 +244,8 @@ firstdraft skills
 firstdraft capacity
 firstdraft taskTypes
 firstdraft enablePlanning
+firstdraft repos list
+firstdraft integrations list
 ```
 
 ## Contributing

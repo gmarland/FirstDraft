@@ -139,6 +139,20 @@ dotnet run -- init
 
 During setup, set the external API URL, log in or sign up with your FirstDraft user, choose the AI provider, and select the task types, paths, and skills this worker should advertise.
 
+Configure repository-backed gitflow work before assigning repository tasks to the worker:
+
+```bash
+dotnet run -- repos add https://github.com/example/repo.git --source main --target main
+```
+
+Configure worker-local Jira polling when this worker should claim ready Jira issues:
+
+```bash
+dotnet run -- integrations add jira
+```
+
+The Jira setup stores the site URL, email, encrypted API token, board, and ready/processing/processed statuses in the worker's local configuration.
+
 Start the worker:
 
 ```bash

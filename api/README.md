@@ -32,6 +32,7 @@ Worker authentication:
 - `POST /api/worker-auth/refresh`
 - `GET /api/worker-auth/public-key`
 - `GET /api/worker-auth/jira-attachments/:eventId/:attachmentId`
+- `POST /api/worker-auth/integration-tickets/jira/claim`
 
 Workers and commands:
 
@@ -105,6 +106,17 @@ AWS_REGION=eu-west-2
 | `COMMAND_OUTPUT_BUCKET` | No | Bucket or Azure Blob container for command output |
 | `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws`, `gcs`/`google`, or `azure`/`az`; defaults to `s3` |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |
+| `AWS_REGION` | No | S3-compatible region; local development uses `eu-west-2` |
+| `AWS_ACCESS_KEY_ID` | No | S3-compatible access key |
+| `AWS_SECRET_ACCESS_KEY` | No | S3-compatible secret key |
+| `S3_ENDPOINT_URL` | No | S3-compatible endpoint, such as local MinIO |
+| `S3_FORCE_PATH_STYLE` | No | Set to `true` for MinIO-style path access |
+| `GOOGLE_APPLICATION_CREDENTIALS` | No | Service account path for GCS output storage |
+| `GCP_PROJECT_ID` | No | Optional GCS project ID |
+| `GOOGLE_CLOUD_PROJECT` | No | Optional GCS project ID used by Google libraries |
+| `AZURE_STORAGE_CONNECTION_STRING` | No | Azure Blob Storage connection string |
+| `AZURE_STORAGE_ACCOUNT_NAME` | No | Azure Storage account name when not using a connection string |
+| `AZURE_STORAGE_ACCOUNT_KEY` | No | Azure Storage account key when not using a connection string |
 
 For local MinIO, use the S3 settings shown above. For Google Cloud Storage, set `COMMAND_OUTPUT_STORAGE_PROVIDER=gcs` and `COMMAND_OUTPUT_BUCKET` to the GCS bucket name. Authentication uses Google Application Default Credentials, including `GOOGLE_APPLICATION_CREDENTIALS`; optionally set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
 
@@ -122,6 +134,7 @@ The API listens on `http://localhost:5080` by default.
 Run tests and build:
 
 ```bash
+npm run contracts:generate
 npm test
 npm run build
 ```
