@@ -4,50 +4,31 @@ import { WorkerCommandDispatcher } from "../commands/workerCommandDispatcher.js"
 import { SignalRConnection } from "../shared/types.js";
 import { WorkerRegistrationService } from "../workers/workerRegistrationService.js";
 
+type InvocationHandler = (connection: SignalRConnection, message: SignalRInvocationMessage) => Promise<void>;
+
 export class SignalRInvocationDispatcher {
+  private readonly handlers: ReadonlyMap<string, InvocationHandler>;
+
   public constructor(
     private readonly workerRegistration: WorkerRegistrationService,
     private readonly commandResults: CommandResultService,
     private readonly commands: WorkerCommandDispatcher
-  ) {}
+  ) {
+    this.handlers = new Map<string, InvocationHandler>([
+      ["Handshake", this.handleHandshake],
+      ["Register", this.handleRegister],
+      ["ExecuteCommandResult", this.handleExecuteCommandResult],
+      ["CommandOutputChunk", this.handleCommandOutputChunk],
+      ["RefreshCommandToken", this.handleRefreshCommandToken],
+      ["RejectCommand", this.handleRejectCommand],
+    ]);
+  }
 
   public async handleInvocation(connection: SignalRConnection, message: SignalRInvocationMessage): Promise<void> {
     try {
-      if (message.target === "Handshake") {
-        this.sendCompletion(connection, message.invocationId, "ok");
-        return;
-      }
-
-      if (message.target === "Register") {
-        await this.workerRegistration.registerWorker(connection, message.arguments ?? []);
-        this.sendCompletion(connection, message.invocationId);
-        await this.commands.dispatchQueuedCommands(connection.workerId);
-        return;
-      }
-
-      if (message.target === "ExecuteCommandResult") {
-        await this.commandResults.recordCommandResult(connection, message.arguments ?? []);
-        this.sendCompletion(connection, message.invocationId);
-        await this.commands.dispatchQueuedCommands(connection.workerId);
-        return;
-      }
-
-      if (message.target === "CommandOutputChunk") {
-        await this.commandResults.recordCommandOutputChunk(connection, message.arguments ?? []);
-        this.sendCompletion(connection, message.invocationId);
-        return;
-      }
-
-      if (message.target === "RefreshCommandToken") {
-        const token = await this.commandResults.refreshCommandToken(connection, message.arguments ?? []);
-        this.sendCompletion(connection, message.invocationId, token);
-        return;
-      }
-
-      if (message.target === "RejectCommand") {
-        await this.commandResults.rejectCommand(connection, message.arguments ?? []);
-        this.sendCompletion(connection, message.invocationId);
-        await this.commands.dispatchQueuedCommands(connection.workerId);
+      const handler = message.target ? this.handlers.get(message.target) : undefined;
+      if (handler) {
+        await handler(connection, message);
         return;
       }
 
@@ -75,4 +56,36 @@ export class SignalRInvocationDispatcher {
     if (!invocationId) return;
     connection.socket.send(completionMessage(invocationId, result, error));
   }
+
+  private readonly handleHandshake: InvocationHandler = async (connection, message) => {
+    this.sendCompletion(connection, message.invocationId, "ok");
+  };
+
+  private readonly handleRegister: InvocationHandler = async (connection, message) => {
+    await this.workerRegistration.registerWorker(connection, message.arguments ?? []);
+    this.sendCompletion(connection, message.invocationId);
+    await this.commands.dispatchQueuedCommands(connection.workerId);
+  };
+
+  private readonly handleExecuteCommandResult: InvocationHandler = async (connection, message) => {
+    await this.commandResults.recordCommandResult(connection, message.arguments ?? []);
+    this.sendCompletion(connection, message.invocationId);
+    await this.commands.dispatchQueuedCommands(connection.workerId);
+  };
+
+  private readonly handleCommandOutputChunk: InvocationHandler = async (connection, message) => {
+    await this.commandResults.recordCommandOutputChunk(connection, message.arguments ?? []);
+    this.sendCompletion(connection, message.invocationId);
+  };
+
+  private readonly handleRefreshCommandToken: InvocationHandler = async (connection, message) => {
+    const token = await this.commandResults.refreshCommandToken(connection, message.arguments ?? []);
+    this.sendCompletion(connection, message.invocationId, token);
+  };
+
+  private readonly handleRejectCommand: InvocationHandler = async (connection, message) => {
+    await this.commandResults.rejectCommand(connection, message.arguments ?? []);
+    this.sendCompletion(connection, message.invocationId);
+    await this.commands.dispatchQueuedCommands(connection.workerId);
+  };
 }

@@ -1,8 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using FirstDraft.Cli.Git;
-using FirstDraft.Cli.Jira;
-using FirstDraft.Cli.Setup;
+using FirstDraft.Cli.Commands;
 using FirstDraft.Commands;
 using FirstDraft.Commands.Handlers;
 using FirstDraft.Configuration;
@@ -13,67 +11,8 @@ namespace FirstDraft
     {
         public static async Task<int> Main(string[] args)
         {
-            string command = args.Length > 0 ? args[0].ToLowerInvariant() : "run";
-
-            switch (command)
-            {
-                case "init":
-                    ApplicationDataService applicationDataService = new ApplicationDataService();
-                    ConfigurationWizardService configurationWizardService = new ConfigurationWizardService(applicationDataService);
-                    return await configurationWizardService.Init();
-
-                case "skills":
-                    ApplicationDataService skillsApplicationDataService = new ApplicationDataService();
-                    ConfigurationWizardService skillsConfigurationWizardService = new ConfigurationWizardService(skillsApplicationDataService);
-                    return await skillsConfigurationWizardService.Skills();
-
-                case "capacity":
-                    ApplicationDataService capacityApplicationDataService = new ApplicationDataService();
-                    ConfigurationWizardService capacityConfigurationWizardService = new ConfigurationWizardService(capacityApplicationDataService);
-                    return await capacityConfigurationWizardService.Capacity();
-
-                case "tasktypes":
-                    ApplicationDataService taskTypesApplicationDataService = new ApplicationDataService();
-                    ConfigurationWizardService taskTypesConfigurationWizardService = new ConfigurationWizardService(taskTypesApplicationDataService);
-                    return await taskTypesConfigurationWizardService.TaskTypes();
-
-                case "enableplanning":
-                    ApplicationDataService planningApplicationDataService = new ApplicationDataService();
-                    ConfigurationWizardService planningConfigurationWizardService = new ConfigurationWizardService(planningApplicationDataService);
-                    return await planningConfigurationWizardService.EnablePlanning();
-
-                case "repos":
-                    ApplicationDataService reposApplicationDataService = new ApplicationDataService();
-                    GitRepositoryConfigurationService gitRepositoryConfigurationService = new GitRepositoryConfigurationService(reposApplicationDataService);
-                    return await gitRepositoryConfigurationService.Repos(args.Skip(1).ToArray());
-
-                case "integrations":
-                    ApplicationDataService integrationsApplicationDataService = new ApplicationDataService();
-                    JiraIntegrationConfigurationService jiraIntegrationConfigurationService = new JiraIntegrationConfigurationService(integrationsApplicationDataService);
-                    return await jiraIntegrationConfigurationService.Integrations(args.Skip(1).ToArray());
-
-                case "run":
-                    if (args.Length > 1)
-                    {
-                        Console.Error.WriteLine($"Unknown run option: {args[1]}");
-                        PrintHelp();
-                        return 1;
-                    }
-
-                    await CreateHostBuilder(args.Skip(1).ToArray()).Build().RunAsync();
-                    return 0;
-
-                case "help":
-                case "--help":
-                case "-h":
-                    PrintHelp();
-                    return 0;
-
-                default:
-                    Console.Error.WriteLine($"Unknown command: {args[0]}");
-                    PrintHelp();
-                    return 1;
-            }
+            CliCommandRegistry registry = CliCommandRegistry.CreateDefault(CreateHostBuilder, PrintHelp);
+            return await registry.Execute(args);
         }
 
         public static IHostBuilder CreateHostBuilder(string[] args)

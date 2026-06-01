@@ -38,106 +38,18 @@ namespace FirstDraft.AI
       log.Debug($"AI planning prompt length: {planningPrompt.Length}");
       log.Debug($"AI planning prompt preview: {Preview(planningPrompt)}");
 
-      if (applicationData.AIProvider == AIProvider.Codex)
-      {
-        if (!applicationData.PlanningEnabled)
-        {
-          string directExecutionPrompt = BuildDirectExecutionPrompt(message);
-          IReadOnlyList<string> directExecutionArguments = BuildCodexArguments(fullWorkingDirectory, grantedFolders, "workspace-write");
-
-          log.Info("Starting Codex non-interactive execution without planning pass");
-          string directResult = ExecuteOneShot(
-              log,
-              executablePath,
-              new List<string>(directExecutionArguments) { directExecutionPrompt },
-              fullWorkingDirectory,
-              timeoutMinutes,
-              sequencedOutputChunkHandler);
-          log.Info($"Codex execution completed in {stopwatch.ElapsedMilliseconds}ms with {directResult.Length} output characters");
-          return directResult;
-        }
-
-        IReadOnlyList<string> planningArguments = BuildCodexArguments(fullWorkingDirectory, grantedFolders, "read-only");
-
-        log.Info("Starting Codex planning pass");
-        string plan = ExecuteOneShot(
-            log,
-            executablePath,
-            new List<string>(planningArguments) { planningPrompt },
-            fullWorkingDirectory,
-            timeoutMinutes,
-            sequencedOutputChunkHandler);
-
-        EmitPhaseDelimiter(sequencedOutputChunkHandler);
-
-        string executionPrompt = BuildExecutionPrompt(message, plan);
-        IReadOnlyList<string> executionArguments = BuildCodexArguments(fullWorkingDirectory, grantedFolders, "workspace-write");
-
-        log.Info("Starting Codex non-interactive execution");
-        string executionResult = ExecuteOneShot(
-            log,
-            executablePath,
-            new List<string>(executionArguments) { executionPrompt },
-            fullWorkingDirectory,
-            timeoutMinutes,
-            sequencedOutputChunkHandler);
-
-        string result = CombinePhaseOutputs(plan, executionResult);
-        log.Info($"Codex planning and execution completed in {stopwatch.ElapsedMilliseconds}ms with {result.Length} output characters");
-        return result;
-      }
-
-      if (!applicationData.PlanningEnabled)
-      {
-        string directExecutionMessage = BuildDirectExecutionPrompt(message);
-        string directExecutionSessionKey = $"ai:{applicationData.AIProvider}:execution:{fullWorkingDirectory}";
-        log.Info($"Starting AI session execution without planning pass. SessionKey={directExecutionSessionKey}");
-        string result = GenericCommandLineService.Execute(
-            log,
-            directExecutionSessionKey,
-            executablePath,
-            Array.Empty<string>(),
-            fullWorkingDirectory,
-            directExecutionMessage,
-            timeoutMinutes,
-            sequencedOutputChunkHandler,
-            forceNewSession: true);
-        log.Info($"{applicationData.AIProvider} execution completed in {stopwatch.ElapsedMilliseconds}ms with {result.Length} output characters");
-        return result;
-      }
-
-      IReadOnlyList<string> claudePlanningArguments = BuildClaudePlanningArguments();
-      string planningSessionKey = $"ai:{applicationData.AIProvider}:planning:{fullWorkingDirectory}";
-      log.Info($"Starting Claude planning pass. SessionKey={planningSessionKey}");
-      string claudePlan = GenericCommandLineService.Execute(
+      return CreateProviderRunner(applicationData.AIProvider).Execute(new AIExecutionRequest(
           log,
-          planningSessionKey,
-          executablePath,
-          claudePlanningArguments,
-          fullWorkingDirectory,
+          applicationData.AIProvider,
+          applicationData.PlanningEnabled,
+          message,
           planningPrompt,
-          timeoutMinutes,
-          sequencedOutputChunkHandler,
-          forceNewSession: true);
-
-      EmitPhaseDelimiter(sequencedOutputChunkHandler);
-
-      string executionMessage = BuildExecutionPrompt(message, claudePlan);
-      string executionSessionKey = $"ai:{applicationData.AIProvider}:execution:{fullWorkingDirectory}";
-      log.Info($"Starting AI session execution. SessionKey={executionSessionKey}");
-      string sessionResult = GenericCommandLineService.Execute(
-          log,
-          executionSessionKey,
           executablePath,
-          Array.Empty<string>(),
           fullWorkingDirectory,
-          executionMessage,
+          grantedFolders,
           timeoutMinutes,
-          sequencedOutputChunkHandler,
-          forceNewSession: true);
-      string combinedResult = CombinePhaseOutputs(claudePlan, sessionResult);
-      log.Info($"{applicationData.AIProvider} planning and execution completed in {stopwatch.ElapsedMilliseconds}ms with {combinedResult.Length} output characters");
-      return combinedResult;
+          stopwatch,
+          sequencedOutputChunkHandler));
     }
 
     private static string BuildPlanningPrompt(string message)
@@ -456,5 +368,143 @@ namespace FirstDraft.AI
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
+
+    private static IAIProviderRunner CreateProviderRunner(AIProvider provider)
+    {
+      return provider switch
+      {
+        AIProvider.Codex => new CodexAIProviderRunner(),
+        AIProvider.Claude => new SessionAIProviderRunner(),
+        _ => throw new ArgumentException($"Unsupported AI provider: {provider}")
+      };
+    }
+
+    private interface IAIProviderRunner
+    {
+      string Execute(AIExecutionRequest request);
+    }
+
+    private sealed record AIExecutionRequest(
+        Log Log,
+        AIProvider Provider,
+        bool PlanningEnabled,
+        string Message,
+        string PlanningPrompt,
+        string ExecutablePath,
+        string WorkingDirectory,
+        IReadOnlyList<string> GrantedFolders,
+        int TimeoutMinutes,
+        Stopwatch Stopwatch,
+        Action<CommandLineOutputChunk>? OutputChunkHandler);
+
+    private sealed class CodexAIProviderRunner : IAIProviderRunner
+    {
+      public string Execute(AIExecutionRequest request)
+      {
+        if (!request.PlanningEnabled)
+        {
+          string directExecutionPrompt = BuildDirectExecutionPrompt(request.Message);
+          IReadOnlyList<string> directExecutionArguments = BuildCodexArguments(request.WorkingDirectory, request.GrantedFolders, "workspace-write");
+
+          request.Log.Info("Starting Codex non-interactive execution without planning pass");
+          string directResult = ExecuteOneShot(
+              request.Log,
+              request.ExecutablePath,
+              new List<string>(directExecutionArguments) { directExecutionPrompt },
+              request.WorkingDirectory,
+              request.TimeoutMinutes,
+              request.OutputChunkHandler);
+          request.Log.Info($"Codex execution completed in {request.Stopwatch.ElapsedMilliseconds}ms with {directResult.Length} output characters");
+          return directResult;
+        }
+
+        IReadOnlyList<string> planningArguments = BuildCodexArguments(request.WorkingDirectory, request.GrantedFolders, "read-only");
+
+        request.Log.Info("Starting Codex planning pass");
+        string plan = ExecuteOneShot(
+            request.Log,
+            request.ExecutablePath,
+            new List<string>(planningArguments) { request.PlanningPrompt },
+            request.WorkingDirectory,
+            request.TimeoutMinutes,
+            request.OutputChunkHandler);
+
+        EmitPhaseDelimiter(request.OutputChunkHandler);
+
+        string executionPrompt = BuildExecutionPrompt(request.Message, plan);
+        IReadOnlyList<string> executionArguments = BuildCodexArguments(request.WorkingDirectory, request.GrantedFolders, "workspace-write");
+
+        request.Log.Info("Starting Codex non-interactive execution");
+        string executionResult = ExecuteOneShot(
+            request.Log,
+            request.ExecutablePath,
+            new List<string>(executionArguments) { executionPrompt },
+            request.WorkingDirectory,
+            request.TimeoutMinutes,
+            request.OutputChunkHandler);
+
+        string result = CombinePhaseOutputs(plan, executionResult);
+        request.Log.Info($"Codex planning and execution completed in {request.Stopwatch.ElapsedMilliseconds}ms with {result.Length} output characters");
+        return result;
+      }
+    }
+
+    private sealed class SessionAIProviderRunner : IAIProviderRunner
+    {
+      public string Execute(AIExecutionRequest request)
+      {
+        if (!request.PlanningEnabled)
+        {
+          string directExecutionMessage = BuildDirectExecutionPrompt(request.Message);
+          string directExecutionSessionKey = $"ai:{request.Provider}:execution:{request.WorkingDirectory}";
+          request.Log.Info($"Starting AI session execution without planning pass. SessionKey={directExecutionSessionKey}");
+          string result = GenericCommandLineService.Execute(
+              request.Log,
+              directExecutionSessionKey,
+              request.ExecutablePath,
+              Array.Empty<string>(),
+              request.WorkingDirectory,
+              directExecutionMessage,
+              request.TimeoutMinutes,
+              request.OutputChunkHandler,
+              forceNewSession: true);
+          request.Log.Info($"{request.Provider} execution completed in {request.Stopwatch.ElapsedMilliseconds}ms with {result.Length} output characters");
+          return result;
+        }
+
+        IReadOnlyList<string> claudePlanningArguments = BuildClaudePlanningArguments();
+        string planningSessionKey = $"ai:{request.Provider}:planning:{request.WorkingDirectory}";
+        request.Log.Info($"Starting Claude planning pass. SessionKey={planningSessionKey}");
+        string claudePlan = GenericCommandLineService.Execute(
+            request.Log,
+            planningSessionKey,
+            request.ExecutablePath,
+            claudePlanningArguments,
+            request.WorkingDirectory,
+            request.PlanningPrompt,
+            request.TimeoutMinutes,
+            request.OutputChunkHandler,
+            forceNewSession: true);
+
+        EmitPhaseDelimiter(request.OutputChunkHandler);
+
+        string executionMessage = BuildExecutionPrompt(request.Message, claudePlan);
+        string executionSessionKey = $"ai:{request.Provider}:execution:{request.WorkingDirectory}";
+        request.Log.Info($"Starting AI session execution. SessionKey={executionSessionKey}");
+        string sessionResult = GenericCommandLineService.Execute(
+            request.Log,
+            executionSessionKey,
+            request.ExecutablePath,
+            Array.Empty<string>(),
+            request.WorkingDirectory,
+            executionMessage,
+            request.TimeoutMinutes,
+            request.OutputChunkHandler,
+            forceNewSession: true);
+        string combinedResult = CombinePhaseOutputs(claudePlan, sessionResult);
+        request.Log.Info($"{request.Provider} planning and execution completed in {request.Stopwatch.ElapsedMilliseconds}ms with {combinedResult.Length} output characters");
+        return combinedResult;
+      }
+    }
   }
 }
