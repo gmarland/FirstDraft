@@ -61,6 +61,30 @@ namespace FirstDraft.Cli.Common
             }
         }
 
+        public static int? PromptOptionalInt(string label, int? defaultValue, int min, int max, string emptyLabel)
+        {
+            while (true)
+            {
+                string suffix = defaultValue.HasValue
+                    ? $" [{defaultValue.Value}; empty for {emptyLabel}]"
+                    : $" [{emptyLabel}]";
+                Console.Write($"{label}{suffix}: ");
+
+                string? input = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(input) || string.Equals(input.Trim(), emptyLabel, StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                if (int.TryParse(input.Trim(), out int value) && value >= min && value <= max)
+                {
+                    return value;
+                }
+
+                Console.Error.WriteLine($"{label} must be between {min} and {max}, or {emptyLabel}");
+            }
+        }
+
         public static bool PromptBool(string label, bool defaultValue)
         {
             string defaultText = defaultValue ? "yes" : "no";

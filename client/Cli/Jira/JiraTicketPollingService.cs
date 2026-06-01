@@ -299,10 +299,11 @@ namespace FirstDraft.Cli.Jira
             JiraAttachmentMetadata[] imageAttachments,
             CancellationToken cancellationToken)
         {
-            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, $"{_applicationData.ExternalAPI}/api/worker-auth/integration-tickets/jira/claim");
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, $"{_applicationData.ExternalAPI}/api/worker-auth/tasks/start");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _getWorkerAccessToken());
             request.Content = JsonContent.Create(new
             {
+                provider = "jira",
                 integrationId = integration.IntegrationId,
                 sourceItemId = issue.Id,
                 sourceItemKey = issue.Key,
@@ -310,6 +311,7 @@ namespace FirstDraft.Cli.Jira
                 repositoryUrl = repository.RepositoryUrl,
                 normalizedRepositoryUrl,
                 command,
+                commandMode = "gitflow",
                 metadata = new
                 {
                     issueId = issue.Id,

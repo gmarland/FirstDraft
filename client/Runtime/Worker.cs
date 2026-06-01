@@ -36,7 +36,7 @@ namespace FirstDraft.Runtime
                     try
                     {
                         _applicationAPI = new ApplicationAPI(_logger, _applicationData, _applicationDataService, _commandDispatcher);
-                        await _applicationAPI.ConnectSignalR();
+                        await _applicationAPI.Connect();
                     }
                     catch (Exception ex)
                     {

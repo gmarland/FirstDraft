@@ -1,8 +1,8 @@
 # FirstDraft
 
-FirstDraft is a control plane for running AI-assisted engineering work on remote machines you control.
+FirstDraft is a reporting plane for AI-assisted engineering work on remote machines you control.
 
-Put workers next to the repositories, credentials, build tools, and internal networks they need, then turn those sandboxed workers on from a browser or from Jira. FirstDraft is built for teams who want more than a single local coding agent: a fleet of addressable workers can sit on remote machines, advertise what they can do, and pick up operational work as soon as the UI or an enabled Jira workflow sends it their way.
+Put workers next to the repositories, credentials, build tools, and internal networks they need. FirstDraft records what those workers are doing and exposes the history, output, and integration status in a browser.
 
 ## Interactive Demo
 
@@ -15,9 +15,9 @@ Click the image above to launch the full interactive walkthrough.
 AI coding tools are most useful when they can work where the real context lives: cloned repositories, local toolchains, internal services, private networks, and team-specific workflows. FirstDraft turns those machines into an on-demand worker fleet.
 
 - Run multiple workers on remote machines and enable the right one for each job.
-- Use the web UI to inspect workers, choose a target, and dispatch work manually.
+- Use the web UI to inspect workers, task status, output, and history.
 - Let workers poll their own Jira integrations and claim ready issues without a developer babysitting the queue.
-- Queue AI, shell, or gitflow commands against registered workers.
+- Let workers decide what to run and report task progress back to the API.
 - Watch command status, streamed output, parsed responses, and history from a web console.
 - Register worker capabilities and paths so tasks are sent only where they can run.
 - Run Codex or Claude through local CLI providers instead of building a new agent runtime.
@@ -30,7 +30,7 @@ This repository contains the full FirstDraft stack:
 
 | Path | Purpose |
 | --- | --- |
-| `api/` | Express API, authentication, worker coordination, SignalR-compatible hub, OpenAPI docs, persistence, and integrations |
+| `api/` | Express API, authentication, worker reporting endpoints, OpenAPI docs, persistence, and integrations |
 | `app/` | React/Vite console for users, workers, repositories, API keys, and command history |
 | `client/` | .NET worker that connects to the API, advertises skills, and executes shell, AI, and gitflow commands |
 | `docker-compose.yml` | Local Postgres and MinIO services for development |
@@ -45,7 +45,7 @@ Browser console / Jira / API clients
       Express + Postgres
             |
             v
-      WorkerHub connection
+   HTTP worker reports
             |
             v
   firstdraft .NET workers
@@ -55,7 +55,7 @@ Browser console / Jira / API clients
  local repositories and toolchains
 ```
 
-Workers authenticate with a FirstDraft user account, maintain their own worker JWT, keep a live hub connection, and execute commands on the machines where they are installed. The API records command metadata and worker runtime state in Postgres, and writes command output as NDJSON so runs can be audited after the fact.
+Workers authenticate with a FirstDraft user account, maintain their own worker JWT, register over HTTP, send heartbeats, and report task start/output/completion from the machines where they are installed. The API records command metadata and worker runtime state in Postgres, and writes command output as NDJSON so runs can be audited after the fact.
 
 ## Remote Worker Fleet
 
@@ -72,12 +72,12 @@ That makes FirstDraft useful as a shared execution layer, not just a chat interf
 
 FirstDraft can connect Jira tickets to the worker fleet. Configure Jira connections on the worker CLI, choose the board and statuses that represent ready, processing, and processed work, then start the worker so it advertises those integrations to the API.
 
-Each worker polls its own enabled Jira integrations, filters issues to repositories configured on that worker, and asks the API to claim a ticket before starting work. The API records which worker claimed the ticket so another worker cannot process the same issue, while status transitions and command output keep the workflow visible.
+Each worker polls its own enabled Jira integrations, filters issues to repositories configured on that worker, and reports a task start before doing work. The API rejects duplicate active reports for the same issue, while status transitions and command output keep the workflow visible.
 
 ## Features
 
 - **Remote worker registry**: see connected workers, status, advertised skills, task capacity, and registered paths.
-- **UI-driven dispatch**: choose a worker and queue `ai`, `shell`, or `gitflow` commands from the console.
+- **Reporting console**: inspect worker-reported `ai`, `shell`, and `gitflow` task history from the console.
 - **Jira polling**: enable Jira workflows that let workers claim ready tickets for repository-backed gitflow tasks.
 - **Live output**: stream command output while retaining durable command history.
 - **Gitflow workflows**: let workers clone or reuse repository workspaces, run agent tasks, and format pull request-oriented results.
@@ -186,18 +186,9 @@ docker compose up -d
 docker compose down
 ```
 
-## API Example
+## Task Modes
 
-Queue an AI command for a connected worker:
-
-```bash
-curl -X POST http://localhost:5080/api/workers/<workerId>/commands \
-  -H "Authorization: Bearer <jwt>" \
-  -H "Content-Type: application/json" \
-  -d '{"command":"summarize the repository and suggest the next test to add","commandMode":"ai"}'
-```
-
-Supported command modes:
+Workers can report these task modes:
 
 - `ai`: run a prompt through the configured local Codex or Claude CLI.
 - `shell`: run a shell command through the worker.

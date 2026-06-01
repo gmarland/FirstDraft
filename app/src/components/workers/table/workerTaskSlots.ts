@@ -8,6 +8,7 @@ export function getWorkerTaskSlots(worker: WorkerRegistration) {
 
   return {
     activeTaskCount,
-    maxConcurrentTasks: worker.maxConcurrentTasks ?? 1,
+    maxConcurrentTasks: worker.maxConcurrentTasks ?? null,
+    maxConcurrentTasksLabel: worker.maxConcurrentTasks == null ? "unlimited" : worker.maxConcurrentTasks.toString(),
   };
 }

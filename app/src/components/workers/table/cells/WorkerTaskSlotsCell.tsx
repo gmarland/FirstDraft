@@ -7,11 +7,11 @@ type Props = {
 };
 
 export function WorkerTaskSlotsCell({ worker }: Props) {
-  const { activeTaskCount, maxConcurrentTasks } = getWorkerTaskSlots(worker);
+  const { activeTaskCount, maxConcurrentTasksLabel } = getWorkerTaskSlots(worker);
 
   return (
     <TableCell>
-      {activeTaskCount} / {maxConcurrentTasks}
+      {activeTaskCount} / {maxConcurrentTasksLabel}
     </TableCell>
   );
 }

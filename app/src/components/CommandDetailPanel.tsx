@@ -15,7 +15,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import CancelIcon from "@mui/icons-material/Cancel";
 import CloseIcon from "@mui/icons-material/Close";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DataObjectIcon from "@mui/icons-material/DataObject";
@@ -43,7 +42,6 @@ export function CommandDetailPanel({ workerId, command, onCommandChanged }: Prop
   const [output, setOutput] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
   const [outputFullscreenOpen, setOutputFullscreenOpen] = useState(false);
 
   const loadDetail = useCallback(async () => {
@@ -92,21 +90,6 @@ export function CommandDetailPanel({ workerId, command, onCommandChanged }: Prop
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
-
-  const cancelCommand = useCallback(async () => {
-    if (!token || !command || !canCancelCommand(command)) return;
-
-    setCancelling(true);
-    setError(null);
-    try {
-      await api.cancelCommand(token, workerId, command.transactionId);
-      await onCommandChanged();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to cancel command");
-    } finally {
-      setCancelling(false);
-    }
-  }, [workerId, command, onCommandChanged, token]);
 
   if (!command) {
     return (
@@ -179,17 +162,6 @@ export function CommandDetailPanel({ workerId, command, onCommandChanged }: Prop
             <Field label="Completed" value={formatDate(command.completedAt)} />
             {command.errorMessage && (
               <Field label="Error" value={command.errorMessage} error />
-            )}
-            {canCancelCommand(command) && (
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<CancelIcon />}
-                disabled={cancelling}
-                onClick={() => void cancelCommand()}
-              >
-                {cancelling ? "Cancelling..." : "Cancel command"}
-              </Button>
             )}
             <Button
               variant="outlined"
@@ -309,10 +281,6 @@ function Field({
 
 function shortId(value: string): string {
   return value.length > 12 ? `${value.slice(0, 12)}...` : value;
-}
-
-function canCancelCommand(command: Command): boolean {
-  return command.status === "queued" || command.status === "in_progress";
 }
 
 function formatCommandMode(mode: Command["commandMode"]): string {

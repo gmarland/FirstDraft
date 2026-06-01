@@ -1,8 +1,7 @@
 import { WorkerRegistration, Command, CommandMode, CommandStatus, PaginatedCommands } from "../types.js";
-import { CommandStore, CreateQueuedCommandInput } from "./commands/commandStore.js";
+import { CommandStore, CreateQueuedCommandInput, CreateReportedCommandInput } from "./commands/commandStore.js";
 import { GitRepositoryStore } from "./gitRepositories/gitRepositoryStore.js";
 import { WorkerRecord, WorkerRecordStore } from "./workers/workerRecordStore.js";
-import { normalizeMaxConcurrentTasks } from "../workers/workerState.js";
 import { normalizeEnabledTaskTypes } from "../commandModes.js";
 
 export type RegisterWorkerInput = {
@@ -12,7 +11,7 @@ export type RegisterWorkerInput = {
   paths: string[];
   skills: string[];
   enabledTaskTypes?: CommandMode[];
-  maxConcurrentTasks?: number;
+  maxConcurrentTasks?: number | null;
 };
 
 export type CompleteCommandInput = {
@@ -60,10 +59,11 @@ export type WorkerStore = {
   getWorkerForUser(userId: string, workerId: string): Promise<WorkerRegistration | undefined>;
   registerWorker(input: RegisterWorkerInput): Promise<WorkerRegistration>;
   markWorkerStopped(workerId: string, connectionId: string): Promise<void>;
-  setWorkerEnabledForUser(userId: string, workerId: string, enabled: boolean): Promise<WorkerRegistration | undefined>;
-  disableWorkersForUser(userId: string): Promise<WorkerRegistration[]>;
+  refreshWorkerHeartbeat(workerId: string, userId: string): Promise<WorkerRegistration | undefined>;
+  markStaleWorkersStopped(timeoutSeconds: number): Promise<void>;
   createWorkerCommand(userId: string, workerId: string, command: string, commandMode?: CommandMode, executionCommand?: string): Promise<Command>;
   createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
+  createReportedCommand(input: CreateReportedCommandInput): Promise<Command>;
   getWorkerCommand(transactionId: string): Promise<Command | undefined>;
   listWorkerCommands(workerId: string, pagination: CommandPagination): Promise<PaginatedCommands>;
   listTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<PaginatedCommands>;
@@ -125,18 +125,15 @@ export function createWorkerStore(
       await workers.markWorkerStopped(workerId, connectionId);
     },
 
-    async setWorkerEnabledForUser(userId: string, workerId: string, enabled: boolean): Promise<WorkerRegistration | undefined> {
-      const record = await workers.setWorkerEnabledForUser(userId, workerId, enabled);
+    async refreshWorkerHeartbeat(workerId: string, userId: string): Promise<WorkerRegistration | undefined> {
+      const record = await workers.refreshWorkerHeartbeat(workerId, userId);
       if (!record) return undefined;
 
       return mergeWorkerState(record, await commands.getInProgressWorkerCommands(workerId));
     },
 
-    async disableWorkersForUser(userId: string): Promise<WorkerRegistration[]> {
-      const records = await workers.disableWorkersForUser(userId);
-      const inProgressCommands = await commands.getInProgressWorkerCommandsByWorkerIds(records.map((record) => record.workerId));
-
-      return records.map((record) => mergeWorkerState(record, inProgressCommands.get(record.workerId) ?? []));
+    async markStaleWorkersStopped(timeoutSeconds: number): Promise<void> {
+      await workers.markStaleWorkersStopped(timeoutSeconds);
     },
 
     async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "ai", executionCommand?: string): Promise<Command> {
@@ -145,6 +142,12 @@ export function createWorkerStore(
 
     async createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command> {
       return commands.createQueuedCommand(input);
+    },
+
+    async createReportedCommand(input: CreateReportedCommandInput): Promise<Command> {
+      const command = await commands.createReportedCommand(input);
+      await refreshWorkerActivity(commands, workers, input.workerId);
+      return command;
     },
 
     getWorkerCommand(transactionId: string): Promise<Command | undefined> {
@@ -283,12 +286,11 @@ export function mergeWorkerState(record: WorkerRecord, inProgressCommands: Comma
     connectionId: record.lastConnectionId ?? "",
     paths: record.paths,
     skills: record.skills,
-    enabled: record.enabled,
     enabledTaskTypes: normalizeEnabledTaskTypes(record.enabledTaskTypes),
     state,
     activeTransactionIds,
     activeTaskCount: activeTransactionIds.length,
-    maxConcurrentTasks: normalizeMaxConcurrentTasks(record.maxConcurrentTasks),
+    maxConcurrentTasks: record.maxConcurrentTasks,
     ...(activeTransactionIds[0] ? { currentTransactionId: activeTransactionIds[0] } : {}),
     registeredAt: record.firstRegisteredAt,
     firstRegisteredAt: record.firstRegisteredAt,

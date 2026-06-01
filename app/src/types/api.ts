@@ -14,12 +14,11 @@ export type WorkerRegistration = {
   connectionId: string;
   paths: string[];
   skills: string[];
-  enabled: boolean;
   enabledTaskTypes: CommandMode[];
   state: ClientState;
   currentTransactionId?: string;
   activeTransactionIds?: string[];
-  maxConcurrentTasks?: number;
+  maxConcurrentTasks?: number | null;
   activeTaskCount?: number;
   registeredAt: string;
   firstRegisteredAt: string;

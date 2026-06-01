@@ -1,7 +1,6 @@
 import type {
   WorkerRegistration,
   Command,
-  CommandMode,
   CommandStatus,
   TaskQueueSortBy,
   TaskQueueSortDirection,
@@ -141,24 +140,6 @@ export const api = {
     );
   },
 
-  updateWorker(token: string, workerId: string, input: { enabled: boolean }) {
-    return request<WorkerRegistration>(
-      `/api/workers/${encodeURIComponent(workerId)}`,
-      {
-        token,
-        method: "PATCH",
-        body: input,
-      },
-    );
-  },
-
-  disableAllWorkers(token: string) {
-    return request<WorkerRegistration[]>("/api/workers/disable-all", {
-      token,
-      method: "POST",
-    });
-  },
-
   listCommands(token: string, workerId: string, pagination: { page: number; pageSize: number }) {
     const params = new URLSearchParams({
       page: String(pagination.page),
@@ -196,39 +177,10 @@ export const api = {
     );
   },
 
-  getGitflowSuggestions(token: string, workerId: string) {
-    return request<GitflowSuggestions>(
-      `/api/workers/${encodeURIComponent(workerId)}/gitflow-suggestions`,
-      { token },
-    );
-  },
-
-  createCommand(token: string, workerId: string, command: string, commandMode: CommandMode) {
-    return request<Command>(
-      `/api/workers/${encodeURIComponent(workerId)}/commands`,
-      {
-        token,
-        method: "POST",
-        body: { command, commandMode },
-      },
-    );
-  },
-
   getCommand(token: string, workerId: string, transactionId: string) {
     return request<Command>(
       `/api/workers/${encodeURIComponent(workerId)}/commands/${encodeURIComponent(transactionId)}`,
       { token },
-    );
-  },
-
-  cancelCommand(token: string, workerId: string, transactionId: string) {
-    return request<Command>(
-      `/api/workers/${encodeURIComponent(workerId)}/commands/${encodeURIComponent(transactionId)}/cancel`,
-      {
-        token,
-        method: "POST",
-        body: { reason: "command cancelled from UI" },
-      },
     );
   },
 

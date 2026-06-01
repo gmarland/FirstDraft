@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { normalizeEnabledTaskTypes } from "../src/commandModes.js";
 import { readUpdateProfileInput, validateUpdateProfileInput, validateUserInput } from "../src/controllers/auth/authValidation.js";
-import { getMissingSkills, parseCommandMode, parseGitflowPayload, readTaskQueueSort, readTaskQueueStatuses, readWorkerEnabled } from "../src/controllers/workers/workerRequests.js";
+import { getMissingSkills, parseCommandMode, parseGitflowPayload, readTaskQueueSort, readTaskQueueStatuses } from "../src/controllers/workers/workerRequests.js";
 import { readCleanString, readMetadata, readPlainObject } from "../src/shared/readers.js";
 import { selectColumns } from "../src/store/sqlColumns.js";
 
@@ -31,9 +31,6 @@ function testWorkerRequests(): void {
   assert.deepEqual(normalizeEnabledTaskTypes(undefined), ["ai", "shell", "gitflow"]);
   assert.deepEqual(normalizeEnabledTaskTypes("gitflow|ai|unknown|ai"), ["gitflow", "ai"]);
   assert.deepEqual(normalizeEnabledTaskTypes(["shell", "AI"]), ["shell", "ai"]);
-  assert.equal(readWorkerEnabled({ enabled: true }), true);
-  assert.equal(readWorkerEnabled({ enabled: false }), false);
-  assert.equal(readWorkerEnabled({ enabled: "false" }), undefined);
   assert.deepEqual(readTaskQueueStatuses({}), ["queued", "in_progress"]);
   assert.deepEqual(readTaskQueueStatuses({ status: ["completed", "failed"] }), ["completed", "failed"]);
   assert.deepEqual(readTaskQueueStatuses({ status: ["queued", "invalid", "queued", "completed"] }), ["queued", "completed"]);

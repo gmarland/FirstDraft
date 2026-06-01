@@ -57,19 +57,21 @@ export class JiraTicketClaimStore {
             and integrations.user_id = $2
             and integrations.integration_id = $3
             and integrations.enabled = true
-            and workers.enabled = true
             and 'gitflow' = any(workers.enabled_task_types)
             and 'git' = any(workers.skills)
             and (
-              select count(*)
-              from client_commands active_commands
-              where active_commands.worker_id = workers.worker_id
-                and active_commands.status = 'in_progress'
-                and (
-                  active_commands.claimed_at is null
-                  or active_commands.claimed_at >= now() - ($13::int * interval '1 minute')
-                )
-            ) < workers.max_concurrent_tasks
+              workers.max_concurrent_tasks is null
+              or (
+                select count(*)
+                from client_commands active_commands
+                where active_commands.worker_id = workers.worker_id
+                  and active_commands.status = 'in_progress'
+                  and (
+                    active_commands.claimed_at is null
+                    or active_commands.claimed_at >= now() - ($13::int * interval '1 minute')
+                  )
+              ) < workers.max_concurrent_tasks
+            )
             and exists (
               select 1
               from worker_git_repositories repositories
@@ -253,7 +255,6 @@ export class JiraTicketClaimStore {
       `
         select
           workers.worker_id is not null as worker_exists,
-          coalesce(workers.enabled, false) as worker_enabled,
           integrations.integration_id is not null as integration_exists,
           coalesce(integrations.enabled, false) as integration_enabled,
           coalesce('gitflow' = any(workers.enabled_task_types), false) as gitflow_enabled,
@@ -264,7 +265,7 @@ export class JiraTicketClaimStore {
             where repositories.worker_id = $1
               and repositories.normalized_repository_url = $4
           ) as repository_configured,
-          coalesce(workers.max_concurrent_tasks, 0) as max_concurrent_tasks,
+          workers.max_concurrent_tasks as max_concurrent_tasks,
           (
             select count(*)::int
             from client_commands active_commands
@@ -296,7 +297,6 @@ export class JiraTicketClaimStore {
 
     const row = result.rows[0];
     if (!row?.worker_exists) return "worker is not registered for this user";
-    if (!row.worker_enabled) return "worker is disabled";
     if (!row.integration_exists) return "Jira integration is not registered for this worker";
     if (!row.integration_enabled) return "Jira integration is disabled";
     if (!row.gitflow_enabled) return "worker is not enabled for gitflow tasks";
@@ -304,8 +304,10 @@ export class JiraTicketClaimStore {
     if (!row.repository_configured) return "worker is not configured for this repository";
 
     const activeCommandCount = Number(row.active_command_count ?? 0);
-    const maxConcurrentTasks = Number(row.max_concurrent_tasks ?? 0);
-    if (activeCommandCount >= maxConcurrentTasks) {
+    const maxConcurrentTasks = row.max_concurrent_tasks === null || row.max_concurrent_tasks === undefined
+      ? null
+      : Number(row.max_concurrent_tasks);
+    if (maxConcurrentTasks !== null && activeCommandCount >= maxConcurrentTasks) {
       return `worker has no available capacity (${activeCommandCount}/${maxConcurrentTasks} active gitflow tasks)`;
     }
 

@@ -16,7 +16,7 @@ export function WorkerSummaryGrid({ state }: Props) {
     state?.activeTaskCount ??
     state?.activeTransactionIds?.length ??
     (state?.currentTransactionId ? 1 : 0);
-  const maxConcurrentTasks = state?.maxConcurrentTasks ?? 1;
+  const maxConcurrentTasksLabel = state?.maxConcurrentTasks == null ? "unlimited" : state.maxConcurrentTasks.toString();
 
   return (
     <Box
@@ -33,18 +33,6 @@ export function WorkerSummaryGrid({ state }: Props) {
           useFlexGap
           sx={{ flexWrap: "wrap" }}
         >
-          <Chip
-            size="small"
-            label={
-              state?.enabled === false
-                ? "Disabled"
-                : state
-                  ? "Enabled"
-                  : "Loading"
-            }
-            color={state?.enabled === false ? "default" : "success"}
-            sx={{ fontWeight: 800 }}
-          />
           {state ? (
             <StatusBadge value={state.state} />
           ) : (
@@ -54,7 +42,7 @@ export function WorkerSummaryGrid({ state }: Props) {
       </SummaryCard>
       <SummaryCard label="Task slots">
         <Typography sx={{ fontWeight: 800 }}>
-          {state ? `${activeTaskCount} / ${maxConcurrentTasks}` : "Loading"}
+          {state ? `${activeTaskCount} / ${maxConcurrentTasksLabel}` : "Loading"}
         </Typography>
       </SummaryCard>
       <SummaryCard label="Task types">

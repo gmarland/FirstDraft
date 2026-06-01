@@ -1,6 +1,6 @@
 # FirstDraft API
 
-Express and TypeScript API for the FirstDraft control plane. It handles user authentication, worker authentication, worker registration, command dispatch, command history, command output storage, worker-local Git repository advertisements, Jira integrations, and OpenAPI documentation.
+Express and TypeScript API for the FirstDraft reporting plane. It handles user authentication, worker authentication, worker registration, worker-reported task history, command output storage, worker-local Git repository advertisements, Jira integrations, and OpenAPI documentation.
 
 ## Runtime Dependencies
 
@@ -14,7 +14,6 @@ The local `docker-compose.yml` starts Postgres and MinIO, then creates a `firstd
 System and docs:
 
 - `GET /health`
-- `POST /WorkerHub/negotiate`
 - `GET /api/docs`
 - `GET /swagger.json`
 
@@ -31,6 +30,12 @@ Worker authentication:
 - `POST /api/worker-auth/token` with a user bearer token
 - `POST /api/worker-auth/refresh`
 - `GET /api/worker-auth/public-key`
+- `POST /api/worker-auth/register`
+- `POST /api/worker-auth/heartbeat`
+- `POST /api/worker-auth/tasks/start`
+- `POST /api/worker-auth/tasks/:transactionId/output`
+- `POST /api/worker-auth/tasks/:transactionId/complete`
+- `POST /api/worker-auth/tasks/:transactionId/reject`
 - `GET /api/worker-auth/jira-attachments/:eventId/:attachmentId`
 
 Workers and commands:
@@ -41,18 +46,15 @@ Workers and commands:
 - `PATCH /api/workers/:workerId`
 - `GET /api/workers/:workerId/state`
 - `GET /api/workers/:workerId/commands`
-- `POST /api/workers/:workerId/commands`
-- `GET /api/workers/:workerId/gitflow-suggestions`
 - `GET /api/workers/:workerId/commands/:transactionId`
-- `POST /api/workers/:workerId/commands/:transactionId/cancel`
 - `GET /api/workers/:workerId/commands/:transactionId/output`
 - `GET /api/workers/:workerId/commands/:transactionId/responses`
 
-Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for ticket claiming, attachment download, and lifecycle transitions. Workers poll Jira themselves and use `POST /api/worker-auth/integration-tickets/jira/claim` to atomically record which worker claimed a ready issue. There is no public `/api/integrations` management surface.
+Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for duplicate guarding, attachment download, and lifecycle transitions. Workers poll Jira themselves and use `POST /api/worker-auth/tasks/start` to atomically report a ready issue before execution. There is no public `/api/integrations` management surface.
 
 ## Commands
 
-The API queues work for connected workers. Supported command modes are:
+Workers report work to the API. Supported command modes are:
 
 - `ai`: run a prompt through the worker's configured Codex or Claude CLI provider.
 - `shell`: run a shell command on the worker.
@@ -130,13 +132,4 @@ Run the compiled API after building:
 
 ```bash
 npm start
-```
-
-## Queue A Command
-
-```bash
-curl -X POST http://localhost:5080/api/workers/<workerId>/commands \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"command":"summarize this repository","commandMode":"ai"}'
 ```

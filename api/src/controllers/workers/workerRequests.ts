@@ -37,11 +37,6 @@ export function readCancelReason(body: unknown): string {
   return reason || "command cancelled from UI";
 }
 
-export function readWorkerEnabled(body: unknown): boolean | undefined {
-  const payload = body as { enabled?: unknown };
-  return typeof payload?.enabled === "boolean" ? payload.enabled : undefined;
-}
-
 export function readTaskQueueStatuses(query: Record<string, unknown>): CommandStatus[] {
   const rawStatus = query.status;
   const requestedStatuses = Array.isArray(rawStatus) ? rawStatus : [rawStatus];
