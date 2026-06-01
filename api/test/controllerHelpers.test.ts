@@ -31,10 +31,10 @@ function testWorkerRequests(): void {
   assert.deepEqual(normalizeEnabledTaskTypes(undefined), ["ai", "shell", "gitflow"]);
   assert.deepEqual(normalizeEnabledTaskTypes("gitflow|ai|unknown|ai"), ["gitflow", "ai"]);
   assert.deepEqual(normalizeEnabledTaskTypes(["shell", "AI"]), ["shell", "ai"]);
-  assert.deepEqual(readTaskQueueStatuses({}), ["queued", "in_progress"]);
+  assert.deepEqual(readTaskQueueStatuses({}), ["queued", "in_progress", "completed", "failed"]);
   assert.deepEqual(readTaskQueueStatuses({ status: ["completed", "failed"] }), ["completed", "failed"]);
   assert.deepEqual(readTaskQueueStatuses({ status: ["queued", "invalid", "queued", "completed"] }), ["queued", "completed"]);
-  assert.deepEqual(readTaskQueueStatuses({ status: ["invalid"] }), ["queued", "in_progress"]);
+  assert.deepEqual(readTaskQueueStatuses({ status: ["invalid"] }), ["queued", "in_progress", "completed", "failed"]);
   assert.deepEqual(readTaskQueueSort({}), {});
   assert.deepEqual(readTaskQueueSort({ sortBy: "task", sortDirection: "asc" }), { sortBy: "task", sortDirection: "asc" });
   assert.deepEqual(readTaskQueueSort({ sortBy: "created", sortDirection: "desc" }), { sortBy: "created", sortDirection: "desc" });

@@ -1,4 +1,8 @@
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.RegularExpressions;
+using FirstDraft.Cli.Jira;
+using FirstDraft.Configuration;
 using FirstDraft.Infrastructure.Logging;
 
 namespace FirstDraft.Features.Gitflow
@@ -10,17 +14,14 @@ namespace FirstDraft.Features.Gitflow
 
     private static IReadOnlyList<LocalGitflowAttachment> DownloadAttachments(
         Log log,
+        ApplicationData applicationData,
         GitflowCommandPayload payload,
-        string apiBaseUrl,
-        string workerAccessToken,
         string worktreePath,
         int timeoutMinutes,
         Action<string, string> emit)
     {
       IReadOnlyList<GitflowAttachmentPayload> attachments = payload.Attachments ?? Array.Empty<GitflowAttachmentPayload>();
       if (attachments.Count == 0) return Array.Empty<LocalGitflowAttachment>();
-      if (string.IsNullOrWhiteSpace(apiBaseUrl)) throw new InvalidOperationException("API base URL is required to download Jira attachments.");
-      if (string.IsNullOrWhiteSpace(workerAccessToken)) throw new InvalidOperationException("Worker access token is required to download Jira attachments.");
 
       string attachmentDirectory = ResolveAttachmentDirectory(worktreePath);
       Directory.CreateDirectory(attachmentDirectory);
@@ -28,15 +29,18 @@ namespace FirstDraft.Features.Gitflow
       List<LocalGitflowAttachment> localAttachments = new List<LocalGitflowAttachment>();
       foreach (GitflowAttachmentPayload attachment in attachments.Take(5))
       {
-        if (string.IsNullOrWhiteSpace(attachment.DownloadUrl)) continue;
+        if (string.IsNullOrWhiteSpace(attachment.IntegrationId) || string.IsNullOrWhiteSpace(attachment.ContentUrl))
+          throw new InvalidOperationException($"Jira attachment {attachment.Filename} is missing direct Jira download metadata.");
 
-        Uri uri = ResolveAttachmentUri(apiBaseUrl, attachment.DownloadUrl);
+        JiraIntegrationConfig integration = ResolveJiraIntegration(applicationData, attachment.IntegrationId);
+        Uri uri = ResolveJiraAttachmentUri(integration, attachment.ContentUrl);
         string filename = BuildAttachmentFilename(attachment, localAttachments.Count + 1);
         string filePath = Path.Combine(attachmentDirectory, filename);
 
         emit("stdout", $"Downloading Jira image attachment: {attachment.Filename}");
         using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", workerAccessToken);
+        request.Headers.Authorization = BuildJiraAuthorization(applicationData, integration);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
 
         using CancellationTokenSource timeout = new CancellationTokenSource(TimeSpan.FromMinutes(Math.Max(1, timeoutMinutes)));
         using HttpResponseMessage response = AttachmentHttpClient.Send(request, timeout.Token);
@@ -59,10 +63,41 @@ namespace FirstDraft.Features.Gitflow
       return localAttachments;
     }
 
-    private static Uri ResolveAttachmentUri(string apiBaseUrl, string downloadUrl)
+    private static JiraIntegrationConfig ResolveJiraIntegration(ApplicationData applicationData, string integrationId)
     {
-      if (Uri.TryCreate(downloadUrl, UriKind.Absolute, out Uri? absolute)) return absolute;
-      return new Uri(new Uri(apiBaseUrl.TrimEnd('/') + "/"), downloadUrl.TrimStart('/'));
+      JiraIntegrationConfig? integration = JiraIntegrationConfigService
+          .NormalizeIntegrations(applicationData.JiraIntegrations)
+          .FirstOrDefault(candidate =>
+              string.Equals(candidate.IntegrationId, integrationId, StringComparison.OrdinalIgnoreCase));
+
+      if (integration == null)
+        throw new InvalidOperationException($"Jira integration {integrationId} is not configured for this worker.");
+      if (string.IsNullOrWhiteSpace(integration.GetApiToken(applicationData)))
+        throw new InvalidOperationException($"Jira integration {integrationId} does not have a readable API token.");
+
+      return integration;
+    }
+
+    private static AuthenticationHeaderValue BuildJiraAuthorization(ApplicationData applicationData, JiraIntegrationConfig integration)
+    {
+      string credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{integration.Email}:{integration.GetApiToken(applicationData)}"));
+      return new AuthenticationHeaderValue("Basic", credentials);
+    }
+
+    private static Uri ResolveJiraAttachmentUri(JiraIntegrationConfig integration, string contentUrl)
+    {
+      if (!Uri.TryCreate(contentUrl, UriKind.Absolute, out Uri? attachmentUri))
+        throw new InvalidOperationException("Jira attachment URL must be absolute.");
+
+      Uri siteUri = new Uri($"{JiraIntegrationConfigService.CleanSiteUrl(integration.SiteUrl)}/");
+      if (!string.Equals(attachmentUri.Scheme, siteUri.Scheme, StringComparison.OrdinalIgnoreCase) ||
+          !string.Equals(attachmentUri.Host, siteUri.Host, StringComparison.OrdinalIgnoreCase) ||
+          attachmentUri.Port != siteUri.Port)
+      {
+        throw new InvalidOperationException("Jira attachment URL does not belong to the configured Jira site.");
+      }
+
+      return attachmentUri;
     }
 
     private static string ResolveAttachmentDirectory(string worktreePath)

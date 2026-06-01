@@ -245,8 +245,8 @@ namespace FirstDraft.Cli.Jira
                         attachment.Filename,
                         attachment.MimeType,
                         attachment.Size,
-                        $"/api/worker-auth/jira-attachments/{Uri.EscapeDataString(claim.EventId ?? string.Empty)}/{Uri.EscapeDataString(attachment.Id)}"))
-                    .Where(attachment => !string.IsNullOrWhiteSpace(claim.EventId))
+                        integration.IntegrationId,
+                        attachment.ContentUrl))
                     .ToArray();
                 string executionCommand = BuildGitflowCommand(repository, issue, issueUrl, executionAttachments);
 
@@ -511,6 +511,6 @@ namespace FirstDraft.Cli.Jira
 
         private sealed record JiraAttachmentMetadata(string Id, string Filename, string MimeType, long? Size, string ContentUrl);
 
-        private sealed record GitflowAttachmentClaim(string Id, string Filename, string MimeType, long? Size, string DownloadUrl);
+        private sealed record GitflowAttachmentClaim(string Id, string Filename, string MimeType, long? Size, string IntegrationId, string ContentUrl);
     }
 }

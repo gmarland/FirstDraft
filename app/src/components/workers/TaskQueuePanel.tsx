@@ -69,6 +69,8 @@ const statusOptions: Array<{ value: CommandStatus; label: string }> = [
   { value: "failed", label: "Failed" },
 ];
 
+const defaultStatusFilter = statusOptions.map((option) => option.value);
+
 const sortableColumns: SortableColumn[] = [
   { key: "status", label: "Status", width: 132, firstDirection: "asc" },
   { key: "source", label: "Source", width: 132, firstDirection: "asc" },
@@ -116,9 +118,7 @@ export function TaskQueuePanel({
       typeof value === "string"
         ? value.split(",").filter(isCommandStatus)
         : value;
-    onStatusesChange(
-      nextStatuses.length > 0 ? nextStatuses : ["queued", "in_progress"],
-    );
+    onStatusesChange(nextStatuses.length > 0 ? nextStatuses : defaultStatusFilter);
   };
   const statusFilter = (
     <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -295,9 +295,8 @@ function isCommandStatus(value: string): value is CommandStatus {
 
 function isDefaultStatusFilter(statuses: CommandStatus[]): boolean {
   return (
-    statuses.length === 2 &&
-    statuses.includes("queued") &&
-    statuses.includes("in_progress")
+    statuses.length === defaultStatusFilter.length &&
+    defaultStatusFilter.every((status) => statuses.includes(status))
   );
 }
 

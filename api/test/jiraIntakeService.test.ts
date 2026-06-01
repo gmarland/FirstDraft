@@ -129,6 +129,19 @@ async function testDuplicateIssueAcrossIntegrationsQueuesOneCommand(): Promise<v
   assert.equal(stores.workers.commands.length, 1);
   assert.equal(stores.intakeEvents.markQueuedCalls.length, 1);
   assert.equal(stores.dispatcher.dispatchCalls, 1);
+  const commandPayload = JSON.parse((stores.workers.commands[0] as { command: string }).command) as {
+    attachments?: unknown[];
+  };
+  assert.deepEqual(commandPayload.attachments, [
+    {
+      id: "attachment-1",
+      filename: "screenshot.png",
+      mimeType: "image/png",
+      size: 1234,
+      integrationId: "integration-1",
+      contentUrl: "https://example.atlassian.net/rest/api/3/attachment/content/attachment-1",
+    },
+  ]);
   assert.equal(result.items[0].status, "queued");
   assert.equal(result.items[0].transactionId, "transaction-1");
   assert.equal(result.items[1].status, "skipped");
@@ -365,6 +378,15 @@ function installRepositoryIssueFetchMock(): void {
                 name: "Ready",
               },
               customfield_10001: "https://github.com/example/repo.git",
+              attachment: [
+                {
+                  id: "attachment-1",
+                  filename: "screenshot.png",
+                  mimeType: "image/png",
+                  size: 1234,
+                  content: "https://example.atlassian.net/rest/api/3/attachment/content/attachment-1",
+                },
+              ],
             },
           },
         ],

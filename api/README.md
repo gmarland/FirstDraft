@@ -36,7 +36,6 @@ Worker authentication:
 - `POST /api/worker-auth/tasks/:transactionId/output`
 - `POST /api/worker-auth/tasks/:transactionId/complete`
 - `POST /api/worker-auth/tasks/:transactionId/reject`
-- `GET /api/worker-auth/jira-attachments/:eventId/:attachmentId`
 
 Workers and commands:
 
@@ -50,7 +49,7 @@ Workers and commands:
 - `GET /api/workers/:workerId/commands/:transactionId/output`
 - `GET /api/workers/:workerId/commands/:transactionId/responses`
 
-Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for duplicate guarding, attachment download, and lifecycle transitions. Workers poll Jira themselves and use `POST /api/worker-auth/tasks/start` to atomically report a ready issue before execution. There is no public `/api/integrations` management surface.
+Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for duplicate guarding and lifecycle transitions. Workers poll Jira themselves, download Jira attachments directly, and use `POST /api/worker-auth/tasks/start` to atomically report a ready issue before execution. There is no public `/api/integrations` management surface.
 
 ## Commands
 

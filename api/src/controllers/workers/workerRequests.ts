@@ -1,7 +1,7 @@
 import { CommandMode, CommandStatus } from "../../types.js";
 import type { TaskQueueSortBy, TaskQueueSortDirection } from "../../store/clientStore.js";
 
-export const DEFAULT_TASK_QUEUE_STATUSES: CommandStatus[] = ["queued", "in_progress"];
+export const DEFAULT_TASK_QUEUE_STATUSES: CommandStatus[] = ["queued", "in_progress", "completed", "failed"];
 
 const commandStatuses = new Set<CommandStatus>(["queued", "in_progress", "completed", "failed"]);
 const taskQueueSortFields = new Set<TaskQueueSortBy>(["status", "source", "task", "worker", "repository", "created"]);

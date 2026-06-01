@@ -27,8 +27,6 @@ namespace FirstDraft.Features.Gitflow
           log,
           applicationData,
           timeoutMinutes,
-          apiBaseUrl,
-          workerAccessToken,
           outputChunkHandler).Execute(command);
     }
   }

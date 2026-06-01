@@ -222,10 +222,10 @@ export const openApiDocument = {
         parameters: [
           queryParam("page", "Zero-based page index", { type: "integer", minimum: 0, default: 0 }),
           queryParam("pageSize", "Rows per page", { type: "integer", enum: [5, 10, 25, 50], default: 10 }),
-          queryParam("status", "Command statuses to include. Repeat this parameter to select multiple statuses. Defaults to queued and in_progress.", {
+          queryParam("status", "Command statuses to include. Repeat this parameter to select multiple statuses. Defaults to all statuses.", {
             type: "array",
             items: { type: "string", enum: ["queued", "in_progress", "completed", "failed"] },
-            default: ["queued", "in_progress"]
+            default: ["queued", "in_progress", "completed", "failed"]
           }),
           queryParam("sortBy", "Task queue column to sort by. Defaults to queue priority ordering when omitted.", {
             type: "string",

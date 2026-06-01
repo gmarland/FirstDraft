@@ -2,7 +2,7 @@
 
 .NET worker that registers with the FirstDraft API, reports its task activity, and executes locally selected work on the machine where it is running. Workers should be installed next to the repositories, credentials, toolchains, and network access needed for the jobs they accept.
 
-The project targets `net10.0` and builds the `firstdraft` assembly. At runtime the worker uses worker-auth HTTP endpoints to register, heartbeat, report task start/output/completion, and download Jira attachments.
+The project targets `net10.0` and builds the `firstdraft` assembly. At runtime the worker uses worker-auth HTTP endpoints to register, heartbeat, and report task start/output/completion.
 
 ## Prerequisites
 
@@ -101,7 +101,7 @@ Use `details <integration-id>` to inspect board/status configuration and whether
 
 When the worker is running, it polls enabled Jira integrations every 60 seconds. Ready issues are claimed through the API before execution, so only one worker can process a ticket; the worker then runs the matching gitflow task locally and reports output through the existing command history.
 
-Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
+Jira image attachments are downloaded directly from Jira with the worker's locally configured Jira integration credentials before the AI prompt is built.
 
 `MaxConcurrentTasks` controls concurrent gitflow execution. Set it to `1` through `8`, or omit/set it to `null` for unlimited concurrency.
 

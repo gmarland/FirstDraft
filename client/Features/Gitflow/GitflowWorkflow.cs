@@ -12,8 +12,6 @@ namespace FirstDraft.Features.Gitflow
       private readonly Log _log;
       private readonly ApplicationData _applicationData;
       private readonly int _timeoutMinutes;
-      private readonly string _apiBaseUrl;
-      private readonly string _workerAccessToken;
       private readonly Action<CommandLineOutputChunk>? _outputChunkHandler;
       private long _sequence;
 
@@ -21,15 +19,11 @@ namespace FirstDraft.Features.Gitflow
           Log log,
           ApplicationData applicationData,
           int timeoutMinutes,
-          string apiBaseUrl,
-          string workerAccessToken,
           Action<CommandLineOutputChunk>? outputChunkHandler)
       {
         _log = log;
         _applicationData = applicationData;
         _timeoutMinutes = timeoutMinutes;
-        _apiBaseUrl = apiBaseUrl;
-        _workerAccessToken = workerAccessToken;
         _outputChunkHandler = outputChunkHandler;
       }
 
@@ -60,9 +54,8 @@ namespace FirstDraft.Features.Gitflow
         PrepareRepository(_log, payload.RepositoryUrl, repositoryPath, worktreePath, sourceBranch, targetBranch, branchName, _timeoutMinutes, Emit);
         IReadOnlyList<LocalGitflowAttachment> attachments = DownloadAttachments(
             _log,
+            _applicationData,
             payload,
-            _apiBaseUrl,
-            _workerAccessToken,
             worktreePath,
             _timeoutMinutes,
             Emit);

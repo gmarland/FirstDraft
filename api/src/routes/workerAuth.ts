@@ -6,7 +6,6 @@ import { IntegrationLifecycleService } from "../integrations/integrationLifecycl
 import { CommandOutputStorage } from "../storage/commandOutputStorage.js";
 import { WorkerStore } from "../store/clientStore.js";
 import { GitRepositoryStore } from "../store/gitRepositories/gitRepositoryStore.js";
-import { IntegrationIntakeEventStore } from "../store/integrations/integrationIntakeEventStore.js";
 import { JiraIntegrationStore } from "../store/integrations/jiraIntegrationStore.js";
 import { JiraTicketClaimStore } from "../store/integrations/jiraTicketClaimStore.js";
 import { AppStore } from "../store/tenantStore.js";
@@ -18,7 +17,6 @@ export function createWorkerAuthRoutes(
   apiToWorkerTokens: ApiToWorkerTokenIssuer,
   workerConfigEncryptionKey: string,
   outputStorage?: CommandOutputStorage,
-  intakeEvents?: IntegrationIntakeEventStore,
   gitRepositories?: GitRepositoryStore,
   jiraIntegrations?: JiraIntegrationStore,
   jiraTicketClaims?: JiraTicketClaimStore,
@@ -32,7 +30,6 @@ export function createWorkerAuthRoutes(
     apiToWorkerTokens,
     workerConfigEncryptionKey,
     outputStorage,
-    intakeEvents,
     gitRepositories,
     jiraIntegrations,
     jiraTicketClaims,
@@ -48,7 +45,6 @@ export function createWorkerAuthRoutes(
   router.post("/tasks/:transactionId/output", controller.recordTaskOutput);
   router.post("/tasks/:transactionId/complete", controller.completeTask);
   router.post("/tasks/:transactionId/reject", controller.rejectTask);
-  router.get("/jira-attachments/:eventId/:attachmentId", controller.downloadJiraAttachment);
 
   return router;
 }

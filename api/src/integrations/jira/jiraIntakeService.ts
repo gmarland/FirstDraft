@@ -42,7 +42,8 @@ export type GitflowJiraAttachment = {
   filename: string;
   mimeType: string;
   size?: number;
-  downloadUrl: string;
+  integrationId: string;
+  contentUrl: string;
 };
 
 export type JiraIntakeResult = {
@@ -331,7 +332,7 @@ export class JiraIntakeService {
           ticketUrl: buildIssueUrl(integration.siteUrl, issue.key),
           title: issue.summary,
           description: readJiraText(issue.fields?.description),
-          attachments: buildGitflowAttachments(intake.event.id, issue),
+          attachments: buildGitflowAttachments(integration.id, issue),
         }),
         repositoryUrl: repository.repositoryUrl,
         normalizedRepositoryUrl: repository.normalizedRepositoryUrl,
@@ -539,7 +540,7 @@ function readRepositoryFieldValue(value: unknown): string | undefined {
 }
 
 function buildGitflowAttachments(
-  eventId: string,
+  integrationId: string,
   issue: JiraIssueSummary,
 ): GitflowJiraAttachment[] {
   return readImageAttachments(issue)
@@ -549,7 +550,8 @@ function buildGitflowAttachments(
       filename: attachment.filename,
       mimeType: attachment.mimeType,
       size: attachment.size,
-      downloadUrl: `/api/worker-auth/jira-attachments/${encodeURIComponent(eventId)}/${encodeURIComponent(attachment.id)}`,
+      integrationId,
+      contentUrl: attachment.contentUrl,
     }));
 }
 

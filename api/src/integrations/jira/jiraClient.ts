@@ -247,30 +247,6 @@ export class JiraClient {
     );
   }
 
-  public async downloadAttachmentContent(contentUrl: string): Promise<{
-    contentType?: string;
-    body: Buffer;
-  }> {
-    const url = this.normalizeJiraResourceUrl(contentUrl);
-    const response = await fetch(url, {
-      headers: {
-        accept: "*/*",
-        authorization: this.authorization,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Jira API returned ${response.status}: ${await readResponseMessage(response)}`,
-      );
-    }
-
-    return {
-      contentType: response.headers.get("content-type") ?? undefined,
-      body: Buffer.from(await response.arrayBuffer()),
-    };
-  }
-
   private async request<T>(
     path: string,
     options: { method?: string; body?: unknown } = {},
@@ -297,15 +273,6 @@ export class JiraClient {
     const text = await response.text();
     if (!text) return undefined as T;
     return JSON.parse(text) as T;
-  }
-
-  private normalizeJiraResourceUrl(value: string): string {
-    const url = new URL(value, this.baseUrl);
-    const baseUrl = new URL(this.baseUrl);
-    if (url.origin !== baseUrl.origin) {
-      throw new Error("Jira attachment URL does not belong to this Jira site");
-    }
-    return url.toString();
   }
 }
 

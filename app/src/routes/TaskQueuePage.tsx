@@ -12,6 +12,13 @@ import type {
   TaskQueueSortDirection,
 } from "../types/api";
 
+const defaultQueueStatuses: CommandStatus[] = [
+  "queued",
+  "in_progress",
+  "completed",
+  "failed",
+];
+
 type TaskQueueSort = {
   sortBy?: TaskQueueSortBy;
   sortDirection?: TaskQueueSortDirection;
@@ -21,10 +28,8 @@ export function TaskQueuePage() {
   const { token, user } = useAuth();
   const [queuePage, setQueuePage] = useState(0);
   const [queuePageSize, setQueuePageSize] = useState(10);
-  const [queueStatuses, setQueueStatuses] = useState<CommandStatus[]>([
-    "queued",
-    "in_progress",
-  ]);
+  const [queueStatuses, setQueueStatuses] =
+    useState<CommandStatus[]>(defaultQueueStatuses);
   const [queueSort, setQueueSort] = useState<TaskQueueSort>({
     sortDirection: "asc",
   });

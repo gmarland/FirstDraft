@@ -2,11 +2,9 @@ import { RequestHandler } from "express";
 import { ApiToWorkerTokenIssuer, WorkerTokenService } from "../../auth/workerTokens.js";
 import { normalizeEnabledTaskTypes } from "../../commandModes.js";
 import { IntegrationLifecycleService } from "../../integrations/integrationLifecycleService.js";
-import { JiraClient } from "../../integrations/jira/jiraClient.js";
 import { CommandOutputStorage } from "../../storage/commandOutputStorage.js";
 import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore, normalizeRepositoryUrl, WorkerGitRepositoryInput } from "../../store/gitRepositories/gitRepositoryStore.js";
-import { IntegrationIntakeEventStore } from "../../store/integrations/integrationIntakeEventStore.js";
 import { JiraIntegrationStore, WorkerJiraIntegrationInput } from "../../store/integrations/jiraIntegrationStore.js";
 import { JiraTicketClaimStore } from "../../store/integrations/jiraTicketClaimStore.js";
 import { AppStore } from "../../store/tenantStore.js";
@@ -16,11 +14,9 @@ import { readCleanString, readPlainObject } from "../../shared/readers.js";
 import { asyncHandler, requireUser, requireWorkerBearerToken } from "../controllerHelpers.js";
 import {
   parseWorkerTokenRequest,
-  readImageAttachmentMetadata,
   readRefreshToken,
   validateWorkerTokenRequest
 } from "./workerAuthRequests.js";
-import { sendJiraAttachment } from "./workerAuthResponses.js";
 
 export class WorkerAuthController {
   public constructor(
@@ -30,7 +26,6 @@ export class WorkerAuthController {
     private readonly apiToWorkerTokens: ApiToWorkerTokenIssuer,
     private readonly workerConfigEncryptionKey: string,
     private readonly outputStorage?: CommandOutputStorage,
-    private readonly intakeEvents?: IntegrationIntakeEventStore,
     private readonly gitRepositories?: GitRepositoryStore,
     private readonly jiraIntegrations?: JiraIntegrationStore,
     private readonly jiraTicketClaims?: JiraTicketClaimStore,
@@ -291,42 +286,6 @@ export class WorkerAuthController {
     res.json(completed);
   });
 
-  public readonly downloadJiraAttachment: RequestHandler = asyncHandler(async (req, res) => {
-    if (!this.intakeEvents || !this.jiraIntegrations) {
-      res.status(503).json({ error: "Jira attachment download is not configured" });
-      return;
-    }
-
-    const worker = await requireWorkerBearerToken(this.tokens, req.headers.authorization, res);
-    if (!worker) return;
-
-    const resolved = await this.intakeEvents.getByIdForWorker(
-      req.params.eventId,
-      worker.workerId,
-      worker.userId,
-    );
-    if (!resolved) {
-      res.status(404).json({ error: "attachment not found" });
-      return;
-    }
-
-    const { event, participant } = resolved;
-    const attachment = readImageAttachmentMetadata(event.metadata, req.params.attachmentId);
-    if (!attachment) {
-      res.status(404).json({ error: "attachment not found" });
-      return;
-    }
-
-    const credentials = await this.jiraIntegrations.getCredentials(participant.userId, participant.integrationId, worker.workerId);
-    if (!credentials) {
-      res.status(404).json({ error: "Jira integration not found" });
-      return;
-    }
-
-    const content = await new JiraClient(credentials).downloadAttachmentContent(attachment.contentUrl);
-    sendJiraAttachment(res, attachment, content);
-  });
-
   public readonly claimJiraTicket: RequestHandler = asyncHandler(async (req, res) => {
     if (!this.jiraTicketClaims) {
       res.status(503).json({ error: "Jira ticket claiming is not configured" });
@@ -402,7 +361,6 @@ export function createWorkerAuthController(
   apiToWorkerTokens: ApiToWorkerTokenIssuer,
   workerConfigEncryptionKey: string,
   outputStorage?: CommandOutputStorage,
-  intakeEvents?: IntegrationIntakeEventStore,
   gitRepositories?: GitRepositoryStore,
   jiraIntegrations?: JiraIntegrationStore,
   jiraTicketClaims?: JiraTicketClaimStore,
@@ -415,7 +373,6 @@ export function createWorkerAuthController(
     apiToWorkerTokens,
     workerConfigEncryptionKey,
     outputStorage,
-    intakeEvents,
     gitRepositories,
     jiraIntegrations,
     jiraTicketClaims,

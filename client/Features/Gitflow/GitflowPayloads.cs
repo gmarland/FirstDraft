@@ -21,7 +21,8 @@ namespace FirstDraft.Features.Gitflow
       string Filename,
       string MimeType,
       long? Size = null,
-      string? DownloadUrl = null);
+      string? IntegrationId = null,
+      string? ContentUrl = null);
 
   internal sealed record LocalGitflowAttachment(
       string Id,

@@ -7,12 +7,22 @@ import { configurePassport, createJwtConfigFromEnv } from "./auth/passport.js";
 import { createAuthRoutes } from "./routes/auth.js";
 import { createWorkerAuthRoutes } from "./routes/workerAuth.js";
 import { createWorkerRoutes } from "./routes/workers.js";
-import { createCommandOutputStorageFromEnv, getCommandOutputStorageProviderFromEnv } from "./storage/commandOutputStorage.js";
-import { publicConfigEncryptionKey, TenantCrypto } from "./security/tenantCrypto.js";
+import {
+  createCommandOutputStorageFromEnv,
+  getCommandOutputStorageProviderFromEnv,
+} from "./storage/commandOutputStorage.js";
+import {
+  publicConfigEncryptionKey,
+  TenantCrypto,
+} from "./security/tenantCrypto.js";
 import { CommandStore } from "./store/commands/commandStore.js";
 import { WorkerRecordStore } from "./store/workers/workerRecordStore.js";
 import { GitRepositoryStore } from "./store/gitRepositories/gitRepositoryStore.js";
-import { ApiToWorkerTokenIssuer, createWorkerJwtConfigFromEnv, WorkerTokenService } from "./auth/workerTokens.js";
+import {
+  ApiToWorkerTokenIssuer,
+  createWorkerJwtConfigFromEnv,
+  WorkerTokenService,
+} from "./auth/workerTokens.js";
 import { WorkerRefreshTokenStore } from "./store/workerAuth/workerRefreshTokenStore.js";
 import { TenantSettingsStore } from "./store/tenants/tenantSettingsStore.js";
 import { JiraIntegrationStore } from "./store/integrations/jiraIntegrationStore.js";
@@ -27,14 +37,16 @@ const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required");
 }
-
 const dataSource = createDataSource(databaseUrl);
 await dataSource.initialize();
 await dataSource.runMigrations();
 const db = new TypeOrmStoreContext(dataSource);
-const tenantEncryptionKey = await new TenantSettingsStore(db).ensureEncryptionKey();
+const tenantEncryptionKey = await new TenantSettingsStore(
+  db,
+).ensureEncryptionKey();
 const tenantCrypto = new TenantCrypto(tenantEncryptionKey);
-const workerConfigEncryptionKey = publicConfigEncryptionKey(tenantEncryptionKey);
+const workerConfigEncryptionKey =
+  publicConfigEncryptionKey(tenantEncryptionKey);
 const commands = new CommandStore(db);
 const workerRecords = new WorkerRecordStore(db);
 const gitRepositories = new GitRepositoryStore(db);
@@ -47,11 +59,20 @@ const tenants = createAppStore(db);
 const jwtConfig = createJwtConfigFromEnv();
 configurePassport(tenants, jwtConfig);
 const workerRefreshTokens = new WorkerRefreshTokenStore(db);
-const workerTokenService = new WorkerTokenService(createWorkerJwtConfigFromEnv(), workerRefreshTokens);
+const workerTokenService = new WorkerTokenService(
+  createWorkerJwtConfigFromEnv(),
+  workerRefreshTokens,
+);
 const apiToWorkerTokens = new ApiToWorkerTokenIssuer();
 const outputStorage = createCommandOutputStorageFromEnv();
-const outputStorageProvider = outputStorage ? getCommandOutputStorageProviderFromEnv() : undefined;
-const integrationLifecycle = new IntegrationLifecycleService(integrationIntakeEvents, jiraIntegrations, gitRepositories);
+const outputStorageProvider = outputStorage
+  ? getCommandOutputStorageProviderFromEnv()
+  : undefined;
+const integrationLifecycle = new IntegrationLifecycleService(
+  integrationIntakeEvents,
+  jiraIntegrations,
+  gitRepositories,
+);
 const app = createApp({
   authRoutes: createAuthRoutes(jwtConfig, tenants, outputStorage),
   workerAuthRoutes: createWorkerAuthRoutes(
@@ -61,11 +82,10 @@ const app = createApp({
     apiToWorkerTokens,
     workerConfigEncryptionKey,
     outputStorage,
-    integrationIntakeEvents,
     gitRepositories,
     jiraIntegrations,
     jiraTicketClaims,
-    integrationLifecycle
+    integrationLifecycle,
   ),
   workerRoutes: createWorkerRoutes(store, outputStorage, gitRepositories),
 });
@@ -74,7 +94,9 @@ const server = createServer(app);
 server.listen(port, () => {
   console.log(`firstdraft api listening on http://localhost:${port}`);
   console.log("postgres connected");
-  console.log(`command output storage ${outputStorage ? `enabled (${outputStorageProvider})` : "disabled: set COMMAND_OUTPUT_BUCKET to enable command output uploads"}`);
+  console.log(
+    `command output storage ${outputStorage ? `enabled (${outputStorageProvider})` : "disabled: set COMMAND_OUTPUT_BUCKET to enable command output uploads"}`,
+  );
   console.log("tenant encryption settings loaded from postgres");
 });
 
