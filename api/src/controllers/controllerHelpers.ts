@@ -25,10 +25,16 @@ export function requireUser(req: Request, res: Response): User | undefined {
 export async function requireWorkerForUser(
   store: WorkerStore,
   user: User,
-  workerId: string,
+  workerId: string | string[] | undefined,
   res: Response
 ): Promise<WorkerRegistration | undefined> {
-  const worker = await store.getWorkerForUser(user.userId, workerId);
+  const routeWorkerId = readRouteParam(workerId);
+  if (!routeWorkerId) {
+    res.status(404).json({ error: "worker is not registered" });
+    return undefined;
+  }
+
+  const worker = await store.getWorkerForUser(user.userId, routeWorkerId);
   if (!worker) {
     res.status(404).json({ error: "worker is not registered" });
     return undefined;
@@ -55,6 +61,10 @@ export async function requireWorkerBearerToken(
   }
 
   return worker;
+}
+
+export function readRouteParam(value: string | string[] | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
 function readBearerToken(value: string | undefined): string | undefined {

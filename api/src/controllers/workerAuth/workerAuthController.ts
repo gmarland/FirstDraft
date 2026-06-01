@@ -11,7 +11,7 @@ import { AppStore } from "../../store/tenantStore.js";
 import { Command, CommandMode } from "../../types.js";
 import { normalizeMaxConcurrentTasks } from "../../workers/workerState.js";
 import { readCleanString, readPlainObject } from "../../shared/readers.js";
-import { asyncHandler, requireUser, requireWorkerBearerToken } from "../controllerHelpers.js";
+import { asyncHandler, readRouteParam, requireUser, requireWorkerBearerToken } from "../controllerHelpers.js";
 import {
   parseWorkerTokenRequest,
   readRefreshToken,
@@ -208,7 +208,7 @@ export class WorkerAuthController {
       return;
     }
 
-    const command = await this.requireWorkerCommand(worker.workerId, req.params.transactionId, res);
+    const command = await this.requireWorkerCommand(worker.workerId, readRouteParam(req.params.transactionId), res);
     if (!command) return;
     if (command.status !== "in_progress") {
       res.status(202).json(command);
@@ -236,7 +236,7 @@ export class WorkerAuthController {
     const worker = await requireWorkerBearerToken(this.tokens, req.headers.authorization, res);
     if (!worker) return;
 
-    const command = await this.requireWorkerCommand(worker.workerId, req.params.transactionId, res);
+    const command = await this.requireWorkerCommand(worker.workerId, readRouteParam(req.params.transactionId), res);
     if (!command) return;
     const input = readTaskCompleteRequest(req.body);
 
@@ -273,7 +273,7 @@ export class WorkerAuthController {
     const worker = await requireWorkerBearerToken(this.tokens, req.headers.authorization, res);
     if (!worker) return;
 
-    const command = await this.requireWorkerCommand(worker.workerId, req.params.transactionId, res);
+    const command = await this.requireWorkerCommand(worker.workerId, readRouteParam(req.params.transactionId), res);
     if (!command) return;
 
     const completed = await this.workers.completeWorkerCommand({
@@ -352,7 +352,12 @@ export class WorkerAuthController {
     });
   });
 
-  private async requireWorkerCommand(workerId: string, transactionId: string, res: Parameters<RequestHandler>[1]): Promise<Command | undefined> {
+  private async requireWorkerCommand(workerId: string, transactionId: string | undefined, res: Parameters<RequestHandler>[1]): Promise<Command | undefined> {
+    if (!transactionId) {
+      res.status(404).json({ error: "command not found" });
+      return undefined;
+    }
+
     const command = await this.workers.getWorkerCommand(transactionId);
     if (!command || command.workerId !== workerId) {
       res.status(404).json({ error: "command not found" });

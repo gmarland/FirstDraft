@@ -4,7 +4,7 @@ import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore } from "../../store/gitRepositories/gitRepositoryStore.js";
 import { JiraIntegrationStore } from "../../store/integrations/jiraIntegrationStore.js";
 import { Command, User } from "../../types.js";
-import { asyncHandler, requireUser, requireWorkerForUser } from "../controllerHelpers.js";
+import { asyncHandler, readRouteParam, requireUser, requireWorkerForUser } from "../controllerHelpers.js";
 import { readTaskQueueSort, readTaskQueueStatuses } from "./workerRequests.js";
 import { sendCommandResponses, streamCommandOutput, toWorkerStateResponse } from "./workerResponses.js";
 
@@ -67,7 +67,11 @@ export class WorkerController {
     const user = requireUser(req, res);
     if (!user) return;
 
-    const command = await this.getVisibleCommand(user, req.params.workerId, req.params.transactionId);
+    const command = await this.getVisibleCommand(
+      user,
+      readRouteParam(req.params.workerId),
+      readRouteParam(req.params.transactionId)
+    );
     if (!command) {
       res.status(404).json({ error: "command not found" });
       return;
@@ -80,7 +84,11 @@ export class WorkerController {
     const user = requireUser(req, res);
     if (!user) return;
 
-    const command = await this.getVisibleCommand(user, req.params.workerId, req.params.transactionId);
+    const command = await this.getVisibleCommand(
+      user,
+      readRouteParam(req.params.workerId),
+      readRouteParam(req.params.transactionId)
+    );
     if (!command) {
       res.status(404).json({ error: "command not found" });
       return;
@@ -93,7 +101,11 @@ export class WorkerController {
     const user = requireUser(req, res);
     if (!user) return;
 
-    const command = await this.getVisibleCommand(user, req.params.workerId, req.params.transactionId);
+    const command = await this.getVisibleCommand(
+      user,
+      readRouteParam(req.params.workerId),
+      readRouteParam(req.params.transactionId)
+    );
     if (!command) {
       res.status(404).json({ error: "command not found" });
       return;
@@ -102,7 +114,13 @@ export class WorkerController {
     await sendCommandResponses(command, res, this.outputStorage);
   });
 
-  private async getVisibleCommand(user: User, workerId: string, transactionId: string): Promise<Command | undefined> {
+  private async getVisibleCommand(
+    user: User,
+    workerId: string | undefined,
+    transactionId: string | undefined
+  ): Promise<Command | undefined> {
+    if (!workerId || !transactionId) return undefined;
+
     const client = await this.store.getWorkerForUser(user.userId, workerId);
     if (!client) return undefined;
 
