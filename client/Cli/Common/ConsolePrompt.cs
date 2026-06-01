@@ -122,6 +122,48 @@ namespace FirstDraft.Cli.Common
             }
         }
 
+        public static T[] PromptMultiSelection<T>(string label, IReadOnlyList<T> options, Func<T, string> format)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"{label}:");
+            for (int index = 0; index < options.Count; index++)
+            {
+                Console.WriteLine($"  {index + 1}. {format(options[index])}");
+            }
+
+            while (true)
+            {
+                Console.Write($"Select {label.ToLowerInvariant()} numbers separated by commas [1-{options.Count}]: ");
+                string? input = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    Console.Error.WriteLine("Enter at least one listed number.");
+                    continue;
+                }
+
+                List<int> selectedIndexes = new List<int>();
+                bool valid = true;
+                foreach (string part in input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (!int.TryParse(part, out int selected) || selected < 1 || selected > options.Count)
+                    {
+                        valid = false;
+                        break;
+                    }
+
+                    int index = selected - 1;
+                    if (!selectedIndexes.Contains(index)) selectedIndexes.Add(index);
+                }
+
+                if (valid && selectedIndexes.Count > 0)
+                {
+                    return selectedIndexes.Select(index => options[index]).ToArray();
+                }
+
+                Console.Error.WriteLine("Enter one or more listed numbers separated by commas.");
+            }
+        }
+
         public static string PromptSensitive(string label, string defaultValue = "")
         {
             string suffix = !string.IsNullOrWhiteSpace(defaultValue) ? " [configured]" : string.Empty;

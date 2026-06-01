@@ -17,6 +17,9 @@ export type WorkerJiraIntegrationEntity = {
   processingStatusName: string;
   processedStatusId: string;
   processedStatusName: string;
+  assigneeAccountIds: string[];
+  assigneeDisplayNames: string[];
+  assigneeEmailAddresses: string[];
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +45,9 @@ export const WorkerJiraIntegrationSchema = new EntitySchema<WorkerJiraIntegratio
     processingStatusName: { type: "text", name: "processing_status_name" },
     processedStatusId: { type: "text", name: "processed_status_id" },
     processedStatusName: { type: "text", name: "processed_status_name" },
+    assigneeAccountIds: { type: "text", name: "assignee_account_ids", array: true, default: "'{}'" },
+    assigneeDisplayNames: { type: "text", name: "assignee_display_names", array: true, default: "'{}'" },
+    assigneeEmailAddresses: { type: "text", name: "assignee_email_addresses", array: true, default: "'{}'" },
     enabled: { type: "boolean", default: true },
     createdAt: { type: "timestamptz", name: "created_at", createDate: true },
     updatedAt: { type: "timestamptz", name: "updated_at", updateDate: true }

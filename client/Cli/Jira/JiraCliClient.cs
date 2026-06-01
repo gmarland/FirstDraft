@@ -88,6 +88,29 @@ namespace FirstDraft.Cli.Jira
                 .ToArray();
         }
 
+        public async Task<JiraUserOption[]> ListUsers(CancellationToken cancellationToken = default)
+        {
+            JObject[] users = (await RequestJsonArray("rest/api/3/users/search?maxResults=1000", cancellationToken))
+                .OfType<JObject>()
+                .ToArray();
+
+            return users
+                .Select(user => new JiraUserOption(
+                    user.Value<string>("accountId") ?? string.Empty,
+                    user.Value<string>("displayName") ?? string.Empty,
+                    user.Value<string>("emailAddress") ?? string.Empty,
+                    user.Value<bool?>("active") ?? false,
+                    user.Value<string>("accountType") ?? string.Empty))
+                .Where(user =>
+                    !string.IsNullOrWhiteSpace(user.AccountId) &&
+                    !string.IsNullOrWhiteSpace(user.DisplayName) &&
+                    user.Active &&
+                    string.Equals(user.AccountType, "atlassian", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(user => user.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(user => user.EmailAddress, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         public async Task<JiraIssueSummary[]> SearchIssues(string jql, int maxResults, IEnumerable<string> fields, CancellationToken cancellationToken = default)
         {
             JObject body = new JObject
@@ -191,6 +214,8 @@ namespace FirstDraft.Cli.Jira
     public sealed record JiraStatusOption(string Id, string Name, string StatusCategory);
 
     public sealed record JiraFieldOption(string Id, string Key, string Name);
+
+    public sealed record JiraUserOption(string AccountId, string DisplayName, string EmailAddress, bool Active, string AccountType);
 
     public sealed record JiraIssueSummary(string Id, string Key, JObject Fields);
 }

@@ -35,7 +35,8 @@ namespace FirstDraft.Cli.Jira
                         ProcessingStatusId = (integration.ProcessingStatusId ?? string.Empty).Trim(),
                         ProcessingStatusName = (integration.ProcessingStatusName ?? string.Empty).Trim(),
                         ProcessedStatusId = (integration.ProcessedStatusId ?? string.Empty).Trim(),
-                        ProcessedStatusName = (integration.ProcessedStatusName ?? string.Empty).Trim()
+                        ProcessedStatusName = (integration.ProcessedStatusName ?? string.Empty).Trim(),
+                        Assignees = NormalizeAssignees(integration.Assignees)
                     };
                 })
                 .GroupBy(integration => integration.IntegrationId, StringComparer.OrdinalIgnoreCase)
@@ -64,7 +65,13 @@ namespace FirstDraft.Cli.Jira
                     processingStatusId = integration.ProcessingStatusId,
                     processingStatusName = integration.ProcessingStatusName,
                     processedStatusId = integration.ProcessedStatusId,
-                    processedStatusName = integration.ProcessedStatusName
+                    processedStatusName = integration.ProcessedStatusName,
+                    assignees = NormalizeAssignees(integration.Assignees).Select(assignee => new
+                    {
+                        accountId = assignee.AccountId,
+                        displayName = assignee.DisplayName,
+                        emailAddress = assignee.EmailAddress
+                    }).ToArray()
                 })
                 .ToArray();
         }
@@ -185,6 +192,26 @@ namespace FirstDraft.Cli.Jira
         public static bool HasStoredApiToken(JiraIntegrationConfig integration)
         {
             return integration.EncryptedApiToken != null;
+        }
+
+        public static JiraAssigneeConfig[] NormalizeAssignees(JiraAssigneeConfig[]? assignees)
+        {
+            if (assignees == null || assignees.Length == 0) return Array.Empty<JiraAssigneeConfig>();
+
+            return assignees
+                .Select(assignee => new JiraAssigneeConfig
+                {
+                    AccountId = (assignee.AccountId ?? string.Empty).Trim(),
+                    DisplayName = (assignee.DisplayName ?? string.Empty).Trim(),
+                    EmailAddress = (assignee.EmailAddress ?? string.Empty).Trim()
+                })
+                .Where(assignee => !string.IsNullOrWhiteSpace(assignee.AccountId))
+                .GroupBy(assignee => assignee.AccountId, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Last())
+                .OrderBy(assignee => assignee.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(assignee => assignee.EmailAddress, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(assignee => assignee.AccountId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
 
         private static string GenerateIntegrationId()

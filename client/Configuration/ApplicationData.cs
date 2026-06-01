@@ -241,6 +241,8 @@ namespace FirstDraft.Configuration
 
         public string ProcessedStatusName { get; set; } = string.Empty;
 
+        public JiraAssigneeConfig[]? Assignees { get; set; }
+
         public string GetApiToken(ApplicationData applicationData)
         {
             return applicationData.DecryptSecret(EncryptedApiToken);
@@ -260,5 +262,14 @@ namespace FirstDraft.Configuration
 
             EncryptedApiToken = applicationData.EncryptSecret(apiToken);
         }
+    }
+
+    public class JiraAssigneeConfig
+    {
+        public string AccountId { get; set; } = string.Empty;
+
+        public string DisplayName { get; set; } = string.Empty;
+
+        public string EmailAddress { get; set; } = string.Empty;
     }
 }

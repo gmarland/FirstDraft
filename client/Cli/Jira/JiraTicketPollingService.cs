@@ -163,7 +163,7 @@ namespace FirstDraft.Cli.Jira
         {
             using JiraCliClient jira = new JiraCliClient(integration.SiteUrl, integration.Email, integration.GetApiToken(_applicationData));
             string[] repositoryFieldKeys = await ResolveRepositoryFieldKeys(jira, cancellationToken);
-            string[] fields = new[] { "summary", "status", "description", "attachment", "repository" }
+            string[] fields = new[] { "summary", "status", "description", "attachment", "repository", "assignee" }
                 .Concat(repositoryFieldKeys)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -209,6 +209,7 @@ namespace FirstDraft.Cli.Jira
                     repository,
                     normalizedRepositoryUrl,
                     claimCommand,
+                    ReadAssigneeAccountId(issue),
                     imageAttachments,
                     cancellationToken);
 
@@ -296,6 +297,7 @@ namespace FirstDraft.Cli.Jira
             GitRepositoryConfig repository,
             string normalizedRepositoryUrl,
             string command,
+            string? assigneeAccountId,
             JiraAttachmentMetadata[] imageAttachments,
             CancellationToken cancellationToken)
         {
@@ -312,10 +314,12 @@ namespace FirstDraft.Cli.Jira
                 normalizedRepositoryUrl,
                 command,
                 commandMode = "gitflow",
+                sourceAssigneeAccountId = assigneeAccountId,
                 metadata = new
                 {
                     issueId = issue.Id,
                     issueKey = issue.Key,
+                    assigneeAccountId,
                     imageAttachments
                 }
             });
@@ -364,12 +368,22 @@ namespace FirstDraft.Cli.Jira
         private static string BuildReadyJql(JiraIntegrationConfig integration)
         {
             string status = EscapeJqlString(integration.ReadyStatusName);
+            string assigneeClause = BuildAssigneeJqlClause(integration);
             if (integration.BoardFilterId.HasValue)
             {
-                return $"filter = {integration.BoardFilterId.Value} AND status = \"{status}\" ORDER BY updated ASC";
+                return $"filter = {integration.BoardFilterId.Value} AND status = \"{status}\"{assigneeClause} ORDER BY updated ASC";
             }
 
-            return $"status = \"{status}\" ORDER BY updated ASC";
+            return $"status = \"{status}\"{assigneeClause} ORDER BY updated ASC";
+        }
+
+        private static string BuildAssigneeJqlClause(JiraIntegrationConfig integration)
+        {
+            JiraAssigneeConfig[] assignees = JiraIntegrationConfigService.NormalizeAssignees(integration.Assignees);
+            if (assignees.Length == 0) return string.Empty;
+
+            string values = string.Join(", ", assignees.Select(assignee => $"\"{EscapeJqlString(assignee.AccountId)}\""));
+            return $" AND (assignee in ({values}) OR assignee is EMPTY)";
         }
 
         private static string EscapeJqlString(string value)
@@ -384,6 +398,16 @@ namespace FirstDraft.Cli.Jira
                 JToken? value = issue.Fields[fieldKey];
                 string? repositoryUrl = ReadRepositoryFieldValue(value);
                 if (!string.IsNullOrWhiteSpace(repositoryUrl)) return repositoryUrl;
+            }
+
+            return null;
+        }
+
+        private static string? ReadAssigneeAccountId(JiraIssueSummary issue)
+        {
+            if (issue.Fields["assignee"] is JObject assignee)
+            {
+                return assignee.Value<string>("accountId")?.Trim();
             }
 
             return null;

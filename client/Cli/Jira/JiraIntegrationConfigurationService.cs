@@ -85,6 +85,7 @@ namespace FirstDraft.Cli.Jira
             Console.WriteLine($"Ready status:\t{FormatStatusDetails(integration.ReadyStatusName, integration.ReadyStatusId)}");
             Console.WriteLine($"Processing status:\t{FormatStatusDetails(integration.ProcessingStatusName, integration.ProcessingStatusId)}");
             Console.WriteLine($"Processed status:\t{FormatStatusDetails(integration.ProcessedStatusName, integration.ProcessedStatusId)}");
+            Console.WriteLine($"Assignees:\t{FormatAssignees(integration)}");
             Console.WriteLine($"Token:\t{(JiraIntegrationConfigService.HasStoredApiToken(integration) ? "configured" : "missing")}");
 
             return 0;
@@ -202,6 +203,7 @@ namespace FirstDraft.Cli.Jira
                 JiraStatusOption ready = ConsolePrompt.PromptSelection("Ready for AI status", statuses, FormatStatus);
                 JiraStatusOption processing = ConsolePrompt.PromptSelection("AI Processing status", statuses, FormatStatus);
                 JiraStatusOption processed = ConsolePrompt.PromptSelection("Processed by AI status", statuses, FormatStatus);
+                JiraAssigneeConfig[] assignees = await PromptAssignees(jira);
 
                 saved.BoardId = board.Id;
                 saved.BoardName = board.Name;
@@ -213,6 +215,7 @@ namespace FirstDraft.Cli.Jira
                 saved.ProcessingStatusName = processing.Name;
                 saved.ProcessedStatusId = processed.Id;
                 saved.ProcessedStatusName = processed.Name;
+                saved.Assignees = assignees;
                 saved.Enabled = true;
             }
             catch (Exception ex)
@@ -292,6 +295,47 @@ namespace FirstDraft.Cli.Jira
         private static string FormatStatus(JiraStatusOption status)
         {
             return status.Name;
+        }
+
+        private static async Task<JiraAssigneeConfig[]> PromptAssignees(JiraCliClient jira)
+        {
+            bool anyUser = ConsolePrompt.PromptBool("Pick up Jira tasks for any assignee", true);
+            if (anyUser) return Array.Empty<JiraAssigneeConfig>();
+
+            JiraUserOption[] users = await jira.ListUsers();
+            if (users.Length == 0)
+            {
+                Console.Error.WriteLine("No active Jira users were returned for this account. Falling back to any assignee.");
+                return Array.Empty<JiraAssigneeConfig>();
+            }
+
+            JiraUserOption[] selected = ConsolePrompt.PromptMultiSelection("Jira assignees", users, FormatUser);
+            return selected
+                .Select(user => new JiraAssigneeConfig
+                {
+                    AccountId = user.AccountId,
+                    DisplayName = user.DisplayName,
+                    EmailAddress = user.EmailAddress
+                })
+                .ToArray();
+        }
+
+        private static string FormatUser(JiraUserOption user)
+        {
+            return string.IsNullOrWhiteSpace(user.EmailAddress)
+                ? user.DisplayName
+                : $"{user.DisplayName} <{user.EmailAddress}>";
+        }
+
+        private static string FormatAssignees(JiraIntegrationConfig integration)
+        {
+            JiraAssigneeConfig[] assignees = JiraIntegrationConfigService.NormalizeAssignees(integration.Assignees);
+            if (assignees.Length == 0) return "any user";
+
+            return string.Join(", ", assignees.Select(assignee =>
+                string.IsNullOrWhiteSpace(assignee.DisplayName)
+                    ? assignee.AccountId
+                    : assignee.DisplayName));
         }
 
         private static int PrintIntegrationsHelp(string? error = null)
