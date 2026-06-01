@@ -18,7 +18,14 @@ export type JiraIntegrationSettings = {
   processingStatusName: string;
   processedStatusId: string;
   processedStatusName: string;
+  assignees: JiraIntegrationAssignee[];
   updatedAt?: string;
+};
+
+export type JiraIntegrationAssignee = {
+  accountId: string;
+  displayName: string;
+  emailAddress: string;
 };
 
 export type WorkerJiraIntegrationInput = {
@@ -37,6 +44,7 @@ export type WorkerJiraIntegrationInput = {
   processingStatusName: string;
   processedStatusId: string;
   processedStatusName: string;
+  assignees?: JiraIntegrationAssignee[];
 };
 
 export type JiraIntegrationCredentials = JiraIntegrationSettings & {
@@ -61,6 +69,9 @@ type JiraIntegrationRow = {
   processing_status_name: string;
   processed_status_id: string;
   processed_status_name: string;
+  assignee_account_ids: string[];
+  assignee_display_names: string[];
+  assignee_email_addresses: string[];
   enabled: boolean;
   updated_at: Date;
 };
@@ -108,10 +119,13 @@ export class JiraIntegrationStore {
             processing_status_name,
             processed_status_id,
             processed_status_name,
+            assignee_account_ids,
+            assignee_display_names,
+            assignee_email_addresses,
             enabled,
             updated_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now())
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, now())
           on conflict (worker_id, integration_id)
           do update set
             user_id = excluded.user_id,
@@ -128,6 +142,9 @@ export class JiraIntegrationStore {
             processing_status_name = excluded.processing_status_name,
             processed_status_id = excluded.processed_status_id,
             processed_status_name = excluded.processed_status_name,
+            assignee_account_ids = excluded.assignee_account_ids,
+            assignee_display_names = excluded.assignee_display_names,
+            assignee_email_addresses = excluded.assignee_email_addresses,
             enabled = excluded.enabled,
             updated_at = now()
         `,
@@ -148,6 +165,9 @@ export class JiraIntegrationStore {
           integration.processingStatusName,
           integration.processedStatusId,
           integration.processedStatusName,
+          integration.assignees?.map((assignee) => assignee.accountId) ?? [],
+          integration.assignees?.map((assignee) => assignee.displayName) ?? [],
+          integration.assignees?.map((assignee) => assignee.emailAddress) ?? [],
           integration.enabled,
         ],
       );
@@ -251,6 +271,11 @@ export class JiraIntegrationStore {
       processingStatusName: row.processing_status_name,
       processedStatusId: row.processed_status_id,
       processedStatusName: row.processed_status_name,
+      assignees: row.assignee_account_ids.map((accountId, index) => ({
+        accountId,
+        displayName: row.assignee_display_names[index] ?? "",
+        emailAddress: row.assignee_email_addresses[index] ?? "",
+      })),
       updatedAt: row.updated_at?.toISOString(),
     };
   }
@@ -273,6 +298,9 @@ const returningColumns = `
   processing_status_name,
   processed_status_id,
   processed_status_name,
+  assignee_account_ids,
+  assignee_display_names,
+  assignee_email_addresses,
   enabled,
   updated_at
 `;
@@ -308,6 +336,7 @@ function normalizeWorkerJiraIntegrationInput(
   const processingStatusName = clean(integration.processingStatusName);
   const processedStatusId = clean(integration.processedStatusId);
   const processedStatusName = clean(integration.processedStatusName);
+  const assignees = normalizeAssignees(integration.assignees);
 
   if (
     !siteUrl ||
@@ -346,6 +375,7 @@ function normalizeWorkerJiraIntegrationInput(
     processingStatusName,
     processedStatusId,
     processedStatusName,
+    assignees,
   };
 }
 
@@ -355,4 +385,22 @@ function clean(value: string | undefined): string {
 
 function isIntegrationId(value: string): boolean {
   return /^[a-z0-9]{5}$/.test(value);
+}
+
+function normalizeAssignees(value: JiraIntegrationAssignee[] | undefined): JiraIntegrationAssignee[] {
+  if (!Array.isArray(value)) return [];
+
+  const byAccountId = new Map<string, JiraIntegrationAssignee>();
+  for (const assignee of value) {
+    const accountId = clean(assignee.accountId);
+    if (!accountId) continue;
+
+    byAccountId.set(accountId, {
+      accountId,
+      displayName: clean(assignee.displayName),
+      emailAddress: clean(assignee.emailAddress),
+    });
+  }
+
+  return [...byAccountId.values()];
 }

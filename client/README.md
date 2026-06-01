@@ -95,7 +95,7 @@ dotnet run -- integrations remove <integration-id>
 dotnet run -- integrations delete <integration-id>
 ```
 
-The `add jira` command prompts for the Jira site URL, email, and API token, then immediately configures the board and workflow statuses. If that configuration step fails, the saved connection can be retried with `configure <integration-id>`. Connection-only Jira integrations remain local-only and are not advertised to the API until fully configured.
+The `add jira` command prompts for the Jira site URL, email, and API token, then immediately configures the board, workflow statuses, and assignee filter. Choose any assignee to pick up all matching tickets, or select one or more Jira users to only pick up tickets assigned to those users. If that configuration step fails, the saved connection can be retried with `configure <integration-id>`. Connection-only Jira integrations remain local-only and are not advertised to the API until fully configured.
 Use `details <integration-id>` to inspect board/status configuration and whether an API token is stored. `detail` and `show` are accepted aliases for `details`; `update` is an alias for `configure`.
 `integrations delete` is accepted as an `integrations remove` alias, but the nested and top-level help output currently lists `remove`.
 

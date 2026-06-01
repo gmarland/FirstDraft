@@ -154,6 +154,7 @@ export class WorkerAuthController {
         sourceItemId: input.sourceItemId,
         sourceItemKey: input.sourceItemKey,
         sourceItemUrl: input.sourceItemUrl,
+        ...(input.sourceAssigneeAccountId ? { sourceAssigneeAccountId: input.sourceAssigneeAccountId } : {}),
         repositoryUrl: input.repositoryUrl,
         normalizedRepositoryUrl: input.normalizedRepositoryUrl,
         command: input.command,
@@ -315,7 +316,15 @@ export class WorkerAuthController {
     const result = await this.jiraTicketClaims.claim({
       workerId: worker.workerId,
       userId: worker.userId,
-      ...input,
+      integrationId: input.integrationId,
+      sourceItemId: input.sourceItemId,
+      sourceItemKey: input.sourceItemKey,
+      sourceItemUrl: input.sourceItemUrl,
+      ...(input.sourceAssigneeAccountId ? { sourceAssigneeAccountId: input.sourceAssigneeAccountId } : {}),
+      repositoryUrl: input.repositoryUrl,
+      normalizedRepositoryUrl: input.normalizedRepositoryUrl,
+      command: input.command,
+      metadata: input.metadata,
     });
 
     if (!result.claimed) {
@@ -403,6 +412,7 @@ type TaskStartRequest = {
   sourceItemId?: string;
   sourceItemKey?: string;
   sourceItemUrl?: string;
+  sourceAssigneeAccountId?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -442,6 +452,7 @@ function readTaskStartRequest(value: unknown): TaskStartRequest | undefined {
     sourceItemId: readCleanString(body.sourceItemId),
     sourceItemKey: readCleanString(body.sourceItemKey),
     sourceItemUrl: readCleanString(body.sourceItemUrl),
+    sourceAssigneeAccountId: readCleanString(body.sourceAssigneeAccountId),
     metadata: readPlainObject(body.metadata),
   };
 }
@@ -546,6 +557,7 @@ function readWorkerJiraIntegrations(value: unknown): WorkerJiraIntegrationInput[
         processingStatusName,
         processedStatusId,
         processedStatusName,
+        assignees: readJiraAssignees(payload.assignees ?? payload.Assignees),
       };
     })
     .filter((item): item is WorkerJiraIntegrationInput => Boolean(item));
@@ -576,6 +588,7 @@ type JiraClaimRequest = {
   sourceItemId: string;
   sourceItemKey: string;
   sourceItemUrl: string;
+  sourceAssigneeAccountId?: string;
   repositoryUrl: string;
   normalizedRepositoryUrl: string;
   command: string;
@@ -590,6 +603,7 @@ function readJiraClaimRequest(value: unknown): JiraClaimRequest | undefined {
     sourceItemId: readCleanString(body.sourceItemId),
     sourceItemKey: readCleanString(body.sourceItemKey),
     sourceItemUrl: readCleanString(body.sourceItemUrl),
+    sourceAssigneeAccountId: readCleanString(body.sourceAssigneeAccountId),
     repositoryUrl: readCleanString(body.repositoryUrl),
     normalizedRepositoryUrl: readCleanString(body.normalizedRepositoryUrl),
     command: readCleanString(body.command),
@@ -609,4 +623,22 @@ function readJiraClaimRequest(value: unknown): JiraClaimRequest | undefined {
   }
 
   return input as JiraClaimRequest;
+}
+
+function readJiraAssignees(value: unknown): { accountId: string; displayName: string; emailAddress: string }[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return undefined;
+      const payload = item as Record<string, unknown>;
+      const accountId = readCleanString(payload.accountId ?? payload.AccountId);
+      if (!accountId) return undefined;
+      return {
+        accountId,
+        displayName: readCleanString(payload.displayName ?? payload.DisplayName) ?? "",
+        emailAddress: readCleanString(payload.emailAddress ?? payload.EmailAddress) ?? "",
+      };
+    })
+    .filter((item): item is { accountId: string; displayName: string; emailAddress: string } => Boolean(item));
 }

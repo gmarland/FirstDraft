@@ -9,6 +9,7 @@ import { ShortJiraIntegrationIds1750000000000 } from "./migrations/1750000000000
 import { RemoveApiKeys1760000000000 } from "./migrations/1760000000000-RemoveApiKeys.js";
 import { RemoveWorkerEnabled1770000000000 } from "./migrations/1770000000000-RemoveWorkerEnabled.js";
 import { NullableWorkerMaxConcurrentTasks1780000000000 } from "./migrations/1780000000000-NullableWorkerMaxConcurrentTasks.js";
+import { JiraIntegrationAssigneeFilters1790000000000 } from "./migrations/1790000000000-JiraIntegrationAssigneeFilters.js";
 
 export function createDataSource(databaseUrl: string): DataSource {
   return new DataSource({
@@ -24,6 +25,7 @@ export function createDataSource(databaseUrl: string): DataSource {
       RemoveApiKeys1760000000000,
       RemoveWorkerEnabled1770000000000,
       NullableWorkerMaxConcurrentTasks1780000000000,
+      JiraIntegrationAssigneeFilters1790000000000,
     ],
     synchronize: false,
     migrationsRun: false,

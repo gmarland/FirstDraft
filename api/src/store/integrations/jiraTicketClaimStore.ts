@@ -17,6 +17,7 @@ export type ClaimJiraTicketInput = {
   sourceItemId: string;
   sourceItemKey: string;
   sourceItemUrl: string;
+  sourceAssigneeAccountId?: string;
   repositoryUrl: string;
   normalizedRepositoryUrl: string;
   command: string;
@@ -57,6 +58,11 @@ export class JiraTicketClaimStore {
             and integrations.user_id = $2
             and integrations.integration_id = $3
             and integrations.enabled = true
+            and (
+              cardinality(integrations.assignee_account_ids) = 0
+              or $14::text is null
+              or $14::text = any(integrations.assignee_account_ids)
+            )
             and 'gitflow' = any(workers.enabled_task_types)
             and 'git' = any(workers.skills)
             and (
@@ -214,6 +220,7 @@ export class JiraTicketClaimStore {
         input.command,
         buildTaskSummary(input.command, "gitflow"),
         staleClaimTimeoutMinutes,
+        input.sourceAssigneeAccountId ?? null,
       ],
     );
 
@@ -257,6 +264,12 @@ export class JiraTicketClaimStore {
           workers.worker_id is not null as worker_exists,
           integrations.integration_id is not null as integration_exists,
           coalesce(integrations.enabled, false) as integration_enabled,
+          coalesce(
+            cardinality(integrations.assignee_account_ids) = 0
+            or $6::text is null
+            or $6::text = any(integrations.assignee_account_ids),
+            false
+          ) as assignee_allowed,
           coalesce('gitflow' = any(workers.enabled_task_types), false) as gitflow_enabled,
           coalesce('git' = any(workers.skills), false) as git_skill_enabled,
           exists (
@@ -292,6 +305,7 @@ export class JiraTicketClaimStore {
         input.integrationId,
         input.normalizedRepositoryUrl,
         staleClaimTimeoutMinutes,
+        input.sourceAssigneeAccountId ?? null,
       ],
     );
 
@@ -299,6 +313,7 @@ export class JiraTicketClaimStore {
     if (!row?.worker_exists) return "worker is not registered for this user";
     if (!row.integration_exists) return "Jira integration is not registered for this worker";
     if (!row.integration_enabled) return "Jira integration is disabled";
+    if (!row.assignee_allowed) return "Jira issue assignee is not configured for this worker integration";
     if (!row.gitflow_enabled) return "worker is not enabled for gitflow tasks";
     if (!row.git_skill_enabled) return "worker does not advertise the git skill";
     if (!row.repository_configured) return "worker is not configured for this repository";

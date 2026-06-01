@@ -5,6 +5,8 @@ import type { DbClient, DbQueryResult } from "../src/db/dbClient.js";
 class SuccessfulClaimDbClient implements DbClient {
   public calls: Array<{ sql: string; parameters?: readonly unknown[] }> = [];
 
+  public constructor(private readonly expectedAssigneeAccountId: string | null = "account-1") {}
+
   public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
     this.calls.push({ sql, parameters });
     if (this.calls.length === 1) {
@@ -18,6 +20,9 @@ class SuccessfulClaimDbClient implements DbClient {
     assert.match(sql, /workers\.max_concurrent_tasks is null/);
     assert.match(sql, /active_commands\.status = 'in_progress'/);
     assert.match(sql, /active_commands\.claimed_at >= now\(\) - \(\$13::int \* interval '1 minute'\)/);
+    assert.match(sql, /cardinality\(integrations\.assignee_account_ids\) = 0/);
+    assert.match(sql, /\$14::text is null/);
+    assert.match(sql, /\$14::text = any\(integrations\.assignee_account_ids\)/);
     assert.match(sql, /repositories\.normalized_repository_url = \$8/);
     assert.match(sql, /active_event as/);
     assert.match(sql, /claimable_existing_event as/);
@@ -46,6 +51,7 @@ class SuccessfulClaimDbClient implements DbClient {
     assert.equal(parameters?.[10], "{\"repositoryUrl\":\"https://github.com/example/repo.git\",\"ticketNumber\":\"FD-1\"}");
     assert.equal(parameters?.[11], "FD-1: https://github.com/example/repo.git");
     assert.equal(parameters?.[12], 30);
+    assert.equal(parameters?.[13], this.expectedAssigneeAccountId);
 
     return {
       rows: [
@@ -86,6 +92,7 @@ async function testClaimCreatesInProgressCommandForWorker(): Promise<void> {
     repositoryUrl: "https://github.com/example/repo.git",
     normalizedRepositoryUrl: "github.com/example/repo",
     command: "{\"repositoryUrl\":\"https://github.com/example/repo.git\",\"ticketNumber\":\"FD-1\"}",
+    sourceAssigneeAccountId: "account-1",
     metadata: { issueKey: "FD-1" },
   });
 
@@ -96,6 +103,26 @@ async function testClaimCreatesInProgressCommandForWorker(): Promise<void> {
     assert.equal(result.event.status, "processing");
     assert.equal(result.event.workerId, "worker-1");
   }
+  assert.equal(db.calls.length, 2);
+}
+
+async function testClaimAllowsUnassignedIssueForRegisteredRepository(): Promise<void> {
+  const db = new SuccessfulClaimDbClient(null);
+  const store = new JiraTicketClaimStore(db);
+
+  const result = await store.claim({
+    workerId: "worker-1",
+    userId: "user-1",
+    integrationId: "abc12",
+    sourceItemId: "issue-1",
+    sourceItemKey: "FD-1",
+    sourceItemUrl: "https://example.atlassian.net/browse/FD-1",
+    repositoryUrl: "https://github.com/example/repo.git",
+    normalizedRepositoryUrl: "github.com/example/repo",
+    command: "{\"repositoryUrl\":\"https://github.com/example/repo.git\",\"ticketNumber\":\"FD-1\"}",
+  });
+
+  assert.equal(result.claimed, true);
   assert.equal(db.calls.length, 2);
 }
 
@@ -253,12 +280,14 @@ class CapacityRejectedClaimDbClient implements DbClient {
 
     assert.match(sql, /active_command_count/);
     assert.match(sql, /worker_git_repositories/);
+    assert.match(sql, /\$6::text is null/);
     assert.deepEqual(parameters, [
       "worker-1",
       "user-1",
       "abc12",
       "github.com/example/repo",
       30,
+      null,
     ]);
     return {
       rows: [
@@ -266,6 +295,7 @@ class CapacityRejectedClaimDbClient implements DbClient {
           worker_exists: true,
           integration_exists: true,
           integration_enabled: true,
+          assignee_allowed: true,
           gitflow_enabled: true,
           git_skill_enabled: true,
           repository_configured: true,
@@ -276,6 +306,100 @@ class CapacityRejectedClaimDbClient implements DbClient {
       rowCount: 1,
     };
   }
+}
+
+class RejectedClaimDbClient implements DbClient {
+  public calls: Array<{ sql: string; parameters?: readonly unknown[] }> = [];
+
+  public constructor(private readonly row: Record<string, unknown>) {}
+
+  public async query(sql: string, parameters?: readonly unknown[]): Promise<DbQueryResult> {
+    this.calls.push({ sql, parameters });
+    if (this.calls.length === 1) {
+      assertStaleClaimExpiryQuery(sql, parameters);
+      return { rows: [], rowCount: 0 };
+    }
+
+    if (this.calls.length === 2) {
+      return { rows: [], rowCount: 0 };
+    }
+
+    if (this.calls.length === 3) {
+      assert.match(sql, /from integration_intake_events/);
+      return { rows: [], rowCount: 0 };
+    }
+
+    assert.match(sql, /assignee_allowed/);
+    assert.match(sql, /repository_configured/);
+    return {
+      rows: [this.row],
+      rowCount: 1,
+    };
+  }
+}
+
+async function testRejectedClaimReturnsAssigneeReasonForAssignedNonMatchingUser(): Promise<void> {
+  const db = new RejectedClaimDbClient({
+    worker_exists: true,
+    integration_exists: true,
+    integration_enabled: true,
+    assignee_allowed: false,
+    gitflow_enabled: true,
+    git_skill_enabled: true,
+    repository_configured: true,
+    max_concurrent_tasks: 3,
+    active_command_count: 0,
+  });
+  const store = new JiraTicketClaimStore(db);
+
+  const result = await store.claim({
+    workerId: "worker-1",
+    userId: "user-1",
+    integrationId: "abc12",
+    sourceItemId: "issue-1",
+    sourceItemKey: "FD-1",
+    sourceItemUrl: "https://example.atlassian.net/browse/FD-1",
+    sourceAssigneeAccountId: "other-account",
+    repositoryUrl: "https://github.com/example/repo.git",
+    normalizedRepositoryUrl: "github.com/example/repo",
+    command: "{}",
+  });
+
+  assert.equal(result.claimed, false);
+  assert.equal(result.reason, "Jira issue assignee is not configured for this worker integration");
+  assert.equal(db.calls.length, 4);
+}
+
+async function testRejectedClaimReturnsRepositoryReasonEvenWithAllowedAssignee(): Promise<void> {
+  const db = new RejectedClaimDbClient({
+    worker_exists: true,
+    integration_exists: true,
+    integration_enabled: true,
+    assignee_allowed: true,
+    gitflow_enabled: true,
+    git_skill_enabled: true,
+    repository_configured: false,
+    max_concurrent_tasks: 3,
+    active_command_count: 0,
+  });
+  const store = new JiraTicketClaimStore(db);
+
+  const result = await store.claim({
+    workerId: "worker-1",
+    userId: "user-1",
+    integrationId: "abc12",
+    sourceItemId: "issue-1",
+    sourceItemKey: "FD-1",
+    sourceItemUrl: "https://example.atlassian.net/browse/FD-1",
+    sourceAssigneeAccountId: "account-1",
+    repositoryUrl: "https://github.com/example/other.git",
+    normalizedRepositoryUrl: "github.com/example/other",
+    command: "{}",
+  });
+
+  assert.equal(result.claimed, false);
+  assert.equal(result.reason, "worker is not configured for this repository");
+  assert.equal(db.calls.length, 4);
 }
 
 async function testRejectedClaimReturnsCapacityReasonWithoutEvent(): Promise<void> {
@@ -341,8 +465,11 @@ function commandRow(): Record<string, unknown> {
 }
 
 await testClaimCreatesInProgressCommandForWorker();
+await testClaimAllowsUnassignedIssueForRegisteredRepository();
 await testClaimAdoptsExistingQueueingEvent();
 await testDuplicateClaimReturnsExistingActiveEvent();
 await testRejectedClaimReturnsCapacityReasonWithoutEvent();
+await testRejectedClaimReturnsAssigneeReasonForAssignedNonMatchingUser();
+await testRejectedClaimReturnsRepositoryReasonEvenWithAllowedAssignee();
 
 console.log("jira ticket claim store tests passed");
