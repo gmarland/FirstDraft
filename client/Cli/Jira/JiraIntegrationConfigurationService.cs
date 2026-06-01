@@ -25,8 +25,7 @@ namespace FirstDraft.Cli.Jira
                 "details" => await Details(args.Skip(1).ToArray()),
                 "detail" => await Details(args.Skip(1).ToArray()),
                 "show" => await Details(args.Skip(1).ToArray()),
-                "remove" => await Remove(args.Skip(1).ToArray()),
-                "delete" => await Remove(args.Skip(1).ToArray()),
+                "delete" => await Delete(args.Skip(1).ToArray()),
                 _ => PrintIntegrationsHelp($"Unknown integrations command: {args[0]}")
             };
         }
@@ -237,7 +236,7 @@ namespace FirstDraft.Cli.Jira
             return 0;
         }
 
-        private async Task<int> Remove(string[] args)
+        private async Task<int> Delete(string[] args)
         {
             if (args.Length == 0) return PrintIntegrationsHelp("Integration ID is required.");
             string? integrationId = JiraIntegrationConfigService.NormalizeIntegrationId(args[0]);
@@ -257,7 +256,7 @@ namespace FirstDraft.Cli.Jira
             applicationData.JiraIntegrations = integrations.ToArray();
             await _applicationDataService.Save(applicationData);
 
-            Console.WriteLine($"Removed Jira integration {integrationId}");
+            Console.WriteLine($"Deleted Jira integration {integrationId}");
             return 0;
         }
 
@@ -346,7 +345,7 @@ namespace FirstDraft.Cli.Jira
                 "  firstdraft integrations details <integration-id>",
                 "  firstdraft integrations add jira",
                 "  firstdraft integrations configure <integration-id>",
-                "  firstdraft integrations remove <integration-id>");
+                "  firstdraft integrations delete <integration-id>");
         }
     }
 }

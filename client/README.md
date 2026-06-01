@@ -31,7 +31,6 @@ dotnet run -- integrations details <integration-id>
 dotnet run -- integrations add jira
 dotnet run -- integrations configure <integration-id>
 dotnet run -- integrations update <integration-id>
-dotnet run -- integrations remove <integration-id>
 dotnet run -- integrations delete <integration-id>
 dotnet run -- run
 dotnet run -- help
@@ -46,20 +45,12 @@ Command details:
 - `capacity`: update the maximum number of concurrent `gitflow` tasks.
 - `enablePlanning`: configure whether `gitflow` AI execution uses a planning pass.
 - `repos list|add|update|delete`: manage Git repositories and their enforced source/PR target branches for this worker. `add` prompts for repository details and only creates new entries; `update` only changes existing entries; `delete` removes an existing entry.
-- `integrations list|details|add|configure|update|remove|delete`: manage Jira integrations for this worker. `detail` and `show` are aliases for `details`; `update` is an alias for `configure`; `delete` is an alias for `remove`. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board, workflow statuses, and assignee filter interactively. API tokens are encrypted in local config and are never printed by `list` or `details`.
+- `integrations list|details|add|configure|update|delete`: manage Jira integrations for this worker. `detail` and `show` are aliases for `details`; `update` is an alias for `configure`. `add jira` prompts for the Jira connection, saves a generated 5-character integration ID, then immediately selects the board, workflow statuses, and assignee filter interactively. API tokens are encrypted in local config and are never printed by `list` or `details`.
 - `run`: start the worker, register it with the API, start heartbeats, and poll configured Jira integrations.
 - `help`: print command help.
 - `--help` or `-h`: print command help.
 
 Running with no command defaults to `run`.
-
-## Supported Task Mode
-
-Workers currently advertise and accept only `gitflow` tasks, which execute repository-oriented implementation or follow-up work.
-
-`gitflow` requires the worker to advertise the `git` skill. Configured skills are validated against executables on `PATH` before registration. Runtime dependency injection currently wires only the `GitflowCommandHandler`, and the shared task type registry always resolves enabled task types to `gitflow`.
-
-The source tree still contains legacy handler classes for other command modes, but the current API and worker runtime do not expose them.
 
 ## Gitflow Workspaces
 
@@ -87,14 +78,12 @@ dotnet run -- integrations list
 dotnet run -- integrations details <integration-id>
 dotnet run -- integrations add jira
 dotnet run -- integrations configure <integration-id>
-dotnet run -- integrations remove <integration-id>
 dotnet run -- integrations delete <integration-id>
 ```
 
 The `add jira` command prompts for the Jira site URL, email, and API token, then immediately configures the board, workflow statuses, and assignee filter. Choose any assignee to pick up all matching tickets, or select one or more Jira users to only pick up tickets assigned to those users. If that configuration step fails, the saved connection can be retried with `configure <integration-id>`. Connection-only Jira integrations remain local-only and are not advertised to the API until fully configured.
 
 Use `details <integration-id>` to inspect board/status configuration and whether an API token is stored. `detail` and `show` are accepted aliases for `details`; `update` is an alias for `configure`.
-`integrations delete` is accepted as an `integrations remove` alias, but the nested and top-level help output currently lists `remove`.
 
 When the worker is running, it polls enabled Jira integrations every 60 seconds. Ready issues are filtered to repositories configured on that worker, then claimed through the API before execution so only one worker processes a ticket. The worker then runs the matching `gitflow` task locally and reports output through the existing command history.
 
