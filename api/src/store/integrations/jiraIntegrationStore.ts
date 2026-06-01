@@ -173,6 +173,24 @@ export class JiraIntegrationStore {
     return result.rows.map((row) => this.mapSettings(row));
   }
 
+  public async listWorkerSettings(
+    userId: string,
+    workerId: string,
+  ): Promise<JiraIntegrationSettings[]> {
+    const result = await this.pool.query<JiraIntegrationRow>(
+      `
+        select ${returningColumns}
+        from worker_jira_integrations
+        where user_id = $1
+          and worker_id = $2
+        order by created_at asc
+      `,
+      [userId, workerId],
+    );
+
+    return result.rows.map((row) => this.mapSettings(row));
+  }
+
   public async listEnabledSettings(
     userId: string,
     integrationId?: string,

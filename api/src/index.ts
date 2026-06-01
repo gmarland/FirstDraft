@@ -82,7 +82,7 @@ const app = createApp({
     jiraTicketClaims,
     integrationLifecycle,
   ),
-  workerRoutes: createWorkerRoutes(store, outputStorage, gitRepositories),
+  workerRoutes: createWorkerRoutes(store, outputStorage, gitRepositories, jiraIntegrations),
 });
 const server = createServer(app);
 

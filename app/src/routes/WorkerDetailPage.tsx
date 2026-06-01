@@ -1,7 +1,9 @@
 import { useCallback, useState } from "react";
-import { Alert, Button, Stack } from "@mui/material";
+import { Alert, Box, Button, Stack, Tab, Tabs } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
+import HistoryIcon from "@mui/icons-material/History";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { WorkerPanelsGrid } from "../components/workerDetail/WorkerPanelsGrid";
 import { WorkerSummaryGrid } from "../components/workerDetail/WorkerSummaryGrid";
@@ -16,10 +18,13 @@ type Props = {
   onBackToWorkers(): void;
 };
 
+type WorkerDetailTab = "history" | "resources";
+
 export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
   const { token } = useAuth();
   const [commandPage, setCommandPage] = useState(0);
   const [commandPageSize, setCommandPageSize] = useState(10);
+  const [tab, setTab] = useState<WorkerDetailTab>("history");
 
   const loadState = useCallback(
     () => api.getWorkerState(token!, workerId),
@@ -64,26 +69,82 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
 
       <WorkerSummaryGrid state={state.data ?? undefined} />
 
-      <WorkerPanelsGrid
-        paths={state.data?.paths ?? []}
-      />
+      <Box
+        sx={{
+          alignSelf: "flex-start",
+          border: 1,
+          borderColor: "divider",
+          bgcolor: "background.default",
+          borderRadius: 2,
+          p: 0.5,
+        }}
+      >
+        <Tabs
+          value={tab}
+          onChange={(_event, value: WorkerDetailTab) => setTab(value)}
+          aria-label="Worker detail sections"
+          sx={{
+            minHeight: 0,
+            "& .MuiTabs-indicator": {
+              display: "none",
+            },
+            "& .MuiTabs-flexContainer": {
+              gap: 0.5,
+            },
+            "& .MuiTab-root": {
+              minHeight: 0,
+              px: 1.5,
+              py: 0.75,
+              borderRadius: 1.5,
+              color: "text.secondary",
+              fontWeight: 800,
+            },
+            "& .Mui-selected": {
+              bgcolor: "background.paper",
+              color: "text.primary",
+              boxShadow: "0 1px 3px rgba(23, 32, 38, 0.12)",
+            },
+          }}
+        >
+          <Tab
+            icon={<HistoryIcon />}
+            iconPosition="start"
+            label="Command history"
+            value="history"
+          />
+          <Tab
+            icon={<FolderSpecialIcon />}
+            iconPosition="start"
+            label="Registered resources"
+            value="resources"
+          />
+        </Tabs>
+      </Box>
 
-      <CommandHistoryPanel
-        workerId={workerId}
-        commands={commands.data?.commands ?? []}
-        total={commands.data?.total ?? 0}
-        page={commandPage}
-        pageSize={commandPageSize}
-        loading={commands.loading}
-        onPageChange={setCommandPage}
-        onPageSizeChange={(nextPageSize) => {
-          setCommandPageSize(nextPageSize);
-          setCommandPage(0);
-        }}
-        onCommandChanged={async () => {
-          await Promise.all([state.refresh(), commands.refresh()]);
-        }}
-      />
+      {tab === "history" ? (
+        <CommandHistoryPanel
+          workerId={workerId}
+          commands={commands.data?.commands ?? []}
+          total={commands.data?.total ?? 0}
+          page={commandPage}
+          pageSize={commandPageSize}
+          loading={commands.loading}
+          onPageChange={setCommandPage}
+          onPageSizeChange={(nextPageSize) => {
+            setCommandPageSize(nextPageSize);
+            setCommandPage(0);
+          }}
+          onCommandChanged={async () => {
+            await Promise.all([state.refresh(), commands.refresh()]);
+          }}
+        />
+      ) : (
+        <WorkerPanelsGrid
+          paths={state.data?.paths ?? []}
+          gitRepositories={state.data?.gitRepositories ?? []}
+          jiraIntegrations={state.data?.jiraIntegrations ?? []}
+        />
+      )}
 
       <Button
         variant="outlined"

@@ -2,6 +2,7 @@ import { RequestHandler } from "express";
 import { CommandOutputStorage } from "../../storage/commandOutputStorage.js";
 import { WorkerStore } from "../../store/clientStore.js";
 import { GitRepositoryStore } from "../../store/gitRepositories/gitRepositoryStore.js";
+import { JiraIntegrationStore } from "../../store/integrations/jiraIntegrationStore.js";
 import { Command, User } from "../../types.js";
 import { asyncHandler, requireUser, requireWorkerForUser } from "../controllerHelpers.js";
 import { readTaskQueueSort, readTaskQueueStatuses } from "./workerRequests.js";
@@ -15,7 +16,8 @@ export class WorkerController {
   public constructor(
     private readonly store: WorkerStore,
     private readonly outputStorage?: CommandOutputStorage,
-    private readonly gitRepositories?: GitRepositoryStore
+    private readonly gitRepositories?: GitRepositoryStore,
+    private readonly jiraIntegrations?: JiraIntegrationStore
   ) {}
 
   public readonly listWorkers: RequestHandler = asyncHandler(async (req, res) => {
@@ -32,7 +34,12 @@ export class WorkerController {
     const client = await requireWorkerForUser(this.store, user, req.params.workerId, res);
     if (!client) return;
 
-    res.json(toWorkerStateResponse(client));
+    const [gitRepositories, jiraIntegrations] = await Promise.all([
+      this.gitRepositories?.listGitflowSuggestions(client.workerId) ?? Promise.resolve([]),
+      this.jiraIntegrations?.listWorkerSettings(user.userId, client.workerId) ?? Promise.resolve([])
+    ]);
+
+    res.json(toWorkerStateResponse(client, gitRepositories, jiraIntegrations));
   });
 
   public readonly listWorkerCommands: RequestHandler = asyncHandler(async (req, res) => {
@@ -124,7 +131,8 @@ function readNonNegativeInteger(value: unknown, fallback: number): number {
 export function createWorkerController(
   store: WorkerStore,
   outputStorage?: CommandOutputStorage,
-  gitRepositories?: GitRepositoryStore
+  gitRepositories?: GitRepositoryStore,
+  jiraIntegrations?: JiraIntegrationStore
 ): WorkerController {
-  return new WorkerController(store, outputStorage, gitRepositories);
+  return new WorkerController(store, outputStorage, gitRepositories, jiraIntegrations);
 }

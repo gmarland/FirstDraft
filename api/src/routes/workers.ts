@@ -3,14 +3,16 @@ import { createWorkerController } from "../controllers/workers/workerController.
 import { CommandOutputStorage } from "../storage/commandOutputStorage.js";
 import { WorkerStore } from "../store/clientStore.js";
 import { GitRepositoryStore } from "../store/gitRepositories/gitRepositoryStore.js";
+import { JiraIntegrationStore } from "../store/integrations/jiraIntegrationStore.js";
 
 export function createWorkerRoutes(
   store: WorkerStore,
   outputStorage?: CommandOutputStorage,
-  gitRepositories?: GitRepositoryStore
+  gitRepositories?: GitRepositoryStore,
+  jiraIntegrations?: JiraIntegrationStore
 ): Router {
   const router = Router();
-  const controller = createWorkerController(store, outputStorage, gitRepositories);
+  const controller = createWorkerController(store, outputStorage, gitRepositories, jiraIntegrations);
 
   router.get("/", controller.listWorkers);
   router.get("/task-queue", controller.listTaskQueue);

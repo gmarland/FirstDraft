@@ -13,6 +13,8 @@ export type WorkerRegistration = {
   userId: string;
   connectionId: string;
   paths: string[];
+  gitRepositories?: GitRepositorySuggestion[];
+  jiraIntegrations?: WorkerJiraIntegration[];
   skills: string[];
   enabledTaskTypes: CommandMode[];
   state: ClientState;
@@ -26,6 +28,21 @@ export type WorkerRegistration = {
   lastSeenAt: string;
   stateUpdatedAt: string;
   stoppedAt?: string;
+};
+
+export type WorkerJiraIntegration = {
+  provider: "jira";
+  id: string;
+  connected: boolean;
+  enabled: boolean;
+  siteUrl: string;
+  boardName: string;
+  boardType: string;
+  readyStatusName: string;
+  processingStatusName: string;
+  processedStatusName: string;
+  assigneeCount: number;
+  updatedAt?: string;
 };
 
 export type Command = {
