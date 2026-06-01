@@ -17,8 +17,10 @@ function testAuthValidation(): void {
 }
 
 function testWorkerRequests(): void {
-  assert.equal(parseCommandMode(undefined), "ai");
-  assert.equal(parseCommandMode("shell"), "shell");
+  assert.equal(parseCommandMode(undefined), "gitflow");
+  assert.equal(parseCommandMode("gitflow"), "gitflow");
+  assert.equal(parseCommandMode("shell"), undefined);
+  assert.equal(parseCommandMode("ai"), undefined);
   assert.equal(parseCommandMode("invalid"), undefined);
   assert.deepEqual(parseGitflowPayload('{"repositoryUrl":" repo ","sourceBranch":" feature ","targetBranch":" main "}'), {
     repositoryUrl: "repo",
@@ -28,9 +30,9 @@ function testWorkerRequests(): void {
   assert.equal(parseGitflowPayload("{"), undefined);
   assert.deepEqual(getMissingSkills(["Git"], "gitflow"), []);
   assert.deepEqual(getMissingSkills([], "gitflow"), ["git"]);
-  assert.deepEqual(normalizeEnabledTaskTypes(undefined), ["ai", "shell", "gitflow"]);
-  assert.deepEqual(normalizeEnabledTaskTypes("gitflow|ai|unknown|ai"), ["gitflow", "ai"]);
-  assert.deepEqual(normalizeEnabledTaskTypes(["shell", "AI"]), ["shell", "ai"]);
+  assert.deepEqual(normalizeEnabledTaskTypes(undefined), ["gitflow"]);
+  assert.deepEqual(normalizeEnabledTaskTypes("gitflow|ai|unknown|ai"), ["gitflow"]);
+  assert.deepEqual(normalizeEnabledTaskTypes(["shell", "AI"]), ["gitflow"]);
   assert.deepEqual(readTaskQueueStatuses({}), ["queued", "in_progress", "completed", "failed"]);
   assert.deepEqual(readTaskQueueStatuses({ status: ["completed", "failed"] }), ["completed", "failed"]);
   assert.deepEqual(readTaskQueueStatuses({ status: ["queued", "invalid", "queued", "completed"] }), ["queued", "completed"]);

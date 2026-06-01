@@ -28,6 +28,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { EmptyState } from "../EmptyState";
 import { StatusBadge } from "../StatusBadge";
+import { formatCommandSummary } from "../../lib/commands";
 import { formatDate, relativeTime } from "../../lib/dates";
 import type {
   Command,
@@ -436,36 +437,10 @@ function Field({
 }
 
 function formatCommandMode(mode: Command["commandMode"]): string {
-  if (mode === "shell") return "Shell";
-  if (mode === "gitflow") return "Gitflow";
-  return "AI";
-}
-
-function formatCommandSummary(command: Command): string {
-  if (command.taskSummary) return command.taskSummary;
-  if (command.commandMode !== "gitflow") return command.command;
-
-  try {
-    const payload = JSON.parse(command.command) as Partial<{
-      repositoryUrl: string;
-      ticketNumber: string;
-      title: string;
-      description: string;
-    }>;
-    return `${payload.ticketNumber ?? "Gitflow"}: ${
-      payload.title ??
-      payload.description ??
-      payload.repositoryUrl ??
-      command.command
-    }`;
-  } catch {
-    return command.command;
-  }
+  return "Gitflow";
 }
 
 function formatCommandDetail(command: Command): string {
-  if (command.commandMode !== "gitflow") return command.command;
-
   try {
     const payload = JSON.parse(command.command) as Partial<{
       repositoryUrl: string;
@@ -497,9 +472,7 @@ function formatCommandDetail(command: Command): string {
 function formatSource(command: Command): { provider: string; key?: string } {
   const provider = command.sourceProvider
     ? titleCase(command.sourceProvider)
-    : command.commandMode === "gitflow"
-      ? "Manual"
-      : "-";
+    : "Manual";
   return { provider, key: command.sourceItemKey };
 }
 

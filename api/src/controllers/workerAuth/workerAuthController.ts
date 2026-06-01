@@ -459,7 +459,7 @@ function readTaskStartRequest(value: unknown): TaskStartRequest | undefined {
 
 function readCommandMode(value: unknown): CommandMode | undefined {
   const mode = readCleanString(value)?.toLowerCase();
-  if (mode === "ai" || mode === "shell" || mode === "gitflow") return mode;
+  if (mode === "gitflow") return mode;
   return undefined;
 }
 

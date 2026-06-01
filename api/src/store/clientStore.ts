@@ -136,7 +136,7 @@ export function createWorkerStore(
       await workers.markStaleWorkersStopped(timeoutSeconds);
     },
 
-    async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "ai", executionCommand?: string): Promise<Command> {
+    async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "gitflow", executionCommand?: string): Promise<Command> {
       return commands.createWorkerCommand(userId, workerId, command, commandMode, executionCommand);
     },
 
@@ -171,7 +171,6 @@ export function createWorkerStore(
     },
 
     async prepareGitflowCommandForWorker(command: Command, workerId: string): Promise<Command | undefined> {
-      if (command.commandMode !== "gitflow") return command;
       if (!gitRepositories) return undefined;
 
       const repositoryUrl = command.repositoryUrl ?? readGitflowPayloadString(command.command, "repositoryUrl");

@@ -1,7 +1,6 @@
 import { Box, Chip, List, ListItemButton, Stack, Typography } from "@mui/material";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import TerminalIcon from "@mui/icons-material/Terminal";
+import { formatCommandSummary } from "../lib/commands";
 import { formatDate, relativeTime } from "../lib/dates";
 import type { Command } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
@@ -32,7 +31,7 @@ export function CommandTimeline({ commands, selectedId, onSelect }: Props) {
               </Typography>
             </Stack>
             <Typography component="code" className="wrap-code" sx={{ display: "block" }}>
-              {formatCommand(command)}
+              {formatCommandSummary(command)}
             </Typography>
             {command.errorMessage && (
               <Typography color="error" variant="body2" sx={{ mt: 0.75 }}>
@@ -48,29 +47,9 @@ export function CommandTimeline({ commands, selectedId, onSelect }: Props) {
 
 function CommandModeIcon({ mode }: { mode: Command["commandMode"] }) {
   const sx = { mr: 1.25, mt: 0.4 };
-  if (mode === "shell") return <TerminalIcon fontSize="small" sx={sx} />;
-  if (mode === "gitflow") return <AccountTreeIcon fontSize="small" sx={sx} />;
-  return <AutoAwesomeIcon fontSize="small" sx={sx} />;
+  return <AccountTreeIcon fontSize="small" sx={sx} />;
 }
 
 function formatCommandMode(mode: Command["commandMode"]): string {
-  if (mode === "shell") return "Shell";
-  if (mode === "gitflow") return "Gitflow";
-  return "AI";
-}
-
-function formatCommand(command: Command): string {
-  if (command.commandMode !== "gitflow") return command.command;
-
-  try {
-    const payload = JSON.parse(command.command) as Partial<{
-      repositoryUrl: string;
-      sourceBranch: string;
-      ticketNumber: string;
-      description: string;
-    }>;
-    return `${payload.ticketNumber ?? "Gitflow"}: ${payload.description ?? payload.repositoryUrl ?? command.command}`;
-  } catch {
-    return command.command;
-  }
+  return "Gitflow";
 }

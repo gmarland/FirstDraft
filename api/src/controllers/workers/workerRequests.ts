@@ -7,8 +7,8 @@ const commandStatuses = new Set<CommandStatus>(["queued", "in_progress", "comple
 const taskQueueSortFields = new Set<TaskQueueSortBy>(["status", "source", "task", "worker", "repository", "created"]);
 
 export function parseCommandMode(value: string | undefined): CommandMode | undefined {
-  if (value === undefined) return "ai";
-  if (value === "ai" || value === "shell" || value === "gitflow") return value;
+  if (value === undefined) return "gitflow";
+  if (value === "gitflow") return value;
   return undefined;
 }
 

@@ -38,7 +38,7 @@ export class IntegrationLifecycleService {
   }
 
   private async recordAssignedRepositoryUsage(command: Command): Promise<void> {
-    if (!this.gitRepositories || command.commandMode !== "gitflow" || !command.workerId) return;
+    if (!this.gitRepositories || !command.workerId) return;
 
     const repositoryUrl = command.repositoryUrl ?? readGitflowPayloadString(command.command, "repositoryUrl");
     if (!repositoryUrl) return;

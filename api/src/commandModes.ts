@@ -1,6 +1,6 @@
 import type { CommandMode } from "./types.js";
 
-export const supportedCommandModes: CommandMode[] = ["ai", "shell", "gitflow"];
+export const supportedCommandModes: CommandMode[] = ["gitflow"];
 
 export function normalizeEnabledTaskTypes(value: unknown): CommandMode[] {
   const rawModes = readRawModes(value);
@@ -33,5 +33,5 @@ function readRawModes(value: unknown): string[] {
 }
 
 function isCommandMode(value: string): value is CommandMode {
-  return value === "ai" || value === "shell" || value === "gitflow";
+  return value === "gitflow";
 }

@@ -52,7 +52,7 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
     lastConnectionId: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
-    enabledTaskTypes: ["ai", "gitflow"],
+    enabledTaskTypes: ["gitflow"],
     maxConcurrentTasks: 2,
     state: "started",
     stateUpdatedAt: "2026-01-03T00:01:00.000Z",
@@ -76,7 +76,7 @@ function testWorkerRecordMappingNormalizesTaskTypes(): void {
     state_updated_at: "2026-01-03T00:01:00.000Z"
   });
 
-  assert.deepEqual(worker.enabledTaskTypes, ["ai", "gitflow"]);
+  assert.deepEqual(worker.enabledTaskTypes, ["gitflow"]);
 }
 
 function testWorkerRecordMappingPreservesUnlimitedCapacity(): void {
@@ -108,7 +108,7 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
     lastConnectionId: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
-    enabledTaskTypes: ["ai", "shell", "gitflow"],
+    enabledTaskTypes: ["gitflow"],
     maxConcurrentTasks: 2,
     state: "started",
     stateUpdatedAt: "2026-01-03T00:01:00.000Z"
@@ -117,7 +117,7 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
     userId: "user-1",
     workerId: "worker-1",
     command: "do work",
-    commandMode: "ai",
+    commandMode: "gitflow",
     status: "in_progress",
     createdAt: "2026-01-03T00:00:30.000Z"
   }]);
@@ -126,7 +126,7 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
   assert.deepEqual(worker.activeTransactionIds, ["command-1"]);
   assert.equal(worker.activeTaskCount, 1);
   assert.equal(worker.currentTransactionId, "command-1");
-  assert.deepEqual(worker.enabledTaskTypes, ["ai", "shell", "gitflow"]);
+  assert.deepEqual(worker.enabledTaskTypes, ["gitflow"]);
 }
 
 function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
@@ -149,7 +149,7 @@ function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
     userId: "user-1",
     workerId: "worker-1",
     command: "do work",
-    commandMode: "ai",
+    commandMode: "gitflow",
     status: "in_progress",
     createdAt: "2026-01-03T00:00:30.000Z"
   }]);

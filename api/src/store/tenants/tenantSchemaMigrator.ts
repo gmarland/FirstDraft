@@ -51,7 +51,7 @@ export class SchemaMigrator {
         last_connection_id text,
         paths text[] not null default '{}',
         skills text[] not null default '{}',
-        enabled_task_types text[] not null default '{ai,shell,gitflow}',
+        enabled_task_types text[] not null default '{gitflow}',
         max_concurrent_tasks integer default 1,
         state text not null default 'stopped',
         state_updated_at timestamptz,
@@ -118,7 +118,7 @@ export class SchemaMigrator {
         command text not null,
         task_summary text,
         execution_command text,
-        command_mode text not null default 'ai',
+        command_mode text not null default 'gitflow',
         repository_url text,
         normalized_repository_url text,
         status text not null,
@@ -203,27 +203,5 @@ export class SchemaMigrator {
         where transaction_id is not null;
     `);
 
-    await this.pool.query(`
-      create index if not exists worker_refresh_tokens_user_idx
-        on worker_refresh_tokens(user_id);
-
-      create index if not exists client_workers_user_idx
-        on client_workers(user_id);
-
-      alter table worker_git_repositories
-        add column if not exists source_branch text,
-        add column if not exists target_branch text;
-
-      update worker_git_repositories
-      set source_branch = coalesce(source_branch, last_source_branch, 'main'),
-        target_branch = coalesce(target_branch, source_branch, last_source_branch, 'main');
-
-      alter table worker_git_repositories
-        alter column source_branch set not null,
-        alter column target_branch set not null;
-
-      drop index if exists user_git_repositories_user_last_used_idx;
-      drop table if exists user_git_repositories;
-    `);
   }
 }

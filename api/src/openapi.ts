@@ -330,7 +330,7 @@ export const openApiDocument = {
         workerId: { type: "string" },
         paths: array({ type: "string" }),
         skills: array({ type: "string" }),
-        enabledTaskTypes: array({ type: "string", enum: ["ai", "shell", "gitflow"] }),
+        enabledTaskTypes: array({ type: "string", enum: ["gitflow"] }),
         maxConcurrentTasks: nullable({ type: "integer" }),
         gitRepositories: array(freeForm()),
         jiraIntegrations: array(freeForm())
@@ -345,7 +345,7 @@ export const openApiDocument = {
         normalizedRepositoryUrl: { type: "string" },
         command: { type: "string" },
         executionCommand: { type: "string" },
-        commandMode: { type: "string", enum: ["ai", "shell", "gitflow"] },
+        commandMode: { type: "string", enum: ["gitflow"] },
         metadata: freeForm()
       }, ["command", "commandMode"]),
       TaskStartResponse: object({
@@ -370,7 +370,7 @@ export const openApiDocument = {
         connectionId: { type: "string" },
         paths: array({ type: "string" }),
         skills: array({ type: "string" }),
-        enabledTaskTypes: array({ type: "string", enum: ["ai", "shell", "gitflow"] }),
+        enabledTaskTypes: array({ type: "string", enum: ["gitflow"] }),
         state: { type: "string", enum: ["started", "running_command", "stopped"] },
         currentTransactionId: { type: "string" },
         activeTransactionIds: array({ type: "string" }),
@@ -390,7 +390,7 @@ export const openApiDocument = {
         command: { type: "string" },
         taskSummary: { type: "string" },
         executionCommand: nullable({ type: "string" }),
-        commandMode: { type: "string", enum: ["ai", "shell", "gitflow"] },
+        commandMode: { type: "string", enum: ["gitflow"] },
         repositoryUrl: { type: "string" },
         normalizedRepositoryUrl: { type: "string" },
         status: { type: "string", enum: ["queued", "in_progress", "completed", "failed"] },

@@ -71,7 +71,7 @@ async function testCreateQueuedCommandAddsOwnerMembership(): Promise<void> {
   const result = await store.createQueuedCommand({
     userId: "user-1",
     command: "echo hello",
-    commandMode: "shell"
+    commandMode: "gitflow"
   });
 
   assert.equal(result.userId, "user-1");
@@ -81,7 +81,7 @@ async function testCreateQueuedCommandAddsOwnerMembership(): Promise<void> {
 }
 
 function testBuildTaskSummary(): void {
-  assert.equal(buildTaskSummary("echo hello", "shell"), "echo hello");
+  assert.equal(buildTaskSummary("echo hello", "gitflow"), "echo hello");
   assert.equal(
     buildTaskSummary(
       JSON.stringify({
@@ -311,7 +311,7 @@ async function testMarkWorkerCommandInProgressScopesClaimToWorkerOwner(): Promis
     transactionId: "owned-unassigned",
     userId: "user-1",
     command: "echo hello",
-    commandMode: "shell",
+    commandMode: "gitflow",
     status: "queued",
     createdAt: "2026-05-24T09:00:00.000Z"
   }, "worker-1");
@@ -349,7 +349,7 @@ function commandRow(
     command: "echo hello",
     task_summary: overrides.taskSummary ?? "echo hello",
     execution_command: null,
-    command_mode: "shell",
+    command_mode: "gitflow",
     repository_url: null,
     normalized_repository_url: null,
     source_provider: overrides.sourceProvider ?? null,

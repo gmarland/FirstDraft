@@ -22,7 +22,7 @@ export type ClientState = "started" | "running_command" | "stopped";
 
 export type CommandStatus = "queued" | "in_progress" | "completed" | "failed";
 
-export type CommandMode = "ai" | "shell" | "gitflow";
+export type CommandMode = "gitflow";
 
 export type Command = {
   transactionId: string;
