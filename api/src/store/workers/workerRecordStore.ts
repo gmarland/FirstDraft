@@ -14,9 +14,8 @@ export type WorkerRecord = {
   lastConnectionId?: string;
   paths: string[];
   skills: string[];
-  enabled: boolean;
   enabledTaskTypes: CommandMode[];
-  maxConcurrentTasks: number;
+  maxConcurrentTasks: number | null;
   state: ClientState;
   stateUpdatedAt: string;
   stoppedAt?: string;
@@ -29,7 +28,7 @@ export type UpsertWorkerRegistrationInput = {
   paths: string[];
   skills: string[];
   enabledTaskTypes?: CommandMode[];
-  maxConcurrentTasks?: number;
+  maxConcurrentTasks?: number | null;
 };
 
 export class WorkerRecordStore {
@@ -144,6 +143,38 @@ export class WorkerRecordStore {
     );
   }
 
+  public async refreshWorkerHeartbeat(workerId: string, userId: string): Promise<WorkerRecord | undefined> {
+    const result = await this.pool.query(
+      `
+        update client_workers
+        set last_seen_at = now(),
+          state = case when state = 'stopped' then 'started' else state end,
+          state_updated_at = case when state = 'stopped' then now() else state_updated_at end,
+          stopped_at = null
+        where worker_id = $1
+          and user_id = $2
+        returning ${workerRecordColumns}
+      `,
+      [workerId, userId]
+    );
+
+    return result.rows[0] ? mapWorkerRecord(result.rows[0]) : undefined;
+  }
+
+  public async markStaleWorkersStopped(timeoutSeconds: number): Promise<void> {
+    await this.pool.query(
+      `
+        update client_workers
+        set state = 'stopped',
+          state_updated_at = now(),
+          stopped_at = now()
+        where state <> 'stopped'
+          and coalesce(last_seen_at, last_registered_at, first_registered_at) < now() - ($1::int * interval '1 second')
+      `,
+      [timeoutSeconds]
+    );
+  }
+
   public async markAllWorkersStopped(): Promise<void> {
     await this.pool.query(
       `
@@ -154,36 +185,6 @@ export class WorkerRecordStore {
         where state <> 'stopped'
       `
     );
-  }
-
-  public async setWorkerEnabledForUser(userId: string, workerId: string, enabled: boolean): Promise<WorkerRecord | undefined> {
-    const result = await this.pool.query(
-      `
-        update client_workers
-        set enabled = $3
-        where client_workers.user_id = $1
-          and client_workers.worker_id = $2
-        returning ${workerRecordColumns}
-      `,
-      [userId, workerId, enabled]
-    );
-
-    return result.rows[0] ? mapWorkerRecord(result.rows[0]) : undefined;
-  }
-
-  public async disableWorkersForUser(userId: string): Promise<WorkerRecord[]> {
-    const result = await this.pool.query(
-      `
-        update client_workers
-        set enabled = false
-        where client_workers.user_id = $1
-          and client_workers.enabled = true
-        returning ${workerRecordColumns}
-      `,
-      [userId]
-    );
-
-    return result.rows.map(mapWorkerRecord);
   }
 
   public async refreshWorkerActivity(workerId: string, state: Exclude<ClientState, "stopped">): Promise<void> {
@@ -211,7 +212,6 @@ const workerRecordColumnNames = [
   "last_connection_id",
   "paths",
   "skills",
-  "enabled",
   "enabled_task_types",
   "max_concurrent_tasks",
   "state",
@@ -237,9 +237,8 @@ export function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
     lastConnectionId: row.last_connection_id ? String(row.last_connection_id) : undefined,
     paths: Array.isArray(row.paths) ? row.paths.map(String) : [],
     skills: Array.isArray(row.skills) ? row.skills.map(String) : [],
-    enabled: row.enabled !== false,
     enabledTaskTypes: normalizeEnabledTaskTypes(row.enabled_task_types),
-    maxConcurrentTasks: normalizeMaxConcurrentTasks(Number(row.max_concurrent_tasks)),
+    maxConcurrentTasks: normalizeMaxConcurrentTasks(row.max_concurrent_tasks),
     state,
     stateUpdatedAt: toIsoString(stateUpdatedAt),
     stoppedAt: row.stopped_at ? toIsoString(row.stopped_at) : undefined
@@ -251,7 +250,9 @@ function mapWorkerState(value: unknown): ClientState {
   return "stopped";
 }
 
-function normalizeMaxConcurrentTasks(value: unknown): number {
-  const numeric = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : 1;
+function normalizeMaxConcurrentTasks(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const numeric = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : null;
+  if (numeric === null) return null;
   return Math.max(1, Math.min(8, numeric));
 }

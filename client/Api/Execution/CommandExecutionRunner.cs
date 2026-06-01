@@ -16,7 +16,7 @@ namespace FirstDraft.Api.Execution
         private readonly CommandEventOutbox _commandEvents;
         private readonly CommandEventFlusher _commandEventFlusher;
         private readonly CommandDispatcher _commandDispatcher;
-        private readonly SemaphoreSlim _commandCapacity;
+        private readonly SemaphoreSlim? _commandCapacity;
 
         public CommandExecutionRunner(
             Log logger,
@@ -32,16 +32,17 @@ namespace FirstDraft.Api.Execution
             _commandEvents = commandEvents;
             _commandEventFlusher = commandEventFlusher;
             _commandDispatcher = commandDispatcher;
-            _commandCapacity = new SemaphoreSlim(
-                WorkerApiSettings.GetMaxConcurrentTasks(applicationData),
-                WorkerApiSettings.GetMaxConcurrentTasks(applicationData));
+            int? maxConcurrentTasks = WorkerApiSettings.GetMaxConcurrentTasks(applicationData);
+            _commandCapacity = maxConcurrentTasks.HasValue
+                ? new SemaphoreSlim(maxConcurrentTasks.Value, maxConcurrentTasks.Value)
+                : null;
         }
 
-        public int AvailableCapacity => _commandCapacity.CurrentCount;
+        public int? AvailableCapacity => _commandCapacity?.CurrentCount;
 
         public async Task RunCommand(string transactionId, string command, string commandMode)
         {
-            await _commandCapacity.WaitAsync();
+            if (_commandCapacity != null) await _commandCapacity.WaitAsync();
 
             try
             {
@@ -82,7 +83,7 @@ namespace FirstDraft.Api.Execution
             }
             finally
             {
-                _commandCapacity.Release();
+                _commandCapacity?.Release();
             }
         }
 

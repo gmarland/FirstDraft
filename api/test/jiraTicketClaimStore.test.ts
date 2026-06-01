@@ -13,9 +13,9 @@ class SuccessfulClaimDbClient implements DbClient {
     }
 
     assert.match(sql, /with worker_integration as/);
-    assert.match(sql, /workers\.enabled = true/);
     assert.match(sql, /'gitflow' = any\(workers\.enabled_task_types\)/);
     assert.match(sql, /'git' = any\(workers\.skills\)/);
+    assert.match(sql, /workers\.max_concurrent_tasks is null/);
     assert.match(sql, /active_commands\.status = 'in_progress'/);
     assert.match(sql, /active_commands\.claimed_at >= now\(\) - \(\$13::int \* interval '1 minute'\)/);
     assert.match(sql, /repositories\.normalized_repository_url = \$8/);
@@ -264,7 +264,6 @@ class CapacityRejectedClaimDbClient implements DbClient {
       rows: [
         {
           worker_exists: true,
-          worker_enabled: true,
           integration_exists: true,
           integration_enabled: true,
           gitflow_enabled: true,

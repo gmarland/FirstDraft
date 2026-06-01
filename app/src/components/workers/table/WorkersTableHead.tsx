@@ -6,7 +6,6 @@ export function WorkersTableHead() {
       <TableRow>
         <TableCell>Worker</TableCell>
         <TableCell>State</TableCell>
-        <TableCell>Enabled</TableCell>
         <TableCell>Task slots</TableCell>
         <TableCell>Task types</TableCell>
         <TableCell>Skills</TableCell>

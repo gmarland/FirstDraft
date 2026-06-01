@@ -1,6 +1,7 @@
-using FirstDraft.Api.Contracts;
 using FirstDraft.Api.Auth;
-using FirstDraft.Api.Hub;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using FirstDraft.Configuration;
 using FirstDraft.Infrastructure.Logging;
 
 namespace FirstDraft.Api.Outbox
@@ -8,26 +9,26 @@ namespace FirstDraft.Api.Outbox
     internal sealed class CommandEventFlusher
     {
         private readonly Log _logger;
+        private readonly ApplicationData _applicationData;
         private readonly WorkerTokenManager _tokens;
         private readonly CommandEventOutbox _commandEvents;
-        private readonly WorkerHubConnection _hub;
+        private readonly HttpClient _http = new HttpClient();
         private readonly SemaphoreSlim _flushLock = new SemaphoreSlim(1, 1);
 
         public CommandEventFlusher(
             Log logger,
+            ApplicationData applicationData,
             WorkerTokenManager tokens,
-            CommandEventOutbox commandEvents,
-            WorkerHubConnection hub)
+            CommandEventOutbox commandEvents)
         {
             _logger = logger;
+            _applicationData = applicationData;
             _tokens = tokens;
             _commandEvents = commandEvents;
-            _hub = hub;
         }
 
         public async Task FlushPendingCommandEvents(bool waitForLock = false)
         {
-            if (!_hub.IsConnected) return;
             if (waitForLock)
             {
                 await _flushLock.WaitAsync();
@@ -39,7 +40,7 @@ namespace FirstDraft.Api.Outbox
 
             try
             {
-                while (_hub.IsConnected)
+                while (true)
                 {
                     IReadOnlyList<PendingCommandEvent> events = await _commandEvents.ReadAll();
                     if (events.Count == 0) return;
@@ -47,8 +48,6 @@ namespace FirstDraft.Api.Outbox
                     List<string> deliveredEventIds = new List<string>();
                     foreach (PendingCommandEvent pendingEvent in events)
                     {
-                        if (!_hub.IsConnected) break;
-
                         try
                         {
                             await SendPendingCommandEvent(pendingEvent);
@@ -82,39 +81,52 @@ namespace FirstDraft.Api.Outbox
             switch (pendingEvent.Type)
             {
                 case CommandEventType.OutputChunk:
-                    object?[] outputChunkArguments = new object?[WorkerHubContract.CommandOutputChunkArguments.EmittedAt + 1];
-                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.AccessToken] = accessToken;
-                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.TransactionId] = pendingEvent.TransactionId;
-                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.Sequence] = pendingEvent.Sequence;
-                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.Stream] = pendingEvent.Stream;
-                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.Text] = pendingEvent.Text;
-                    outputChunkArguments[WorkerHubContract.CommandOutputChunkArguments.EmittedAt] = pendingEvent.EmittedAt;
-
-                    await _hub.InvokeAsync(WorkerHubContract.ServerMethods.CommandOutputChunk, outputChunkArguments);
+                    await PostJson(
+                        $"/api/worker-auth/tasks/{Uri.EscapeDataString(pendingEvent.TransactionId)}/output",
+                        accessToken,
+                        new
+                        {
+                            sequence = pendingEvent.Sequence,
+                            stream = pendingEvent.Stream,
+                            text = pendingEvent.Text,
+                            emittedAt = pendingEvent.EmittedAt
+                        });
                     return;
 
                 case CommandEventType.CommandResult:
-                    object?[] commandResultArguments = new object?[WorkerHubContract.CommandResultArguments.ErrorMessage + 1];
-                    commandResultArguments[WorkerHubContract.CommandResultArguments.AccessToken] = accessToken;
-                    commandResultArguments[WorkerHubContract.CommandResultArguments.TransactionId] = pendingEvent.TransactionId;
-                    commandResultArguments[WorkerHubContract.CommandResultArguments.Result] = pendingEvent.Result;
-                    commandResultArguments[WorkerHubContract.CommandResultArguments.ErrorMessage] = pendingEvent.ErrorMessage;
-
-                    await _hub.InvokeAsync(WorkerHubContract.ServerMethods.ExecuteCommandResult, commandResultArguments);
+                    await PostJson(
+                        $"/api/worker-auth/tasks/{Uri.EscapeDataString(pendingEvent.TransactionId)}/complete",
+                        accessToken,
+                        new
+                        {
+                            result = pendingEvent.Result,
+                            errorMessage = pendingEvent.ErrorMessage
+                        });
                     return;
 
                 case CommandEventType.CommandRejected:
-                    object?[] rejectCommandArguments = new object?[WorkerHubContract.RejectCommandArguments.Reason + 1];
-                    rejectCommandArguments[WorkerHubContract.RejectCommandArguments.AccessToken] = accessToken;
-                    rejectCommandArguments[WorkerHubContract.RejectCommandArguments.TransactionId] = pendingEvent.TransactionId;
-                    rejectCommandArguments[WorkerHubContract.RejectCommandArguments.Reason] = pendingEvent.ErrorMessage ?? "worker rejected command";
-
-                    await _hub.InvokeAsync(WorkerHubContract.ServerMethods.RejectCommand, rejectCommandArguments);
+                    await PostJson(
+                        $"/api/worker-auth/tasks/{Uri.EscapeDataString(pendingEvent.TransactionId)}/reject",
+                        accessToken,
+                        new
+                        {
+                            reason = pendingEvent.ErrorMessage ?? "worker rejected command"
+                        });
                     return;
 
                 default:
                     throw new InvalidOperationException($"Unsupported pending command event type: {pendingEvent.Type}");
             }
+        }
+
+        private async Task PostJson(string path, string accessToken, object body)
+        {
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, $"{_applicationData.ExternalAPI}{path}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            request.Content = JsonContent.Create(body);
+
+            using HttpResponseMessage response = await _http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
         }
     }
 }

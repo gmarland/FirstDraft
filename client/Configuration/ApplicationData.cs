@@ -71,7 +71,7 @@ namespace FirstDraft.Configuration
 
         public string? GitWorkspaceDirectory { get; set; }
 
-        public int MaxConcurrentTasks { get; set; } = 1;
+        public int? MaxConcurrentTasks { get; set; } = 1;
 
         public GitRepositoryConfig[]? GitRepositories { get; set; }
 

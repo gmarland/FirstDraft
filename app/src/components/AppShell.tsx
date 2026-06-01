@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import AppsIcon from "@mui/icons-material/Apps";
 import HubIcon from "@mui/icons-material/Hub";
+import PlaylistAddCheckIcon from "@mui/icons-material/PlaylistAddCheck";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -23,6 +24,7 @@ export function AppShell() {
   const workersActive =
     location.pathname === "/workers" ||
     location.pathname.startsWith("/workers/");
+  const taskQueueActive = location.pathname === "/task-queue";
   const profileActive = location.pathname === "/profile";
   const drawerWidth = 260;
 
@@ -66,6 +68,16 @@ export function AppShell() {
               <AppsIcon />
             </ListItemIcon>
             <ListItemText primary="Workers" />
+          </ListItemButton>
+          <ListItemButton
+            selected={taskQueueActive}
+            onClick={() => navigate("/task-queue")}
+            sx={navSx}
+          >
+            <ListItemIcon sx={iconSx}>
+              <PlaylistAddCheckIcon />
+            </ListItemIcon>
+            <ListItemText primary="Task queue" />
           </ListItemButton>
         </List>
 

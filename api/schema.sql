@@ -46,7 +46,7 @@ create table if not exists client_workers (
   skills text[] not null default '{}',
   enabled boolean not null default true,
   enabled_task_types text[] not null default '{ai,shell,gitflow}',
-  max_concurrent_tasks integer not null default 1,
+  max_concurrent_tasks integer default 1,
   state text not null default 'stopped',
   state_updated_at timestamptz,
   stopped_at timestamptz

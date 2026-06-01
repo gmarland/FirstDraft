@@ -13,7 +13,6 @@ namespace FirstDraft.Api.Integrations.Jira
         private readonly Log _logger;
         private readonly ApplicationData _applicationData;
         private readonly WorkerTokenManager _tokens;
-        private readonly WorkerHubConnection _hub;
         private readonly CommandExecutionRunner _commands;
 
         private JiraTicketPollingService? _jiraTicketPolling;
@@ -22,13 +21,11 @@ namespace FirstDraft.Api.Integrations.Jira
             Log logger,
             ApplicationData applicationData,
             WorkerTokenManager tokens,
-            WorkerHubConnection hub,
             CommandExecutionRunner commands)
         {
             _logger = logger;
             _applicationData = applicationData;
             _tokens = tokens;
-            _hub = hub;
             _commands = commands;
         }
 
@@ -38,8 +35,9 @@ namespace FirstDraft.Api.Integrations.Jira
 
             int repositoryCount = GitRepositoryConfigurationService.NormalizeRepositories(_applicationData.GitRepositories).Length;
             int integrationCount = JiraIntegrationConfigService.BuildRegistrationPayload(_applicationData).Length;
-            int maxConcurrentTasks = WorkerApiSettings.GetMaxConcurrentTasks(_applicationData);
-            _logger.Info($"Starting Jira ticket polling; interval: {JiraTicketPollingService.PollIntervalSeconds}s, configured integrations: {integrationCount}, configured Git repositories: {repositoryCount}, available capacity: {_commands.AvailableCapacity}/{maxConcurrentTasks}");
+            string maxConcurrentTasks = WorkerApiSettings.FormatMaxConcurrentTasks(_applicationData);
+            string availableCapacity = _commands.AvailableCapacity.HasValue ? _commands.AvailableCapacity.Value.ToString() : "unlimited";
+            _logger.Info($"Starting Jira ticket polling; interval: {JiraTicketPollingService.PollIntervalSeconds}s, configured integrations: {integrationCount}, configured Git repositories: {repositoryCount}, available capacity: {availableCapacity}/{maxConcurrentTasks}");
 
             _jiraTicketPolling = new JiraTicketPollingService(
                 _logger,
@@ -47,8 +45,7 @@ namespace FirstDraft.Api.Integrations.Jira
                 () => _tokens.EnsureAccessTokenAsync(),
                 () =>
                 {
-                    if (!_hub.IsConnected) return "SignalR connection is not connected";
-                    if (_commands.AvailableCapacity <= 0) return "no command capacity is available";
+                    if (_commands.AvailableCapacity.HasValue && _commands.AvailableCapacity.Value <= 0) return "no command capacity is available";
                     return null;
                 },
                 _commands.RunCommand);

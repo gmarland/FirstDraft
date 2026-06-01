@@ -7,6 +7,8 @@ import { WorkerLocalRepositories1730000000000 } from "./migrations/1730000000000
 import { WorkerLocalJiraIntegrations1740000000000 } from "./migrations/1740000000000-WorkerLocalJiraIntegrations.js";
 import { ShortJiraIntegrationIds1750000000000 } from "./migrations/1750000000000-ShortJiraIntegrationIds.js";
 import { RemoveApiKeys1760000000000 } from "./migrations/1760000000000-RemoveApiKeys.js";
+import { RemoveWorkerEnabled1770000000000 } from "./migrations/1770000000000-RemoveWorkerEnabled.js";
+import { NullableWorkerMaxConcurrentTasks1780000000000 } from "./migrations/1780000000000-NullableWorkerMaxConcurrentTasks.js";
 
 export function createDataSource(databaseUrl: string): DataSource {
   return new DataSource({
@@ -20,6 +22,8 @@ export function createDataSource(databaseUrl: string): DataSource {
       WorkerLocalJiraIntegrations1740000000000,
       ShortJiraIntegrationIds1750000000000,
       RemoveApiKeys1760000000000,
+      RemoveWorkerEnabled1770000000000,
+      NullableWorkerMaxConcurrentTasks1780000000000,
     ],
     synchronize: false,
     migrationsRun: false,

@@ -15,6 +15,7 @@ import { WorkersPage } from "./routes/WorkersPage";
 import { CreateUserPage } from "./routes/CreateUserPage";
 import { LoginPage } from "./routes/LoginPage";
 import { ProfilePage } from "./routes/ProfilePage";
+import { TaskQueuePage } from "./routes/TaskQueuePage";
 
 export function App() {
   return (
@@ -31,6 +32,7 @@ export function App() {
             <Route index element={<Navigate to="/workers" replace />} />
             <Route path="workers" element={<WorkersRoute />} />
             <Route path="workers/:workerId" element={<WorkerRoute />} />
+            <Route path="task-queue" element={<TaskQueuePage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>

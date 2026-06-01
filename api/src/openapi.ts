@@ -27,16 +27,6 @@ export const openApiDocument = {
         }
       }
     },
-    "/WorkerHub/negotiate": {
-      post: {
-        tags: ["Workers"],
-        summary: "Negotiate a SignalR worker hub connection",
-        responses: {
-          "200": jsonResponse("Negotiation payload", freeForm()),
-          "401": errorResponse()
-        }
-      }
-    },
     "/api/auth/signup": {
       post: {
         tags: ["Auth"],
@@ -128,19 +118,88 @@ export const openApiDocument = {
         }
       }
     },
-    "/api/worker-auth/integration-tickets/jira/claim": {
+    "/api/worker-auth/register": {
       post: {
         tags: ["Worker Auth"],
-        summary: "Claim a Jira ticket for the authenticated worker",
+        summary: "Register or refresh worker metadata",
         security: bearerSecurity(),
-        requestBody: jsonBody(ref("JiraTicketClaimRequest"), true),
+        requestBody: jsonBody(ref("WorkerRegistrationReport"), true),
         responses: {
-          "201": jsonResponse("Claimed Jira ticket", ref("JiraTicketClaimResponse")),
+          "200": jsonResponse("Registered worker", ref("WorkerRegistration")),
+          "400": errorResponse(),
+          "401": errorResponse(),
+          "403": errorResponse()
+        }
+      }
+    },
+    "/api/worker-auth/heartbeat": {
+      post: {
+        tags: ["Worker Auth"],
+        summary: "Refresh worker heartbeat",
+        security: bearerSecurity(),
+        responses: {
+          "200": jsonResponse("Worker state", ref("WorkerRegistration")),
+          "401": errorResponse(),
+          "404": errorResponse()
+        }
+      }
+    },
+    "/api/worker-auth/tasks/start": {
+      post: {
+        tags: ["Worker Auth"],
+        summary: "Report a worker-started task",
+        security: bearerSecurity(),
+        requestBody: jsonBody(ref("TaskStartReport"), true),
+        responses: {
+          "201": jsonResponse("Started task", ref("TaskStartResponse")),
           "400": errorResponse(),
           "401": errorResponse(),
           "403": errorResponse(),
-          "409": errorResponse(),
-          "503": errorResponse()
+          "409": errorResponse()
+        }
+      }
+    },
+    "/api/worker-auth/tasks/{transactionId}/output": {
+      post: {
+        tags: ["Worker Auth"],
+        summary: "Append worker task output",
+        security: bearerSecurity(),
+        parameters: [pathParam("transactionId", "Transaction id")],
+        requestBody: jsonBody(ref("TaskOutputChunk"), true),
+        responses: {
+          "202": jsonResponse("Accepted output chunk", ref("OkResponse")),
+          "204": { description: "Output storage is not configured" },
+          "400": errorResponse(),
+          "401": errorResponse(),
+          "404": errorResponse()
+        }
+      }
+    },
+    "/api/worker-auth/tasks/{transactionId}/complete": {
+      post: {
+        tags: ["Worker Auth"],
+        summary: "Complete a worker task",
+        security: bearerSecurity(),
+        parameters: [pathParam("transactionId", "Transaction id")],
+        requestBody: jsonBody(ref("TaskCompleteReport"), true),
+        responses: {
+          "200": jsonResponse("Completed command", ref("Command")),
+          "401": errorResponse(),
+          "404": errorResponse()
+        }
+      }
+    },
+    "/api/worker-auth/tasks/{transactionId}/reject": {
+      post: {
+        tags: ["Worker Auth"],
+        summary: "Reject a worker task",
+        security: bearerSecurity(),
+        parameters: [pathParam("transactionId", "Transaction id")],
+        requestBody: jsonBody(object({ reason: { type: "string" } }), false),
+        responses: {
+          "200": jsonResponse("Rejected command", ref("Command")),
+          "401": errorResponse(),
+          "404": errorResponse()
         }
       }
     },
@@ -151,17 +210,6 @@ export const openApiDocument = {
         security: bearerSecurity(),
         responses: {
           "200": jsonResponse("Workers", array(ref("WorkerRegistration"))),
-          "401": errorResponse()
-        }
-      }
-    },
-    "/api/workers/disable-all": {
-      post: {
-        tags: ["Workers"],
-        summary: "Disable all enabled workers for the current user",
-        security: bearerSecurity(),
-        responses: {
-          "200": jsonResponse("Disabled workers", array(ref("WorkerRegistration"))),
           "401": errorResponse()
         }
       }
@@ -194,21 +242,6 @@ export const openApiDocument = {
         }
       }
     },
-    "/api/workers/{workerId}": {
-      patch: {
-        tags: ["Workers"],
-        summary: "Enable or disable a worker",
-        security: bearerSecurity(),
-        parameters: [pathParam("workerId", "Worker id")],
-        requestBody: jsonBody(ref("SetWorkerEnabledRequest"), true),
-        responses: {
-          "200": jsonResponse("Updated worker", ref("WorkerRegistration")),
-          "400": errorResponse(),
-          "401": errorResponse(),
-          "404": errorResponse()
-        }
-      }
-    },
     "/api/workers/{workerId}/state": workerGet("Get worker state", ref("WorkerRegistration")),
     "/api/workers/{workerId}/commands": {
       get: {
@@ -225,40 +258,9 @@ export const openApiDocument = {
           "401": errorResponse(),
           "404": errorResponse()
         }
-      },
-      post: {
-        tags: ["Workers"],
-        summary: "Queue a worker command",
-        security: bearerSecurity(),
-        parameters: [pathParam("workerId", "Worker id")],
-        requestBody: jsonBody(ref("CreateCommandRequest"), true),
-        responses: {
-          "202": jsonResponse("Queued command", ref("Command")),
-          "400": errorResponse(),
-          "401": errorResponse(),
-          "404": errorResponse()
-        }
       }
     },
-    "/api/workers/{workerId}/gitflow-suggestions": workerGet(
-      "List gitflow repository suggestions for a worker",
-      object({ repositories: array(ref("GitRepositorySuggestion")) }, ["repositories"])
-    ),
     "/api/workers/{workerId}/commands/{transactionId}": workerCommandGet("Get a worker command", ref("Command")),
-    "/api/workers/{workerId}/commands/{transactionId}/cancel": {
-      post: {
-        tags: ["Workers"],
-        summary: "Cancel a worker command",
-        security: bearerSecurity(),
-        parameters: workerCommandParams(),
-        requestBody: jsonBody(ref("CancelCommandRequest"), false),
-        responses: {
-          "200": jsonResponse("Cancelled command", ref("Command")),
-          "401": errorResponse(),
-          "404": errorResponse()
-        }
-      }
-    },
     "/api/workers/{workerId}/commands/{transactionId}/output": {
       get: {
         tags: ["Workers"],
@@ -324,7 +326,17 @@ export const openApiDocument = {
         configEncryptionKey: { type: "string" }
       }, ["accessToken", "refreshToken", "configEncryptionKey"]),
       WorkerPublicKeyResponse: object({ alg: { type: "string", example: "RS256" }, publicKey: { type: "string" } }, ["alg", "publicKey"]),
-      JiraTicketClaimRequest: object({
+      WorkerRegistrationReport: object({
+        workerId: { type: "string" },
+        paths: array({ type: "string" }),
+        skills: array({ type: "string" }),
+        enabledTaskTypes: array({ type: "string", enum: ["ai", "shell", "gitflow"] }),
+        maxConcurrentTasks: nullable({ type: "integer" }),
+        gitRepositories: array(freeForm()),
+        jiraIntegrations: array(freeForm())
+      }, ["workerId"]),
+      TaskStartReport: object({
+        provider: { type: "string" },
         integrationId: { type: "string" },
         sourceItemId: { type: "string" },
         sourceItemKey: { type: "string" },
@@ -332,26 +344,37 @@ export const openApiDocument = {
         repositoryUrl: { type: "string" },
         normalizedRepositoryUrl: { type: "string" },
         command: { type: "string" },
+        executionCommand: { type: "string" },
+        commandMode: { type: "string", enum: ["ai", "shell", "gitflow"] },
         metadata: freeForm()
-      }, ["integrationId", "sourceItemId", "sourceItemKey", "sourceItemUrl", "repositoryUrl", "normalizedRepositoryUrl", "command"]),
-      JiraTicketClaimResponse: object({
+      }, ["command", "commandMode"]),
+      TaskStartResponse: object({
         claimed: { type: "boolean" },
         transactionId: { type: "string" },
         eventId: { type: "string" },
         command: ref("Command")
-      }, ["claimed"]),
+      }, ["transactionId", "command"]),
+      TaskOutputChunk: object({
+        sequence: { type: "integer" },
+        stream: { type: "string", enum: ["stdout", "stderr"] },
+        text: { type: "string" },
+        emittedAt: { type: "string", format: "date-time" }
+      }, ["sequence", "stream", "text"]),
+      TaskCompleteReport: object({
+        result: nullable({ type: "string" }),
+        errorMessage: nullable({ type: "string" })
+      }),
       WorkerRegistration: object({
         workerId: { type: "string" },
         userId: { type: "string" },
         connectionId: { type: "string" },
         paths: array({ type: "string" }),
         skills: array({ type: "string" }),
-        enabled: { type: "boolean" },
         enabledTaskTypes: array({ type: "string", enum: ["ai", "shell", "gitflow"] }),
         state: { type: "string", enum: ["started", "running_command", "stopped"] },
         currentTransactionId: { type: "string" },
         activeTransactionIds: array({ type: "string" }),
-        maxConcurrentTasks: { type: "integer" },
+        maxConcurrentTasks: nullable({ type: "integer" }),
         activeTaskCount: { type: "integer" },
         registeredAt: { type: "string", format: "date-time" },
         firstRegisteredAt: { type: "string", format: "date-time" },
@@ -359,13 +382,7 @@ export const openApiDocument = {
         lastSeenAt: { type: "string", format: "date-time" },
         stateUpdatedAt: { type: "string", format: "date-time" },
         stoppedAt: { type: "string", format: "date-time" }
-      }, ["workerId", "userId", "connectionId", "paths", "skills", "enabled", "enabledTaskTypes", "state", "registeredAt", "firstRegisteredAt", "lastRegisteredAt", "lastSeenAt", "stateUpdatedAt"]),
-      SetWorkerEnabledRequest: object({ enabled: { type: "boolean" } }, ["enabled"]),
-      CreateCommandRequest: object({
-        command: { type: "string" },
-        commandMode: { type: "string", enum: ["ai", "shell", "gitflow"], default: "ai" }
-      }, ["command"]),
-      CancelCommandRequest: object({ reason: { type: "string" } }),
+      }, ["workerId", "userId", "connectionId", "paths", "skills", "enabledTaskTypes", "state", "registeredAt", "firstRegisteredAt", "lastRegisteredAt", "lastSeenAt", "stateUpdatedAt"]),
       Command: object({
         transactionId: { type: "string" },
         userId: { type: "string" },
@@ -394,14 +411,7 @@ export const openApiDocument = {
         page: { type: "integer" },
         pageSize: { type: "integer" }
       }, ["commands", "total", "page", "pageSize"]),
-      CommandResponses: object({ command: ref("Command"), responses: array(freeForm()) }, ["command", "responses"]),
-      GitRepositorySuggestion: object({
-        repositoryUrl: { type: "string" },
-        normalizedRepositoryUrl: { type: "string" },
-        sourceBranch: { type: "string" },
-        targetBranch: { type: "string" },
-        lastUsedAt: { type: "string", format: "date-time" }
-      }, ["repositoryUrl", "normalizedRepositoryUrl", "sourceBranch", "targetBranch", "lastUsedAt"])
+      CommandResponses: object({ command: ref("Command"), responses: array(freeForm()) }, ["command", "responses"])
     }
   }
 } as const;

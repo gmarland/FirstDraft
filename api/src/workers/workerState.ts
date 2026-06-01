@@ -1,12 +1,13 @@
 import { WorkerRegistration } from "../types.js";
 
-export function normalizeMaxConcurrentTasks(value: unknown): number {
+export function normalizeMaxConcurrentTasks(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
   const numeric = typeof value === "number"
     ? value
     : typeof value === "string" && value.trim()
       ? Number(value)
-      : 1;
-  if (!Number.isFinite(numeric)) return 1;
+      : null;
+  if (numeric === null || !Number.isFinite(numeric)) return null;
   return Math.max(1, Math.min(8, Math.floor(numeric)));
 }
 
@@ -27,5 +28,6 @@ export function getActiveTransactionIds(
 
 export function canDispatchMoreCommands(client?: WorkerRegistration): boolean {
   if (!client || client.state === "stopped") return false;
-  return getActiveTransactionIds(client).length < normalizeMaxConcurrentTasks(client.maxConcurrentTasks);
+  const maxConcurrentTasks = normalizeMaxConcurrentTasks(client.maxConcurrentTasks);
+  return maxConcurrentTasks === null || getActiveTransactionIds(client).length < maxConcurrentTasks;
 }

@@ -15,6 +15,10 @@ export type CreateQueuedCommandInput = {
   normalizedRepositoryUrl?: string;
 };
 
+export type CreateReportedCommandInput = CreateQueuedCommandInput & {
+  workerId: string;
+};
+
 export class CommandStore {
   public constructor(private readonly pool: DbClient) {}
 
@@ -60,6 +64,51 @@ export class CommandStore {
         input.command,
         buildTaskSummary(input.command, input.commandMode ?? "ai"),
         input.executionCommand ?? null,
+        input.commandMode ?? "ai",
+        input.repositoryUrl ?? null,
+        input.normalizedRepositoryUrl ?? null
+      ]
+    );
+
+    await this.pool.query(
+      `
+        insert into client_command_users (transaction_id, user_id)
+        values ($1, $2)
+        on conflict do nothing
+      `,
+      [transactionId, input.userId]
+    );
+
+    return mapCommand(result.rows[0]);
+  }
+
+  public async createReportedCommand(input: CreateReportedCommandInput): Promise<Command> {
+    const transactionId = nanoid();
+    const result = await this.pool.query(
+      `
+        insert into client_commands (
+          transaction_id,
+          user_id,
+          worker_id,
+          command,
+          task_summary,
+          execution_command,
+          command_mode,
+          repository_url,
+          normalized_repository_url,
+          status,
+          claimed_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'in_progress', now())
+        returning ${commandColumns}
+      `,
+      [
+        transactionId,
+        input.userId,
+        input.workerId,
+        input.command,
+        buildTaskSummary(input.command, input.commandMode ?? "ai"),
+        input.executionCommand ?? input.command,
         input.commandMode ?? "ai",
         input.repositoryUrl ?? null,
         input.normalizedRepositoryUrl ?? null

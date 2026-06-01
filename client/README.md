@@ -1,8 +1,8 @@
 # FirstDraft Worker
 
-.NET worker that connects to the FirstDraft API, registers its identity and capabilities, and executes remote commands on the machine where it is running. Workers should be installed next to the repositories, credentials, toolchains, and network access needed for the jobs they accept.
+.NET worker that registers with the FirstDraft API, reports its task activity, and executes locally selected work on the machine where it is running. Workers should be installed next to the repositories, credentials, toolchains, and network access needed for the jobs they accept.
 
-The project targets `net10.0` and builds the `firstdraft` assembly. At runtime the worker uses a SignalR client connection to the API's `/WorkerHub` endpoint.
+The project targets `net10.0` and builds the `firstdraft` assembly. At runtime the worker uses worker-auth HTTP endpoints to register, heartbeat, report task start/output/completion, and download Jira attachments.
 
 ## Prerequisites
 
@@ -103,7 +103,7 @@ When the worker is running, it polls enabled Jira integrations every 60 seconds.
 
 Jira image attachments are downloaded through the API with the worker access token before the AI prompt is built. Attachment download therefore depends on valid worker authentication and a reachable `ExternalAPI` URL.
 
-`MaxConcurrentTasks` controls concurrent gitflow execution and must be between `1` and `8`.
+`MaxConcurrentTasks` controls concurrent gitflow execution. Set it to `1` through `8`, or omit/set it to `null` for unlimited concurrency.
 
 ## Configuration
 
@@ -123,7 +123,7 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `PlanningEnabled`: whether AI execution performs a planning pass before implementation.
 - `AIWorkingDirectory`: base working directory for AI commands.
 - `GitWorkspaceDirectory`: workspace root for gitflow repository work.
-- `MaxConcurrentTasks`: maximum concurrent gitflow tasks, from `1` to `8`.
+- `MaxConcurrentTasks`: maximum concurrent gitflow tasks, from `1` to `8`; missing or `null` means unlimited.
 - `GitRepositories`: worker-local Git repositories with enforced source and PR target branches.
 - `JiraIntegrations`: worker-local Jira connections and workflow settings with encrypted API tokens.
 

@@ -6,6 +6,7 @@ const originalFetch = globalThis.fetch;
 async function testIssueTokenRequiresAuthenticatedUser(): Promise<void> {
   const controller = new WorkerAuthController(
     {} as never,
+    {} as never,
     {
       async issue() {
         throw new Error("issue should not be called");
@@ -35,6 +36,7 @@ async function testIssueTokenRequiresAuthenticatedUser(): Promise<void> {
 async function testIssueTokenUsesAuthenticatedUser(): Promise<void> {
   const issuedFor: Array<{ workerId: string; userId: string }> = [];
   const controller = new WorkerAuthController(
+    {} as never,
     {} as never,
     {
       async issue(workerId: string, user: { userId: string }) {
@@ -81,6 +83,65 @@ async function testIssueTokenUsesAuthenticatedUser(): Promise<void> {
     tokenType: "Bearer",
     configEncryptionKey: "config-key",
   });
+}
+
+async function testRegisterWorkerAcceptsUnlimitedCapacity(): Promise<void> {
+  const registrations: unknown[] = [];
+  const controller = new WorkerAuthController(
+    {} as never,
+    {
+      async registerWorker(input: unknown) {
+        registrations.push(input);
+        return {
+          workerId: "worker-1",
+          userId: "user-1",
+          connectionId: "http:worker-1",
+          paths: [],
+          skills: ["git"],
+          enabledTaskTypes: ["gitflow"],
+          state: "started",
+          maxConcurrentTasks: null,
+          activeTaskCount: 0,
+          registeredAt: "2026-06-01T00:00:00.000Z",
+          firstRegisteredAt: "2026-06-01T00:00:00.000Z",
+          lastRegisteredAt: "2026-06-01T00:00:00.000Z",
+          lastSeenAt: "2026-06-01T00:00:00.000Z",
+          stateUpdatedAt: "2026-06-01T00:00:00.000Z",
+        };
+      },
+      async markStaleWorkersStopped() {},
+    } as never,
+    {
+      async verifyAccessToken() {
+        return { workerId: "worker-1", userId: "user-1" };
+      },
+    } as never,
+    {} as never,
+    "config-key",
+  );
+  const response = createResponse();
+
+  await controller.registerWorker(
+    {
+      headers: {
+        authorization: "Bearer worker-token",
+      },
+      body: {
+        workerId: "worker-1",
+        skills: ["git"],
+        enabledTaskTypes: ["gitflow"],
+        maxConcurrentTasks: null,
+      },
+    } as never,
+    response as never,
+    (error?: unknown) => {
+      if (error) throw error;
+    },
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal((registrations[0] as { maxConcurrentTasks?: number | null }).maxConcurrentTasks, null);
+  assert.deepEqual((response.body as { maxConcurrentTasks?: number | null }).maxConcurrentTasks, null);
 }
 
 async function testJiraAttachmentUsesWorkerParticipantIntegration(): Promise<void> {
@@ -134,6 +195,7 @@ async function testJiraAttachmentUsesWorkerParticipantIntegration(): Promise<voi
   installFetchMock();
   const controller = new WorkerAuthController(
     {} as never,
+    {} as never,
     {
       async verifyAccessToken(token: string) {
         assert.equal(token, "worker-token");
@@ -145,7 +207,9 @@ async function testJiraAttachmentUsesWorkerParticipantIntegration(): Promise<voi
     } as never,
     {} as never,
     "config-key",
+    undefined,
     intakeEvents as never,
+    undefined,
     jiraIntegrations as never,
   );
   const response = createResponse();
@@ -191,6 +255,7 @@ async function testClaimJiraTicketCreatesClaimAndStartsLifecycle(): Promise<void
   };
   const controller = new WorkerAuthController(
     {} as never,
+    {} as never,
     {
       async verifyAccessToken(token: string) {
         assert.equal(token, "worker-token");
@@ -202,6 +267,8 @@ async function testClaimJiraTicketCreatesClaimAndStartsLifecycle(): Promise<void
     } as never,
     {} as never,
     "config-key",
+    undefined,
+    undefined,
     undefined,
     undefined,
     {
@@ -284,6 +351,7 @@ async function testClaimJiraTicketCreatesClaimAndStartsLifecycle(): Promise<void
 async function testClaimJiraTicketReturnsConflictForDuplicateClaim(): Promise<void> {
   const controller = new WorkerAuthController(
     {} as never,
+    {} as never,
     {
       async verifyAccessToken() {
         return {
@@ -294,6 +362,8 @@ async function testClaimJiraTicketReturnsConflictForDuplicateClaim(): Promise<vo
     } as never,
     {} as never,
     "config-key",
+    undefined,
+    undefined,
     undefined,
     undefined,
     {
@@ -357,6 +427,7 @@ async function testClaimJiraTicketReturnsConflictForDuplicateClaim(): Promise<vo
 async function testClaimJiraTicketRejectsUnownedIntegration(): Promise<void> {
   const controller = new WorkerAuthController(
     {} as never,
+    {} as never,
     {
       async verifyAccessToken() {
         return {
@@ -367,6 +438,8 @@ async function testClaimJiraTicketRejectsUnownedIntegration(): Promise<void> {
     } as never,
     {} as never,
     "config-key",
+    undefined,
+    undefined,
     undefined,
     {
       async getCredentials() {
@@ -455,6 +528,7 @@ function createResponse(): {
 try {
   await testIssueTokenRequiresAuthenticatedUser();
   await testIssueTokenUsesAuthenticatedUser();
+  await testRegisterWorkerAcceptsUnlimitedCapacity();
   await testJiraAttachmentUsesWorkerParticipantIntegration();
   await testClaimJiraTicketCreatesClaimAndStartsLifecycle();
   await testClaimJiraTicketReturnsConflictForDuplicateClaim();

@@ -1,5 +1,5 @@
 import cors from "cors";
-import express, { RequestHandler, Router } from "express";
+import express, { Router } from "express";
 import morgan from "morgan";
 import passport from "passport";
 import { requireJwt } from "../auth/requireJwt.js";
@@ -9,14 +9,12 @@ type CreateAppOptions = {
   authRoutes: Router;
   workerAuthRoutes: Router;
   workerRoutes: Router;
-  negotiateHandler: RequestHandler;
 };
 
 export function createApp({
   authRoutes,
   workerAuthRoutes,
-  workerRoutes,
-  negotiateHandler
+  workerRoutes
 }: CreateAppOptions): express.Express {
   const app = express();
 
@@ -37,7 +35,6 @@ export function createApp({
     res.type("html").send(swaggerHtml());
   });
 
-  app.post("/WorkerHub/negotiate", negotiateHandler);
   app.use("/api/auth", authRoutes);
   app.use("/api/worker-auth", workerAuthRoutes);
   app.use("/api/workers", requireJwt, workerRoutes);

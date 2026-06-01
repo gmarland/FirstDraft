@@ -22,7 +22,7 @@ namespace FirstDraft.Configuration
 
             WorkerTaskTypeRegistry.ResolveEnabledTaskTypes(applicationData.EnabledTaskTypes);
 
-            if (applicationData.MaxConcurrentTasks < 1 || applicationData.MaxConcurrentTasks > 8) throw new Exception("MaxConcurrentTasks must be between 1 and 8");
+            if (applicationData.MaxConcurrentTasks.HasValue && (applicationData.MaxConcurrentTasks < 1 || applicationData.MaxConcurrentTasks > 8)) throw new Exception("MaxConcurrentTasks must be between 1 and 8, or unset for unlimited");
         }
 
         private static void ValidateWorkerId(string workerId)

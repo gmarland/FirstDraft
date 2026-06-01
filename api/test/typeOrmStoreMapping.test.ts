@@ -3,6 +3,7 @@ import { UserEntity } from "../src/db/entities/user.js";
 import { mergeWorkerState } from "../src/store/clientStore.js";
 import { mapUserEntity } from "../src/store/tenantUsers/tenantUserRowMappers.js";
 import { mapWorkerRecord } from "../src/store/workers/workerRecordStore.js";
+import { canDispatchMoreCommands } from "../src/workers/workerState.js";
 
 function testUserEntityMapping(): void {
   const user: UserEntity = {
@@ -35,7 +36,6 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
     last_connection_id: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
-    enabled: false,
     enabled_task_types: ["ai", "gitflow"],
     max_concurrent_tasks: 2,
     state: "started",
@@ -52,7 +52,6 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
     lastConnectionId: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
-    enabled: false,
     enabledTaskTypes: ["ai", "gitflow"],
     maxConcurrentTasks: 2,
     state: "started",
@@ -61,7 +60,7 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
   });
 }
 
-function testWorkerRecordMappingDefaultsEnabled(): void {
+function testWorkerRecordMappingNormalizesTaskTypes(): void {
   const worker = mapWorkerRecord({
     worker_id: "worker-1",
     user_id: "user-1",
@@ -77,8 +76,26 @@ function testWorkerRecordMappingDefaultsEnabled(): void {
     state_updated_at: "2026-01-03T00:01:00.000Z"
   });
 
-  assert.equal(worker.enabled, true);
   assert.deepEqual(worker.enabledTaskTypes, ["ai", "gitflow"]);
+}
+
+function testWorkerRecordMappingPreservesUnlimitedCapacity(): void {
+  const worker = mapWorkerRecord({
+    worker_id: "worker-1",
+    user_id: "user-1",
+    first_registered_at: "2026-01-01T00:00:00.000Z",
+    last_registered_at: "2026-01-02T00:00:00.000Z",
+    last_seen_at: "2026-01-03T00:00:00.000Z",
+    last_connection_id: "connection-1",
+    paths: ["/repo"],
+    skills: ["git"],
+    enabled_task_types: ["gitflow"],
+    max_concurrent_tasks: null,
+    state: "started",
+    state_updated_at: "2026-01-03T00:01:00.000Z"
+  });
+
+  assert.equal(worker.maxConcurrentTasks, null);
 }
 
 function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
@@ -91,7 +108,6 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
     lastConnectionId: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
-    enabled: true,
     enabledTaskTypes: ["ai", "shell", "gitflow"],
     maxConcurrentTasks: 2,
     state: "started",
@@ -107,39 +123,6 @@ function testWorkerStateMergeUsesCommandsForLiveWorkers(): void {
   }]);
 
   assert.equal(worker.state, "running_command");
-  assert.deepEqual(worker.activeTransactionIds, ["command-1"]);
-  assert.equal(worker.activeTaskCount, 1);
-  assert.equal(worker.currentTransactionId, "command-1");
-  assert.deepEqual(worker.enabledTaskTypes, ["ai", "shell", "gitflow"]);
-}
-
-function testWorkerStateMergeIncludesEnabled(): void {
-  const worker = mergeWorkerState({
-    workerId: "worker-1",
-    userId: "user-1",
-    firstRegisteredAt: "2026-01-01T00:00:00.000Z",
-    lastRegisteredAt: "2026-01-02T00:00:00.000Z",
-    lastSeenAt: "2026-01-03T00:00:00.000Z",
-    lastConnectionId: "connection-1",
-    paths: ["/repo"],
-    skills: ["git"],
-    enabled: false,
-    enabledTaskTypes: ["ai", "shell", "gitflow"],
-    maxConcurrentTasks: 2,
-    state: "started",
-    stateUpdatedAt: "2026-01-03T00:01:00.000Z"
-  }, [{
-    transactionId: "command-1",
-    userId: "user-1",
-    workerId: "worker-1",
-    command: "do work",
-    commandMode: "ai",
-    status: "in_progress",
-    createdAt: "2026-01-03T00:00:30.000Z"
-  }]);
-
-  assert.equal(worker.state, "running_command");
-  assert.equal(worker.enabled, false);
   assert.deepEqual(worker.activeTransactionIds, ["command-1"]);
   assert.equal(worker.activeTaskCount, 1);
   assert.equal(worker.currentTransactionId, "command-1");
@@ -156,7 +139,6 @@ function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
     lastConnectionId: "connection-1",
     paths: ["/repo"],
     skills: ["git"],
-    enabled: true,
     enabledTaskTypes: ["gitflow"],
     maxConcurrentTasks: 2,
     state: "stopped",
@@ -179,11 +161,31 @@ function testWorkerStateMergeKeepsStoppedWorkersStopped(): void {
   assert.deepEqual(worker.enabledTaskTypes, ["gitflow"]);
 }
 
+function testUnlimitedWorkerCapacityAllowsAdditionalDispatches(): void {
+  assert.equal(canDispatchMoreCommands({
+    workerId: "worker-1",
+    userId: "user-1",
+    connectionId: "connection-1",
+    paths: [],
+    skills: ["git"],
+    enabledTaskTypes: ["gitflow"],
+    state: "running_command",
+    activeTransactionIds: Array.from({ length: 9 }, (_, index) => `command-${index}`),
+    maxConcurrentTasks: null,
+    registeredAt: "2026-01-01T00:00:00.000Z",
+    firstRegisteredAt: "2026-01-01T00:00:00.000Z",
+    lastRegisteredAt: "2026-01-01T00:00:00.000Z",
+    lastSeenAt: "2026-01-01T00:00:00.000Z",
+    stateUpdatedAt: "2026-01-01T00:00:00.000Z"
+  }), true);
+}
+
 testUserEntityMapping();
 testWorkerRecordMappingIncludesRuntimeState();
-testWorkerRecordMappingDefaultsEnabled();
-testWorkerStateMergeIncludesEnabled();
+testWorkerRecordMappingNormalizesTaskTypes();
+testWorkerRecordMappingPreservesUnlimitedCapacity();
 testWorkerStateMergeUsesCommandsForLiveWorkers();
 testWorkerStateMergeKeepsStoppedWorkersStopped();
+testUnlimitedWorkerCapacityAllowsAdditionalDispatches();
 
 console.log("typeorm store mapping tests passed");

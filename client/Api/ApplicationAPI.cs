@@ -1,4 +1,3 @@
-using FirstDraft.Api.Contracts;
 using FirstDraft.Api.Auth;
 using FirstDraft.Api.Execution;
 using FirstDraft.Api.Hub;
@@ -15,29 +14,27 @@ namespace FirstDraft.Api
         private readonly Log _logger;
         private readonly ApplicationData _applicationData;
         private readonly WorkerTokenManager _tokens;
-        private readonly ApiCommandTokenValidator _apiCommandTokens;
-        private readonly WorkerHubConnection _hub;
         private readonly WorkerRegistrationService _registration;
         private readonly CommandEventFlusher _commandEventFlusher;
         private readonly CommandExecutionRunner _commands;
         private readonly JiraPollingCoordinator _jiraPolling;
+        private CancellationTokenSource? _heartbeatCancellation;
+        private Task? _heartbeatTask;
 
         public ApplicationAPI(Log log, ApplicationData applicationData, ApplicationDataService applicationDataService, CommandDispatcher commandDispatcher)
         {
             _logger = log;
             _applicationData = applicationData;
             _tokens = new WorkerTokenManager(applicationData, applicationDataService);
-            _apiCommandTokens = new ApiCommandTokenValidator(applicationData);
 
             CommandEventOutbox commandEvents = new CommandEventOutbox(log, applicationData);
-            _hub = new WorkerHubConnection(log, applicationData);
-            _commandEventFlusher = new CommandEventFlusher(log, _tokens, commandEvents, _hub);
+            _commandEventFlusher = new CommandEventFlusher(log, applicationData, _tokens, commandEvents);
             _commands = new CommandExecutionRunner(log, applicationData, _tokens, commandEvents, _commandEventFlusher, commandDispatcher);
-            _registration = new WorkerRegistrationService(log, applicationData, _tokens, _hub);
-            _jiraPolling = new JiraPollingCoordinator(log, applicationData, _tokens, _hub, _commands);
+            _registration = new WorkerRegistrationService(log, applicationData, _tokens);
+            _jiraPolling = new JiraPollingCoordinator(log, applicationData, _tokens, _commands);
         }
 
-        public async Task ConnectSignalR()
+        public async Task Connect()
         {
             bool applicationDataValid = true;
 
@@ -53,14 +50,11 @@ namespace FirstDraft.Api
 
             if (!applicationDataValid) return;
 
-            await _hub.RebuildAsync(ConnectSignalR, ExecuteCommand);
             await Start();
         }
 
         public async Task Start()
         {
-            _hub.Reconnect = true;
-
             bool connected = false;
             bool reauthenticationRequired = false;
 
@@ -69,9 +63,8 @@ namespace FirstDraft.Api
                 _logger.Info($"Attempting to register this client as {_applicationData.GetRegisteredAddress()}");
 
                 await _tokens.EnsureAccessTokenAsync();
-                await _apiCommandTokens.EnsurePublicKeyAsync();
-
-                await _hub.StartAsync();
+                await _registration.RegisterAsync();
+                await _commandEventFlusher.FlushPendingCommandEvents(waitForLock: true);
 
                 connected = true;
             }
@@ -89,8 +82,7 @@ namespace FirstDraft.Api
             {
                 try
                 {
-                    await _registration.RegisterAsync();
-                    await _commandEventFlusher.FlushPendingCommandEvents(waitForLock: true);
+                    StartHeartbeat();
                     _jiraPolling.Start();
                 }
                 catch (Exception ex)
@@ -107,35 +99,8 @@ namespace FirstDraft.Api
 
         public async Task Stop()
         {
-            _hub.Reconnect = false;
-
             await _jiraPolling.Stop();
-            await _hub.StopAsync();
-        }
-
-        public async Task ExecuteCommand(string apiCommandToken, string transactionId, string command, string commandMode)
-        {
-            CommandTokenValidationResult tokenValidation = _apiCommandTokens.Validate(apiCommandToken, transactionId);
-            if (tokenValidation == CommandTokenValidationResult.InvalidSignature)
-            {
-                await _apiCommandTokens.EnsurePublicKeyAsync(forceRefresh: true);
-                tokenValidation = _apiCommandTokens.Validate(apiCommandToken, transactionId);
-            }
-
-            if (tokenValidation == CommandTokenValidationResult.Expired)
-            {
-                tokenValidation = await RefreshAndValidateCommandToken(transactionId);
-            }
-
-            if (tokenValidation != CommandTokenValidationResult.Valid)
-            {
-                string reason = $"invalid API command token ({tokenValidation})";
-                _logger.Error($"Rejected command {transactionId}: {reason}");
-                await _commands.RejectCommand(transactionId, reason);
-                return;
-            }
-
-            await _commands.RunCommand(transactionId, command, commandMode);
+            await StopHeartbeat();
         }
 
         public Task ExecuteClaimedCommand(string transactionId, string command, string commandMode)
@@ -143,32 +108,49 @@ namespace FirstDraft.Api
             return _commands.RunCommand(transactionId, command, commandMode);
         }
 
-        private async Task<CommandTokenValidationResult> RefreshAndValidateCommandToken(string transactionId)
+        private void StartHeartbeat()
         {
+            if (_heartbeatTask != null) return;
+
+            _heartbeatCancellation = new CancellationTokenSource();
+            _heartbeatTask = Task.Run(() => RunHeartbeat(_heartbeatCancellation.Token));
+        }
+
+        private async Task StopHeartbeat()
+        {
+            if (_heartbeatCancellation == null || _heartbeatTask == null) return;
+
+            _heartbeatCancellation.Cancel();
             try
             {
-                _logger.Info($"API command token expired for {transactionId}, requesting replacement");
-                object?[] refreshArguments = new object?[WorkerHubContract.RefreshCommandTokenArguments.TransactionId + 1];
-                refreshArguments[WorkerHubContract.RefreshCommandTokenArguments.AccessToken] = await _tokens.EnsureAccessTokenAsync();
-                refreshArguments[WorkerHubContract.RefreshCommandTokenArguments.TransactionId] = transactionId;
+                await _heartbeatTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                _heartbeatCancellation.Dispose();
+                _heartbeatCancellation = null;
+                _heartbeatTask = null;
+            }
+        }
 
-                string refreshedToken = await _hub.InvokeAsync<string>(
-                    WorkerHubContract.ServerMethods.RefreshCommandToken,
-                    refreshArguments);
-
-                CommandTokenValidationResult refreshedValidation = _apiCommandTokens.Validate(refreshedToken, transactionId);
-                if (refreshedValidation == CommandTokenValidationResult.InvalidSignature)
+        private async Task RunHeartbeat(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
                 {
-                    await _apiCommandTokens.EnsurePublicKeyAsync(forceRefresh: true);
-                    refreshedValidation = _apiCommandTokens.Validate(refreshedToken, transactionId);
+                    await _registration.HeartbeatAsync();
+                    await _commandEventFlusher.FlushPendingCommandEvents();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug($"Worker heartbeat failed: {ex.Message}");
                 }
 
-                return refreshedValidation;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Unable to refresh API command token for {transactionId}", ex);
-                return CommandTokenValidationResult.RefreshFailed;
+                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
             }
         }
     }

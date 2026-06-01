@@ -7,7 +7,6 @@ import { configurePassport, createJwtConfigFromEnv } from "./auth/passport.js";
 import { createAuthRoutes } from "./routes/auth.js";
 import { createWorkerAuthRoutes } from "./routes/workerAuth.js";
 import { createWorkerRoutes } from "./routes/workers.js";
-import { SignalRHub } from "./signalr/signalRHub.js";
 import { createCommandOutputStorageFromEnv, getCommandOutputStorageProviderFromEnv } from "./storage/commandOutputStorage.js";
 import { publicConfigEncryptionKey, TenantCrypto } from "./security/tenantCrypto.js";
 import { CommandStore } from "./store/commands/commandStore.js";
@@ -53,29 +52,27 @@ const apiToWorkerTokens = new ApiToWorkerTokenIssuer();
 const outputStorage = createCommandOutputStorageFromEnv();
 const outputStorageProvider = outputStorage ? getCommandOutputStorageProviderFromEnv() : undefined;
 const integrationLifecycle = new IntegrationLifecycleService(integrationIntakeEvents, jiraIntegrations, gitRepositories);
-const signalRHub = new SignalRHub(store, workerTokenService, apiToWorkerTokens, outputStorage, integrationLifecycle, gitRepositories, jiraIntegrations);
 const app = createApp({
   authRoutes: createAuthRoutes(jwtConfig, tenants, outputStorage),
   workerAuthRoutes: createWorkerAuthRoutes(
     tenants,
+    store,
     workerTokenService,
     apiToWorkerTokens,
     workerConfigEncryptionKey,
+    outputStorage,
     integrationIntakeEvents,
+    gitRepositories,
     jiraIntegrations,
     jiraTicketClaims,
     integrationLifecycle
   ),
-  workerRoutes: createWorkerRoutes(store, signalRHub, outputStorage, gitRepositories),
-  negotiateHandler: signalRHub.negotiate
+  workerRoutes: createWorkerRoutes(store, outputStorage, gitRepositories),
 });
 const server = createServer(app);
 
-signalRHub.attach(server);
-
 server.listen(port, () => {
   console.log(`firstdraft api listening on http://localhost:${port}`);
-  console.log(`signalr hub listening on http://localhost:${port}/WorkerHub`);
   console.log("postgres connected");
   console.log(`command output storage ${outputStorage ? `enabled (${outputStorageProvider})` : "disabled: set COMMAND_OUTPUT_BUCKET to enable command output uploads"}`);
   console.log("tenant encryption settings loaded from postgres");

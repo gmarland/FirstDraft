@@ -72,7 +72,7 @@ namespace FirstDraft.Cli.Setup
             applicationData.ApplicationPaths = PromptApplicationPaths(applicationData.ApplicationPaths);
             applicationData.EnabledTaskTypes = PromptTaskTypes(applicationData.EnabledTaskTypes);
             applicationData.Skills = PromptSkills(applicationData.Skills);
-            applicationData.MaxConcurrentTasks = PromptInt("Max concurrent gitflow tasks", Math.Clamp(applicationData.MaxConcurrentTasks, 1, 8), 1, 8);
+            applicationData.MaxConcurrentTasks = PromptOptionalInt("Max concurrent gitflow tasks", ClampOptionalCapacity(applicationData.MaxConcurrentTasks), 1, 8, "unlimited");
 
             if (!string.IsNullOrEmpty(applicationData.ConfigEncryptionKey))
             {
@@ -120,7 +120,7 @@ namespace FirstDraft.Cli.Setup
             Console.WriteLine("firstdraft capacity");
             Console.WriteLine("Configure this client's max concurrent gitflow tasks.");
 
-            applicationData.MaxConcurrentTasks = PromptInt("Max concurrent gitflow tasks", Math.Clamp(applicationData.MaxConcurrentTasks, 1, 8), 1, 8);
+            applicationData.MaxConcurrentTasks = PromptOptionalInt("Max concurrent gitflow tasks", ClampOptionalCapacity(applicationData.MaxConcurrentTasks), 1, 8, "unlimited");
 
             await _applicationDataService.Save(applicationData);
 
@@ -199,6 +199,11 @@ namespace FirstDraft.Cli.Setup
 
                 Console.Error.WriteLine("AI provider must be Codex or Claude");
             }
+        }
+
+        private static int? ClampOptionalCapacity(int? maxConcurrentTasks)
+        {
+            return maxConcurrentTasks.HasValue ? Math.Clamp(maxConcurrentTasks.Value, 1, 8) : null;
         }
 
         private static string[] PromptApplicationPaths(string[]? defaultPaths)

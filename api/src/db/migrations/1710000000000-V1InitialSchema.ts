@@ -51,9 +51,8 @@ export class V1InitialSchema1710000000000 implements MigrationInterface {
         last_connection_id text,
         paths text[] not null default '{}',
         skills text[] not null default '{}',
-        enabled boolean not null default true,
         enabled_task_types text[] not null default '{ai,shell,gitflow}',
-        max_concurrent_tasks integer not null default 1,
+        max_concurrent_tasks integer default 1,
         state text not null default 'stopped',
         state_updated_at timestamptz,
         stopped_at timestamptz
