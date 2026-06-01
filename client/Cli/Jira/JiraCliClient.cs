@@ -131,6 +131,46 @@ namespace FirstDraft.Cli.Jira
                 .ToArray() ?? Array.Empty<JiraIssueSummary>();
         }
 
+        public async Task TransitionIssue(string issueKey, string targetStatusId, string targetStatusName, CancellationToken cancellationToken = default)
+        {
+            JObject json = await RequestJson($"rest/api/3/issue/{Uri.EscapeDataString(issueKey)}/transitions", cancellationToken);
+            JObject? transition = json["transitions"]?
+                .OfType<JObject>()
+                .FirstOrDefault(candidate => IsTargetTransition(candidate, targetStatusId, targetStatusName));
+
+            if (transition == null)
+            {
+                string target = string.IsNullOrWhiteSpace(targetStatusName) ? targetStatusId : targetStatusName;
+                throw new InvalidOperationException($"No Jira transition is available for {issueKey} to status {target}");
+            }
+
+            string transitionId = transition.Value<string>("id") ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(transitionId))
+            {
+                throw new InvalidOperationException($"Jira transition for {issueKey} did not include an id");
+            }
+
+            JObject body = new JObject
+            {
+                ["transition"] = new JObject
+                {
+                    ["id"] = transitionId
+                }
+            };
+
+            await PostJson($"rest/api/3/issue/{Uri.EscapeDataString(issueKey)}/transitions", body, cancellationToken);
+        }
+
+        public async Task AddComment(string issueKey, string body, CancellationToken cancellationToken = default)
+        {
+            JObject payload = new JObject
+            {
+                ["body"] = BuildJiraDocument(body)
+            };
+
+            await PostJson($"rest/api/3/issue/{Uri.EscapeDataString(issueKey)}/comment", payload, cancellationToken);
+        }
+
         private async Task<JiraStatusOption> GetStatus(string statusId, CancellationToken cancellationToken)
         {
             JObject json = await RequestJson($"rest/api/3/status/{Uri.EscapeDataString(statusId)}", cancellationToken);
@@ -199,6 +239,67 @@ namespace FirstDraft.Cli.Jira
             {
                 throw new InvalidOperationException($"Jira API returned invalid JSON: {ex.Message}");
             }
+        }
+
+        private static bool IsTargetTransition(JObject transition, string targetStatusId, string targetStatusName)
+        {
+            string normalizedStatusId = targetStatusId.Trim();
+            string transitionStatusId = transition["to"]?.Value<string>("id") ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(normalizedStatusId) &&
+                string.Equals(transitionStatusId, normalizedStatusId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            string normalizedStatusName = NormalizeTransitionStatusName(targetStatusName);
+            if (string.IsNullOrWhiteSpace(normalizedStatusName)) return false;
+
+            string transitionStatusName = NormalizeTransitionStatusName(transition["to"]?.Value<string>("name") ?? string.Empty);
+            string transitionName = NormalizeTransitionStatusName(transition.Value<string>("name") ?? string.Empty);
+            return string.Equals(transitionStatusName, normalizedStatusName, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(transitionName, normalizedStatusName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeTransitionStatusName(string value)
+        {
+            return value.Trim().ToLowerInvariant();
+        }
+
+        private static JObject BuildJiraDocument(string text)
+        {
+            JArray content = new JArray();
+            foreach (string rawLine in text.Replace("\r\n", "\n").Split('\n'))
+            {
+                string line = rawLine.TrimEnd();
+                JObject paragraph = new JObject
+                {
+                    ["type"] = "paragraph"
+                };
+                if (!string.IsNullOrWhiteSpace(line))
+                {
+                    paragraph["content"] = new JArray
+                    {
+                        new JObject
+                        {
+                            ["type"] = "text",
+                            ["text"] = line
+                        }
+                    };
+                }
+                content.Add(paragraph);
+            }
+
+            if (content.Count == 0)
+            {
+                content.Add(new JObject { ["type"] = "paragraph" });
+            }
+
+            return new JObject
+            {
+                ["type"] = "doc",
+                ["version"] = 1,
+                ["content"] = content
+            };
         }
 
         public void Dispose()

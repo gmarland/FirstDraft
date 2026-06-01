@@ -40,7 +40,7 @@ namespace FirstDraft.Api.Execution
 
         public int? AvailableCapacity => _commandCapacity?.CurrentCount;
 
-        public async Task RunCommand(string transactionId, string command, string commandMode)
+        public async Task<CommandExecutionResult> RunCommand(string transactionId, string command, string commandMode)
         {
             if (_commandCapacity != null) await _commandCapacity.WaitAsync();
 
@@ -80,6 +80,7 @@ namespace FirstDraft.Api.Execution
 
                 await _commandEvents.EnqueueCommandResult(transactionId, result, errorMessage);
                 await _commandEventFlusher.FlushPendingCommandEvents(waitForLock: true);
+                return new CommandExecutionResult(result, errorMessage);
             }
             finally
             {
@@ -116,4 +117,6 @@ namespace FirstDraft.Api.Execution
             }
         }
     }
+
+    public sealed record CommandExecutionResult(string? Result, string? ErrorMessage);
 }

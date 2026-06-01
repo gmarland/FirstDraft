@@ -70,7 +70,6 @@ const outputStorageProvider = outputStorage
   : undefined;
 const integrationLifecycle = new IntegrationLifecycleService(
   integrationIntakeEvents,
-  jiraIntegrations,
   gitRepositories,
 );
 const app = createApp({

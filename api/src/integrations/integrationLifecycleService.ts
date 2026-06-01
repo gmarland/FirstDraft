@@ -1,176 +1,28 @@
 import { Command } from "../types.js";
-import { JiraClient } from "./jira/jiraClient.js";
-import { JiraIntegrationStore } from "../store/integrations/jiraIntegrationStore.js";
-import {
-  IntegrationIntakeEvent,
-  IntegrationIntakeEventParticipant,
-  IntegrationIntakeEventStore,
-} from "../store/integrations/integrationIntakeEventStore.js";
+import { IntegrationIntakeEventStore } from "../store/integrations/integrationIntakeEventStore.js";
 import { GitRepositoryStore } from "../store/gitRepositories/gitRepositoryStore.js";
-import { JiraIntegrationCredentials } from "../store/integrations/jiraIntegrationStore.js";
-
-type JiraLifecycleStage = "processing" | "processed";
-
-type GitflowResultDetails = {
-  branch?: string;
-  commit?: string;
-  pullRequest?: string;
-  aiSummary?: string;
-};
 
 export class IntegrationLifecycleService {
   public constructor(
     private readonly intakeEvents: IntegrationIntakeEventStore,
-    private readonly jiraIntegrations: JiraIntegrationStore,
     private readonly gitRepositories?: GitRepositoryStore,
   ) {}
 
   public async commandStarted(command: Command): Promise<void> {
     await this.recordAssignedRepositoryUsage(command);
     await this.markJiraEventProcessing(command);
-    this.transitionJiraIssue(command.transactionId, "processing", command).catch((error) => {
-      console.error("[integration-lifecycle] Jira processing transition failed", {
-        transactionId: command.transactionId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
   }
 
   public async commandCompleted(command: Command): Promise<void> {
-    await this.handleJiraCompletion(command);
-  }
-
-  private async transitionJiraIssue(
-    transactionId: string,
-    stage: JiraLifecycleStage,
-    command?: Command,
-  ): Promise<void> {
-    const event = await this.intakeEvents.getByTransactionId(transactionId);
+    const event = await this.intakeEvents.getByTransactionId(command.transactionId);
     if (!event || event.provider !== "jira") return;
 
-    if (stage === "processing") {
-      await this.intakeEvents.markProcessing(event.id, command?.workerId);
-    }
-
-    const context = command
-      ? await this.getJiraContext(command)
-      : undefined;
-    const credentials = context?.credentials;
-    if (!credentials) {
-      console.warn("[integration-lifecycle] skipping Jira transition without credentials", {
-        eventId: event.id,
-        transactionId,
-        integrationId: context?.participant.integrationId,
-        issueKey: event.sourceItemKey,
-        stage,
-      });
-      await this.markEventStage(event, stage, command);
-      return;
-    }
-
-    const targetStatusId =
-      stage === "processing"
-        ? credentials.processingStatusId
-        : credentials.processedStatusId;
-    const targetStatusName =
-      stage === "processing"
-        ? credentials.processingStatusName
-        : credentials.processedStatusName;
-
-    if (!targetStatusId || !targetStatusName) {
-      console.warn("[integration-lifecycle] skipping Jira transition without configured status", {
-        eventId: event.id,
-        transactionId,
-        integrationId: context?.participant.integrationId,
-        issueKey: event.sourceItemKey,
-        stage,
-      });
-      await this.markEventStage(event, stage, command);
-      return;
-    }
-
-    try {
-      const transition = await new JiraClient(credentials).transitionIssue(
-        event.sourceItemKey,
-        targetStatusId,
-        targetStatusName,
-      );
-      await this.markEventStage(event, stage, command);
-      console.log("[integration-lifecycle] Jira issue transitioned", {
-        eventId: event.id,
-        transactionId,
-        integrationId: context?.participant.integrationId,
-        issueKey: event.sourceItemKey,
-        stage,
-        transitionId: transition.id,
-        transitionName: transition.name,
-        targetStatusId,
-        targetStatusName,
-      });
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      console.error("[integration-lifecycle] Jira transition failed", {
-        eventId: event.id,
-        transactionId,
-        integrationId: context?.participant.integrationId,
-        issueKey: event.sourceItemKey,
-        stage,
-        targetStatusId,
-        targetStatusName,
-        reason,
-      });
-    }
-  }
-
-  private async markEventStage(
-    event: IntegrationIntakeEvent,
-    stage: JiraLifecycleStage,
-    command?: Command,
-  ): Promise<void> {
-    if (stage === "processing") {
-      await this.intakeEvents.markProcessing(event.id, command?.workerId);
-      return;
-    }
-
-    await this.intakeEvents.markProcessed(event.id);
-  }
-
-  private async handleJiraCompletion(command: Command): Promise<void> {
-    const event = await this.intakeEvents.getByTransactionId(
-      command.transactionId,
-    );
-    if (!event || event.provider !== "jira") return;
-
-    const context = await this.getJiraContext(command);
-    const credentials = context?.credentials;
-    if (!credentials) {
-      console.warn("[integration-lifecycle] skipping Jira completion without credentials", {
-        eventId: event.id,
-        transactionId: command.transactionId,
-        integrationId: context?.participant.integrationId,
-        issueKey: event.sourceItemKey,
-        status: command.status,
-      });
-      if (command.status === "failed") {
-        await this.intakeEvents.markFailed(
-          event.id,
-          command.errorMessage ?? "Gitflow command failed.",
-        );
-      } else if (command.status === "completed") {
-        await this.intakeEvents.markProcessed(event.id);
-      }
-      return;
-    }
-
-    const jira = new JiraClient(credentials);
     if (command.status === "completed") {
-      await this.addJiraCompletionComment(jira, event, command);
-      await this.transitionJiraIssue(command.transactionId, "processed", command);
+      await this.intakeEvents.markProcessed(event.id);
       return;
     }
 
     if (command.status === "failed") {
-      await this.addJiraFailureComment(jira, event, command);
       await this.intakeEvents.markFailed(
         event.id,
         command.errorMessage ?? "Gitflow command failed.",
@@ -183,33 +35,6 @@ export class IntegrationLifecycleService {
     if (!event || event.provider !== "jira") return;
 
     await this.intakeEvents.markProcessing(event.id, command.workerId);
-  }
-
-  private async getJiraContext(
-    command: Command,
-  ): Promise<
-    | {
-        participant: IntegrationIntakeEventParticipant;
-        credentials?: JiraIntegrationCredentials;
-      }
-    | undefined
-  > {
-    if (!command.workerId) return undefined;
-
-    const participant = await this.intakeEvents.getParticipantForWorker(
-      command.transactionId,
-      command.workerId,
-    );
-    if (!participant) return undefined;
-
-    return {
-      participant,
-      credentials: await this.jiraIntegrations.getCredentials(
-        participant.userId,
-        participant.integrationId,
-        command.workerId,
-      ),
-    };
   }
 
   private async recordAssignedRepositoryUsage(command: Command): Promise<void> {
@@ -229,94 +54,6 @@ export class IntegrationLifecycleService {
       });
     }
   }
-
-  private async addJiraCompletionComment(
-    jira: JiraClient,
-    event: IntegrationIntakeEvent,
-    command: Command,
-  ): Promise<void> {
-    const details = parseGitflowResult(command.result ?? "");
-    const summary = extractChangeSummary(
-      details.aiSummary || command.agentResponse || command.result || "",
-    );
-    const lines = [
-      "FirstDraft completed this gitflow task.",
-      details.pullRequest ? `Pull request: ${details.pullRequest}` : undefined,
-      details.branch ? `Branch: ${details.branch}` : undefined,
-      details.commit ? `Commit: ${details.commit}` : undefined,
-      summary ? "" : undefined,
-      summary ? "Summary:" : undefined,
-      summary ? truncateCommentSection(summary) : undefined,
-    ].filter((line): line is string => line !== undefined);
-
-    await this.addJiraComment(jira, event, command, lines.join("\n"));
-  }
-
-  private async addJiraFailureComment(
-    jira: JiraClient,
-    event: IntegrationIntakeEvent,
-    command: Command,
-  ): Promise<void> {
-    const reason = command.errorMessage || "Gitflow command failed.";
-    await this.addJiraComment(
-      jira,
-      event,
-      command,
-      [
-        "FirstDraft could not complete this gitflow task.",
-        "",
-        "Reason:",
-        truncateCommentSection(reason),
-      ].join("\n"),
-    );
-  }
-
-  private async addJiraComment(
-    jira: JiraClient,
-    event: IntegrationIntakeEvent,
-    command: Command,
-    body: string,
-  ): Promise<void> {
-    try {
-      await jira.addComment(event.sourceItemKey, truncateJiraComment(body));
-      console.log("[integration-lifecycle] Jira issue commented", {
-        eventId: event.id,
-        transactionId: command.transactionId,
-        issueKey: event.sourceItemKey,
-        status: command.status,
-      });
-    } catch (error) {
-      console.error("[integration-lifecycle] Jira comment failed", {
-        eventId: event.id,
-        transactionId: command.transactionId,
-        issueKey: event.sourceItemKey,
-        status: command.status,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-}
-
-function parseGitflowResult(result: string): GitflowResultDetails {
-  const details: GitflowResultDetails = {};
-  const lines = result.replace(/\r\n/g, "\n").split("\n");
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (line.startsWith("Branch:")) {
-      details.branch = line.slice("Branch:".length).trim() || undefined;
-    } else if (line.startsWith("Commit:")) {
-      details.commit = line.slice("Commit:".length).trim() || undefined;
-    } else if (line.startsWith("Pull request:")) {
-      details.pullRequest =
-        line.slice("Pull request:".length).trim() || undefined;
-    } else if (line.trim() === "AI summary:") {
-      details.aiSummary = lines.slice(i + 1).join("\n").trim() || undefined;
-      break;
-    }
-  }
-
-  return details;
 }
 
 function readGitflowPayloadString(command: string, key: string): string | undefined {
@@ -328,92 +65,3 @@ function readGitflowPayloadString(command: string, key: string): string | undefi
     return undefined;
   }
 }
-
-function truncateCommentSection(value: string): string {
-  const normalized = value.trim();
-  if (normalized.length <= maxJiraCommentSectionCharacters) return normalized;
-  return `${normalized.slice(0, maxJiraCommentSectionCharacters).trimEnd()}\n...`;
-}
-
-function extractChangeSummary(value: string): string {
-  const normalized = value.replace(/\r\n/g, "\n").trim();
-  if (!normalized) return "";
-
-  const summary = extractMarkdownSection(normalized, ["PR Summary", "Summary"]);
-  if (summary) return summary;
-
-  const execution = textAfterLastDelimiter(normalized, "----- Execution -----");
-  const lines: string[] = [];
-  for (const rawLine of execution.split("\n")) {
-    const line = rawLine.trim();
-    if (isHeading(line, ["Tests", "Testing"])) break;
-    if (!line || line.startsWith("```")) continue;
-    lines.push(line);
-    if (lines.length >= 6) break;
-  }
-
-  return lines.join("\n");
-}
-
-function extractMarkdownSection(
-  value: string,
-  headings: readonly string[],
-): string {
-  const lines = value.split("\n");
-  let start = -1;
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    if (isHeading(lines[index], headings)) {
-      start = index + 1;
-      break;
-    }
-  }
-
-  if (start < 0) return "";
-
-  let end = lines.length;
-  for (let index = start; index < lines.length; index += 1) {
-    if (normalizeHeading(lines[index])) {
-      end = index;
-      break;
-    }
-  }
-
-  return lines.slice(start, end).join("\n").trim();
-}
-
-function isHeading(line: string, headings: readonly string[]): boolean {
-  const normalized = normalizeHeading(line);
-  return headings.some(
-    (heading) => normalized.toLowerCase() === heading.toLowerCase(),
-  );
-}
-
-function normalizeHeading(line: string): string {
-  const normalized = line
-    .trim()
-    .replace(/^#+/, "")
-    .trim()
-    .replace(/^\*+|\*+$/g, "")
-    .trim();
-  if (!normalized.endsWith(":")) return "";
-  const heading = normalized.slice(0, -1).trim();
-  if (heading.length > 80 || heading.includes(".") || heading.includes(",")) {
-    return "";
-  }
-  return heading;
-}
-
-function textAfterLastDelimiter(value: string, delimiter: string): string {
-  const index = value.lastIndexOf(delimiter);
-  if (index < 0) return value;
-  return value.slice(index + delimiter.length);
-}
-
-function truncateJiraComment(value: string): string {
-  const normalized = value.trim();
-  if (normalized.length <= maxJiraCommentCharacters) return normalized;
-  return `${normalized.slice(0, maxJiraCommentCharacters).trimEnd()}\n...`;
-}
-
-const maxJiraCommentSectionCharacters = 4000;
-const maxJiraCommentCharacters = 8000;

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using FirstDraft.Api.Execution;
 using FirstDraft.Cli.Git;
 using FirstDraft.Configuration;
 using FirstDraft.Infrastructure.Logging;
@@ -16,6 +17,8 @@ namespace FirstDraft.Cli.Jira
         private const int MaxImageAttachments = 5;
         private const long MaxImageAttachmentBytes = 10 * 1024 * 1024;
         private const long MaxImageAttachmentTotalBytes = 25 * 1024 * 1024;
+        private const int MaxJiraCommentSectionCharacters = 4000;
+        private const int MaxJiraCommentCharacters = 8000;
 
         private static readonly HashSet<string> SupportedImageMimeTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -30,7 +33,7 @@ namespace FirstDraft.Cli.Jira
         private readonly ApplicationData _applicationData;
         private readonly Func<Task<string>> _getWorkerAccessToken;
         private readonly Func<string?> _getClaimBlockReason;
-        private readonly Func<string, string, string, Task> _executeClaimedCommand;
+        private readonly Func<string, string, string, Task<CommandExecutionResult>> _executeClaimedCommand;
         private readonly HttpClient _http = new HttpClient();
         private CancellationTokenSource? _cancellation;
         private Task? _runTask;
@@ -40,7 +43,7 @@ namespace FirstDraft.Cli.Jira
             ApplicationData applicationData,
             Func<Task<string>> getWorkerAccessToken,
             Func<string?> getClaimBlockReason,
-            Func<string, string, string, Task> executeClaimedCommand)
+            Func<string, string, string, Task<CommandExecutionResult>> executeClaimedCommand)
         {
             _logger = logger;
             _applicationData = applicationData;
@@ -250,19 +253,144 @@ namespace FirstDraft.Cli.Jira
                         attachment.ContentUrl))
                     .ToArray();
                 string executionCommand = BuildGitflowCommand(repository, issue, issueUrl, executionAttachments);
+                await TransitionIssueToProcessing(jira, integration, issue, cancellationToken);
 
                 _logger.Info($"Claimed Jira issue {issue.Key}; dispatching gitflow command {claim.TransactionId}");
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await _executeClaimedCommand(claim.TransactionId, executionCommand, "gitflow");
+                        await ExecuteClaimedJiraCommand(integration, issue, claim.TransactionId, executionCommand);
                     }
                     catch (Exception ex)
                     {
                         _logger.Error($"Unhandled error executing claimed Jira ticket {issue.Key}", ex);
                     }
                 }, cancellationToken);
+            }
+        }
+
+        private async Task TransitionIssueToProcessing(
+            JiraCliClient jira,
+            JiraIntegrationConfig integration,
+            JiraIssueSummary issue,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await jira.TransitionIssue(
+                    issue.Key,
+                    integration.ProcessingStatusId,
+                    integration.ProcessingStatusName,
+                    cancellationToken);
+                _logger.Info($"Transitioned Jira issue {issue.Key} to {integration.ProcessingStatusName}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Unable to transition Jira issue {issue.Key} to {integration.ProcessingStatusName}", ex);
+            }
+        }
+
+        private async Task ExecuteClaimedJiraCommand(
+            JiraIntegrationConfig integration,
+            JiraIssueSummary issue,
+            string transactionId,
+            string executionCommand)
+        {
+            CommandExecutionResult result;
+            try
+            {
+                result = await _executeClaimedCommand(transactionId, executionCommand, "gitflow");
+            }
+            catch (Exception ex)
+            {
+                await AddJiraFailureComment(integration, issue, ex.Message, CancellationToken.None);
+                throw;
+            }
+
+            using JiraCliClient jira = new JiraCliClient(integration.SiteUrl, integration.Email, integration.GetApiToken(_applicationData));
+            if (string.IsNullOrWhiteSpace(result.ErrorMessage))
+            {
+                await AddJiraCompletionComment(jira, issue, result.Result ?? string.Empty, CancellationToken.None);
+                try
+                {
+                    await jira.TransitionIssue(issue.Key, integration.ProcessedStatusId, integration.ProcessedStatusName, CancellationToken.None);
+                    _logger.Info($"Transitioned Jira issue {issue.Key} to {integration.ProcessedStatusName}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Unable to transition Jira issue {issue.Key} to {integration.ProcessedStatusName}", ex);
+                }
+                return;
+            }
+
+            await AddJiraFailureComment(jira, issue, result.ErrorMessage, CancellationToken.None);
+        }
+
+        private async Task AddJiraFailureComment(
+            JiraIntegrationConfig integration,
+            JiraIssueSummary issue,
+            string reason,
+            CancellationToken cancellationToken)
+        {
+            using JiraCliClient jira = new JiraCliClient(integration.SiteUrl, integration.Email, integration.GetApiToken(_applicationData));
+            await AddJiraFailureComment(jira, issue, reason, cancellationToken);
+        }
+
+        private async Task AddJiraCompletionComment(
+            JiraCliClient jira,
+            JiraIssueSummary issue,
+            string result,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                GitflowResultDetails details = ParseGitflowResult(result);
+                string summary = ExtractChangeSummary(details.AiSummary ?? result);
+                List<string> lines = new List<string>
+                {
+                    "FirstDraft completed this gitflow task."
+                };
+                if (!string.IsNullOrWhiteSpace(details.PullRequest)) lines.Add($"Pull request: {details.PullRequest}");
+                if (!string.IsNullOrWhiteSpace(details.Branch)) lines.Add($"Branch: {details.Branch}");
+                if (!string.IsNullOrWhiteSpace(details.Commit)) lines.Add($"Commit: {details.Commit}");
+                if (!string.IsNullOrWhiteSpace(summary))
+                {
+                    lines.Add(string.Empty);
+                    lines.Add("Summary:");
+                    lines.Add(TruncateCommentSection(summary));
+                }
+
+                await jira.AddComment(issue.Key, TruncateJiraComment(string.Join("\n", lines)), cancellationToken);
+                _logger.Info($"Added completion comment to Jira issue {issue.Key}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Unable to add completion comment to Jira issue {issue.Key}", ex);
+            }
+        }
+
+        private async Task AddJiraFailureComment(
+            JiraCliClient jira,
+            JiraIssueSummary issue,
+            string reason,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                string body = string.Join("\n", new[]
+                {
+                    "FirstDraft could not complete this gitflow task.",
+                    string.Empty,
+                    "Reason:",
+                    TruncateCommentSection(string.IsNullOrWhiteSpace(reason) ? "Gitflow command failed." : reason)
+                });
+                await jira.AddComment(issue.Key, TruncateJiraComment(body), cancellationToken);
+                _logger.Info($"Added failure comment to Jira issue {issue.Key}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Unable to add failure comment to Jira issue {issue.Key}", ex);
             }
         }
 
@@ -363,6 +491,127 @@ namespace FirstDraft.Cli.Jira
             {
                 return Array.Empty<string>();
             }
+        }
+
+        private static GitflowResultDetails ParseGitflowResult(string result)
+        {
+            GitflowResultDetails details = new GitflowResultDetails();
+            string[] lines = result.Replace("\r\n", "\n").Split('\n');
+
+            for (int index = 0; index < lines.Length; index++)
+            {
+                string line = lines[index];
+                if (line.StartsWith("Branch:", StringComparison.Ordinal))
+                {
+                    details.Branch = CleanResultValue(line.Substring("Branch:".Length));
+                }
+                else if (line.StartsWith("Commit:", StringComparison.Ordinal))
+                {
+                    details.Commit = CleanResultValue(line.Substring("Commit:".Length));
+                }
+                else if (line.StartsWith("Pull request:", StringComparison.Ordinal))
+                {
+                    details.PullRequest = CleanResultValue(line.Substring("Pull request:".Length));
+                }
+                else if (string.Equals(line.Trim(), "AI summary:", StringComparison.Ordinal))
+                {
+                    details.AiSummary = CleanResultValue(string.Join("\n", lines.Skip(index + 1)));
+                    break;
+                }
+            }
+
+            return details;
+        }
+
+        private static string? CleanResultValue(string value)
+        {
+            string normalized = value.Trim();
+            return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+        }
+
+        private static string ExtractChangeSummary(string value)
+        {
+            string normalized = value.Replace("\r\n", "\n").Trim();
+            if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
+
+            string summary = ExtractMarkdownSection(normalized, new[] { "PR Summary", "Summary" });
+            if (!string.IsNullOrWhiteSpace(summary)) return summary;
+
+            string execution = TextAfterLastDelimiter(normalized, "----- Execution -----");
+            List<string> lines = new List<string>();
+            foreach (string rawLine in execution.Split('\n'))
+            {
+                string line = rawLine.Trim();
+                if (IsHeading(line, new[] { "Tests", "Testing" })) break;
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("```", StringComparison.Ordinal)) continue;
+                lines.Add(line);
+                if (lines.Count >= 6) break;
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        private static string ExtractMarkdownSection(string value, IReadOnlyCollection<string> headings)
+        {
+            string[] lines = value.Split('\n');
+            int start = -1;
+            for (int index = lines.Length - 1; index >= 0; index--)
+            {
+                if (IsHeading(lines[index], headings))
+                {
+                    start = index + 1;
+                    break;
+                }
+            }
+
+            if (start < 0) return string.Empty;
+
+            int end = lines.Length;
+            for (int index = start; index < lines.Length; index++)
+            {
+                if (!string.IsNullOrWhiteSpace(NormalizeHeading(lines[index])))
+                {
+                    end = index;
+                    break;
+                }
+            }
+
+            return string.Join("\n", lines.Skip(start).Take(end - start)).Trim();
+        }
+
+        private static bool IsHeading(string line, IReadOnlyCollection<string> headings)
+        {
+            string normalized = NormalizeHeading(line);
+            return headings.Any(heading => string.Equals(normalized, heading, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizeHeading(string line)
+        {
+            string normalized = line.Trim().TrimStart('#').Trim().Trim('*').Trim();
+            if (!normalized.EndsWith(":", StringComparison.Ordinal)) return string.Empty;
+            string heading = normalized.Substring(0, normalized.Length - 1).Trim();
+            if (heading.Length > 80 || heading.Contains('.') || heading.Contains(',')) return string.Empty;
+            return heading;
+        }
+
+        private static string TextAfterLastDelimiter(string value, string delimiter)
+        {
+            int index = value.LastIndexOf(delimiter, StringComparison.Ordinal);
+            return index < 0 ? value : value.Substring(index + delimiter.Length);
+        }
+
+        private static string TruncateCommentSection(string value)
+        {
+            string normalized = value.Trim();
+            if (normalized.Length <= MaxJiraCommentSectionCharacters) return normalized;
+            return $"{normalized.Substring(0, MaxJiraCommentSectionCharacters).TrimEnd()}\n...";
+        }
+
+        private static string TruncateJiraComment(string value)
+        {
+            string normalized = value.Trim();
+            if (normalized.Length <= MaxJiraCommentCharacters) return normalized;
+            return $"{normalized.Substring(0, MaxJiraCommentCharacters).TrimEnd()}\n...";
         }
 
         private static string BuildReadyJql(JiraIntegrationConfig integration)
@@ -536,5 +785,13 @@ namespace FirstDraft.Cli.Jira
         private sealed record JiraAttachmentMetadata(string Id, string Filename, string MimeType, long? Size, string ContentUrl);
 
         private sealed record GitflowAttachmentClaim(string Id, string Filename, string MimeType, long? Size, string IntegrationId, string ContentUrl);
+
+        private sealed class GitflowResultDetails
+        {
+            public string? Branch { get; set; }
+            public string? Commit { get; set; }
+            public string? PullRequest { get; set; }
+            public string? AiSummary { get; set; }
+        }
     }
 }

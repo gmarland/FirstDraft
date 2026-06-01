@@ -49,7 +49,7 @@ Workers and commands:
 - `GET /api/workers/:workerId/commands/:transactionId/output`
 - `GET /api/workers/:workerId/commands/:transactionId/responses`
 
-Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for duplicate guarding and lifecycle transitions. Workers poll Jira themselves, download Jira attachments directly, and use `POST /api/worker-auth/tasks/start` to atomically report a ready issue before execution. There is no public `/api/integrations` management surface.
+Jira integrations are worker-local. Configure them with the client CLI; workers advertise their Jira integration list during registration, and the API stores that synced copy for duplicate guarding and reporting. Workers poll Jira themselves, download Jira attachments directly, manage Jira issue transitions/comments, and use `POST /api/worker-auth/tasks/start` to atomically report a ready issue before execution. There is no public `/api/integrations` management surface.
 
 ## Commands
 

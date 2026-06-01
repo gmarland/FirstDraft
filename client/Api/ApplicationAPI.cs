@@ -103,7 +103,7 @@ namespace FirstDraft.Api
             await StopHeartbeat();
         }
 
-        public Task ExecuteClaimedCommand(string transactionId, string command, string commandMode)
+        public Task<CommandExecutionResult> ExecuteClaimedCommand(string transactionId, string command, string commandMode)
         {
             return _commands.RunCommand(transactionId, command, commandMode);
         }
