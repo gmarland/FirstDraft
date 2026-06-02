@@ -47,3 +47,8 @@ pre {
   height: calc(100vh - 112px);
   max-height: none;
 }
+
+.landing-code-block {
+  max-height: none;
+  white-space: pre;
+}
