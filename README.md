@@ -108,15 +108,19 @@ Repositories and Jira integrations are configured on each worker with the worker
 - Codex CLI or Claude CLI for `gitflow` execution
 - `git` on `PATH` for workers that execute `gitflow`
 
-### 1. Start local infrastructure
+### 1. Start the local Docker stack
 
 ```bash
 docker compose up -d
 ```
 
-This starts Postgres and MinIO. MinIO creates a local `firstdraft-command-output` bucket for command output storage.
+This pulls and starts the published FirstDraft API and web console images, plus Postgres and MinIO. MinIO creates a local `firstdraft-command-output` bucket for command output storage.
 
-### 2. Run the API
+The API listens on `http://localhost:5080`, and the web console is available at `http://localhost:8080`.
+
+The checked-in compose file uses development auth/admin secrets. Override `JWT_SECRET`, `WORKER_JWT_SECRET`, `TENANT_ADMIN_KEY`, or `VITE_API_BASE_URL` from a root `.env` file or shell environment for anything beyond local testing. If local ports are already in use, override `API_HOST_PORT` or `APP_HOST_PORT`.
+
+### 2. Run the API from source
 
 ```bash
 cd api
@@ -125,9 +129,9 @@ cp .env.example .env
 npm run dev
 ```
 
-The API listens on `http://localhost:5080`. The checked-in `api/.env.example` matches the local `docker-compose.yml` Postgres and MinIO services, including the `firstdraft-command-output` bucket and `AWS_REGION=eu-west-2` for local S3-compatible storage.
+Use this instead of the `api` compose service when developing the API locally. The checked-in `api/.env.example` matches the local `docker-compose.yml` Postgres and MinIO services, including the `firstdraft-command-output` bucket and `AWS_REGION=eu-west-2` for local S3-compatible storage.
 
-### 3. Run the web console
+### 3. Run the web console from source
 
 ```bash
 cd app
@@ -136,7 +140,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open the Vite URL printed by the command, then create the first user from the console. The checked-in `app/.env.example` points the console at `http://localhost:5080`.
+Use this instead of the `app` compose service when developing the console locally. Open the Vite URL printed by the command, then create the first user from the console. The checked-in `app/.env.example` points the console at `http://localhost:5080`.
 
 ### 4. Configure and run a worker
 

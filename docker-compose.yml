@@ -15,6 +15,55 @@ services:
       timeout: 3s
       retries: 10
 
+  api:
+    image: gmarland/firstdraft-api:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-bucket:
+        condition: service_completed_successfully
+    environment:
+      PORT: 5080
+      DATABASE_URL: postgres://firstdraft:firstdraft@postgres:5432/firstdraft
+      JWT_SECRET: ${JWT_SECRET:-change-this-local-development-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      JWT_ISSUER: ${JWT_ISSUER:-firstdraft-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-firstdraft-web}
+      WORKER_JWT_SECRET: ${WORKER_JWT_SECRET:-change-this-local-worker-jwt-secret}
+      WORKER_JWT_ISSUER: ${WORKER_JWT_ISSUER:-firstdraft-api}
+      WORKER_JWT_AUDIENCE: ${WORKER_JWT_AUDIENCE:-firstdraft-worker-api}
+      TENANT_ADMIN_KEY: ${TENANT_ADMIN_KEY:-change-this-local-admin-key}
+      COMMAND_OUTPUT_STORAGE_PROVIDER: s3
+      COMMAND_OUTPUT_BUCKET: firstdraft-command-output
+      COMMAND_OUTPUT_PREFIX: ${COMMAND_OUTPUT_PREFIX:-dev/}
+      AWS_REGION: ${AWS_REGION:-eu-west-2}
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_FORCE_PATH_STYLE: "true"
+    ports:
+      - "${API_HOST_PORT:-5080}:5080"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5080/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    image: gmarland/firstdraft-app:latest
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5080}
+    ports:
+      - "${APP_HOST_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   minio:
     image: minio/minio:latest
     command: ["server", "/data", "--console-address", ":9001"]
