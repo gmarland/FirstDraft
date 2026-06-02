@@ -23,15 +23,16 @@ type Props = {
   onCreateUser(): void;
 };
 
-const workerInstallCommands = `cd client
-dotnet run -- init
-dotnet run -- repos add
-dotnet run -- integrations add jira
-dotnet run -- run`;
+const workerInstallCommands = `brew tap gmarland/firstdraft
+brew install firstdraft
+firstdraft init
+firstdraft repos add
+firstdraft integrations add jira
+firstdraft run`;
 
-const selfHostCommands = `docker pull gmarland/firstdraft-api:latest
-docker pull gmarland/firstdraft-app:latest
-docker run -e VITE_API_BASE_URL=https://api.example.com gmarland/firstdraft-app:latest`;
+const selfHostCommands = `git clone https://github.com/gmarland/FirstDraft.git
+cd FirstDraft
+docker compose up -d`;
 
 const localDevelopmentCommands = `docker compose up -d
 cd api && npm install && cp .env.example .env && npm run dev
@@ -347,10 +348,10 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
             <SetupPanel
               icon={<CloudUploadIcon />}
               eyebrow="Self-host"
-              title="Run your own app and API images"
-              body="Use the published Docker images or build your own from this repo. The API needs Postgres plus durable command output storage."
+              title="Run the GitHub Docker Compose stack"
+              body="Clone the FirstDraft repository and start the checked-in Compose file. It pulls the published app and API images, plus Postgres and MinIO."
               code={selfHostCommands}
-              footer="Set VITE_API_BASE_URL when running the app container so the browser points at your hosted API."
+              footer="Override JWT_SECRET, WORKER_JWT_SECRET, TENANT_ADMIN_KEY, VITE_API_BASE_URL, API_HOST_PORT, or APP_HOST_PORT from a root .env file or shell environment."
             />
           </Box>
         </Box>
