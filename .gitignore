@@ -63,6 +63,7 @@ launchSettings.json
 # Local environment
 .env
 .env.local
+scripts/deploy-gcp.local.sh
 
 # OS files
 .DS_Store
