@@ -10,8 +10,20 @@ import type {
   UpdateProfileInput,
 } from "../types/api";
 
+type RuntimeConfig = {
+  apiBaseUrl?: string;
+};
+
+declare global {
+  interface Window {
+    __FIRSTDRAFT_CONFIG__?: RuntimeConfig;
+  }
+}
+
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5080";
+  window.__FIRSTDRAFT_CONFIG__?.apiBaseUrl ??
+  import.meta.env.VITE_API_BASE_URL ??
+  "http://localhost:5080";
 
 export class ApiError extends Error {
   public constructor(

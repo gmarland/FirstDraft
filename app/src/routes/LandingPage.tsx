@@ -30,7 +30,8 @@ dotnet run -- integrations add jira
 dotnet run -- run`;
 
 const selfHostCommands = `docker pull gmarland/firstdraft-api:latest
-docker pull gmarland/firstdraft-app:latest`;
+docker pull gmarland/firstdraft-app:latest
+docker run -e VITE_API_BASE_URL=https://api.example.com gmarland/firstdraft-app:latest`;
 
 const localDevelopmentCommands = `docker compose up -d
 cd api && npm install && cp .env.example .env && npm run dev
@@ -154,7 +155,10 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.4fr) minmax(340px, 0.9fr)" },
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "minmax(0, 1.4fr) minmax(340px, 0.9fr)",
+              },
               gap: { xs: 4, md: 7 },
               alignItems: "center",
             }}
@@ -233,11 +237,13 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
                 >
                   Worker fleet snapshot
                 </Box>
-                <Stack spacing={0} divider={<Divider sx={{ borderColor: "#2b4148" }} />}>
+                <Stack
+                  spacing={0}
+                  divider={<Divider sx={{ borderColor: "#2b4148" }} />}
+                >
                   <MetricRow label="Workers online" value="6" />
                   <MetricRow label="Ready Jira issues" value="18" />
                   <MetricRow label="Gitflow tasks running" value="4" />
-                  <MetricRow label="Output storage" value="S3 / GCS / Azure" />
                 </Stack>
               </Box>
             </Box>
@@ -271,7 +277,13 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
         </Box>
       </Container>
 
-      <Box sx={{ bgcolor: "#ffffff", borderTop: "1px solid #dde5e8", borderBottom: "1px solid #dde5e8" }}>
+      <Box
+        sx={{
+          bgcolor: "#ffffff",
+          borderTop: "1px solid #dde5e8",
+          borderBottom: "1px solid #dde5e8",
+        }}
+      >
         <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
           <SectionHeading
             eyebrow="Architecture"
@@ -292,7 +304,11 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
             {workflowSteps.map((step, index) => (
               <Box key={step.title}>
                 <Box sx={stepSx}>
-                  <Stack direction="row" spacing={1.25} sx={{ mb: 1.5, alignItems: "center" }}>
+                  <Stack
+                    direction="row"
+                    spacing={1.25}
+                    sx={{ mb: 1.5, alignItems: "center" }}
+                  >
                     <Box sx={iconBoxSx}>{step.icon}</Box>
                     <Typography sx={{ color: "#667985", fontWeight: 800 }}>
                       {String(index + 1).padStart(2, "0")}
@@ -334,17 +350,7 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
               title="Run your own app and API images"
               body="Use the published Docker images or build your own from this repo. The API needs Postgres plus durable command output storage."
               code={selfHostCommands}
-              footer="Build the app image with VITE_API_BASE_URL or the publish script's --api-base-url option so the browser points at your hosted API."
-            />
-          </Box>
-          <Box sx={{ gridColumn: { xs: "auto", md: "1 / -1" } }}>
-            <SetupPanel
-              icon={<PlayCircleIcon />}
-              eyebrow="Local development"
-              title="Start the full stack locally"
-              body="The checked-in compose file starts Postgres and MinIO, including the firstdraft-command-output bucket used by local API settings."
-              code={localDevelopmentCommands}
-              footer="After the API and app are running, open the Vite URL, create the first user, then run a worker with the same API base URL."
+              footer="Set VITE_API_BASE_URL when running the app container so the browser points at your hosted API."
             />
           </Box>
         </Box>
@@ -366,7 +372,9 @@ function MetricRow({ label, value }: { label: string; value: string }) {
       }}
     >
       <Typography sx={{ color: "#9fb0b7" }}>{label}</Typography>
-      <Typography sx={{ fontWeight: 900, color: "#ffffff" }}>{value}</Typography>
+      <Typography sx={{ fontWeight: 900, color: "#ffffff" }}>
+        {value}
+      </Typography>
     </Stack>
   );
 }
@@ -382,10 +390,20 @@ function SectionHeading({
 }) {
   return (
     <Stack spacing={1.25} sx={{ maxWidth: 760, mb: 3 }}>
-      <Typography sx={{ color: "#2364aa", fontWeight: 900, fontSize: 13, textTransform: "uppercase" }}>
+      <Typography
+        sx={{
+          color: "#2364aa",
+          fontWeight: 900,
+          fontSize: 13,
+          textTransform: "uppercase",
+        }}
+      >
         {eyebrow}
       </Typography>
-      <Typography variant="h1" sx={{ fontSize: { xs: 28, md: 34 }, lineHeight: 1.18 }}>
+      <Typography
+        variant="h1"
+        sx={{ fontSize: { xs: 28, md: 34 }, lineHeight: 1.18 }}
+      >
         {title}
       </Typography>
       <Typography sx={{ ...bodyTextSx, fontSize: 16 }}>{body}</Typography>
@@ -410,9 +428,20 @@ function SetupPanel({
 }) {
   return (
     <Box sx={cardSx}>
-      <Stack direction="row" spacing={1.25} sx={{ mb: 1.5, alignItems: "center" }}>
+      <Stack
+        direction="row"
+        spacing={1.25}
+        sx={{ mb: 1.5, alignItems: "center" }}
+      >
         <Box sx={iconBoxSx}>{icon}</Box>
-        <Typography sx={{ color: "#2364aa", fontWeight: 900, fontSize: 13, textTransform: "uppercase" }}>
+        <Typography
+          sx={{
+            color: "#2364aa",
+            fontWeight: 900,
+            fontSize: 13,
+            textTransform: "uppercase",
+          }}
+        >
           {eyebrow}
         </Typography>
       </Stack>

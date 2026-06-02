@@ -35,10 +35,22 @@ Copy the example environment file when you need to point the console at another 
 cp .env.example .env.local
 ```
 
-Set `VITE_API_BASE_URL` when the API is hosted somewhere else:
+For local development or static builds, set `VITE_API_BASE_URL` when the API is hosted somewhere else:
 
 ```bash
 VITE_API_BASE_URL=http://localhost:5080
+```
+
+For CDN/static hosting, build with `.env.production` or an explicit environment variable so Vite bakes the API URL into the bundle:
+
+```bash
+VITE_API_BASE_URL=https://api.example.com npm run build
+```
+
+For Docker hosting, set the same variable when running the container. The nginx image writes browser runtime config from the container environment before serving the app:
+
+```bash
+docker run -e VITE_API_BASE_URL=https://api.example.com gmarland/firstdraft-app:latest
 ```
 
 Important API areas used by the console include:

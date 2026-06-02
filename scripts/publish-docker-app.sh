@@ -6,12 +6,11 @@ VERSION=""
 PUSH_LATEST=true
 DRY_RUN=false
 PLATFORM=""
-API_BASE_URL=""
 
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/publish-docker-app.sh VERSION [--no-latest] [--platform PLATFORM] [--api-base-url URL] [--dry-run]
+  scripts/publish-docker-app.sh VERSION [--no-latest] [--platform PLATFORM] [--dry-run]
 
 Builds the FirstDraft app Docker image and pushes it to Docker Hub as:
   gmarland/firstdraft-app:VERSION
@@ -23,9 +22,10 @@ Arguments:
 Options:
   --no-latest          Do not tag and push latest
   --platform PLATFORM  Pass a Docker platform, for example linux/amd64
-  --api-base-url URL   Build the app with VITE_API_BASE_URL set to URL
   --dry-run            Print the Docker commands without running them
   -h, --help           Show this help
+
+Set VITE_API_BASE_URL when running the container to point the browser at your hosted API.
 USAGE
 }
 
@@ -59,11 +59,6 @@ parse_args() {
       --platform)
         [[ $# -ge 2 ]] || die "--platform requires a value"
         PLATFORM="$2"
-        shift 2
-        ;;
-      --api-base-url)
-        [[ $# -ge 2 ]] || die "--api-base-url requires a value"
-        API_BASE_URL="$2"
         shift 2
         ;;
       --dry-run)
@@ -120,10 +115,6 @@ main() {
 
   if [[ -n "$PLATFORM" ]]; then
     build_args+=(--platform "$PLATFORM")
-  fi
-
-  if [[ -n "$API_BASE_URL" ]]; then
-    build_args+=(--build-arg "VITE_API_BASE_URL=$API_BASE_URL")
   fi
 
   if [[ "$PUSH_LATEST" == true ]]; then
