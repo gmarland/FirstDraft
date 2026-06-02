@@ -76,7 +76,9 @@ require_clean_worktree() {
 
 require_auth_and_repos() {
   info "Checking GitHub authentication and repositories"
-  run gh auth status
+  local active_login
+  active_login="$(gh api user --jq .login)"
+  [[ "$active_login" == "gmarland" ]] || die "active GitHub account must be gmarland, got $active_login"
   run gh repo view "$REPO" >/dev/null
   run gh repo view "$TAP" >/dev/null
 }
