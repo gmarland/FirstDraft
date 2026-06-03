@@ -13,8 +13,6 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CommitIcon from "@mui/icons-material/Commit";
 import HubIcon from "@mui/icons-material/Hub";
 import LanIcon from "@mui/icons-material/Lan";
-import PlayCircleIcon from "@mui/icons-material/PlayCircle";
-import StorageIcon from "@mui/icons-material/Storage";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 
@@ -34,52 +32,71 @@ const selfHostCommands = `git clone https://github.com/gmarland/FirstDraft.git
 cd FirstDraft
 docker compose up -d`;
 
-const localDevelopmentCommands = `docker compose up -d
-cd api && npm install && cp .env.example .env && npm run dev
-cd app && npm install && cp .env.example .env.local && npm run dev`;
-
-const workflowSteps = [
+const pipelineSteps = [
   {
-    title: "Console",
-    description:
-      "Sign in to inspect workers, task state, command history, output, and parsed responses.",
+    title: "Jira issue",
+    detail: "FD-142 is ready on the configured board.",
     icon: <VisibilityIcon />,
   },
   {
-    title: "API",
-    description:
-      "Records worker state, Jira claims, command metadata, and durable output.",
-    icon: <StorageIcon />,
-  },
-  {
-    title: "Workers",
-    description:
-      "Run near the repositories, credentials, build tools, and private networks the work needs.",
+    title: "Worker claim",
+    detail: "A local worker claims it before anyone else can.",
     icon: <LanIcon />,
   },
   {
-    title: "Gitflow",
-    description:
-      "Workers claim eligible Jira issues, execute repository-oriented work locally, and report results.",
+    title: "Gitflow run",
+    detail: "The ticket is implemented in the target repository.",
+    icon: <TerminalIcon />,
+  },
+  {
+    title: "Draft PR",
+    detail: "A branch is pushed and a reviewable draft PR is opened.",
     icon: <CommitIcon />,
   },
 ];
 
-const featureCards = [
+const setupSteps = [
   {
-    title: "Remote worker registry",
+    title: "Install a worker",
     description:
-      "See connected workers, runtime state, advertised paths, skills, repositories, Jira integrations, and task capacity.",
+      "Run FirstDraft on a trusted machine that already has your repos, build tools, AI CLI, GitHub auth, Jira credentials, and network access.",
+    icon: <TerminalIcon />,
   },
   {
-    title: "Jira-driven intake",
+    title: "Register the repo",
     description:
-      "Workers poll their own Jira integrations, claim matching repository-backed issues, and avoid duplicate active claims.",
+      "Add the repository URL plus source and PR target branches. Jira tickets are only picked up when their repository matches this worker.",
+    icon: <CommitIcon />,
   },
   {
-    title: "Auditable output",
+    title: "Point it at Jira",
     description:
-      "Command metadata, terminal output, parsed responses, status, and history are visible from the console.",
+      "Connect a Jira board, choose ready, processing, and processed statuses, and optionally filter by assignee.",
+    icon: <VisibilityIcon />,
+  },
+  {
+    title: "Let it run",
+    description:
+      "The worker polls Jira, claims eligible tickets, runs gitflow locally, and sends status and output back to the console.",
+    icon: <LanIcon />,
+  },
+];
+
+const executionFacts = [
+  {
+    title: "Claims before execution",
+    description:
+      "The API records Jira claims and rejects duplicate active claims, so one ticket is handled by one worker.",
+  },
+  {
+    title: "Keeps context local",
+    description:
+      "Repository workspaces, credentials, attachments, tests, private services, and AI execution stay on the worker machine.",
+  },
+  {
+    title: "Generates reviewer-ready output",
+    description:
+      "Gitflow creates a branch, commits changes, pushes to origin, opens a draft PR, and posts completion details back to Jira.",
   },
 ];
 
@@ -167,7 +184,7 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
             <Box>
               <Stack spacing={3}>
                 <Chip
-                  label="AI engineering work, run on machines you control"
+                  label="Jira tickets to draft pull requests"
                   sx={{
                     alignSelf: "flex-start",
                     bgcolor: "#e8f0f5",
@@ -185,7 +202,8 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
                       color: "#172026",
                     }}
                   >
-                    A reporting plane for remote AI coding workers.
+                    Point a worker at Jira. It picks up tickets and opens draft
+                    PRs.
                   </Typography>
                   <Typography
                     sx={{
@@ -195,9 +213,11 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
                       lineHeight: 1.7,
                     }}
                   >
-                    FirstDraft keeps the browser-visible audit trail while work
-                    happens close to the repositories, CLI credentials, local
-                    toolchains, and private networks it depends on.
+                    Install FirstDraft on a machine with your repositories,
+                    tools, credentials, and network access. Connect a Jira
+                    board, choose the statuses that mean ready, processing, and
+                    done, and the worker claims eligible tickets, implements
+                    them locally, and reports every step back to the console.
                   </Typography>
                 </Stack>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -236,15 +256,19 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
                     fontSize: 13,
                   }}
                 >
-                  Worker fleet snapshot
+                  Live ticket path
                 </Box>
                 <Stack
                   spacing={0}
                   divider={<Divider sx={{ borderColor: "#2b4148" }} />}
                 >
-                  <MetricRow label="Workers online" value="6" />
-                  <MetricRow label="Ready Jira issues" value="18" />
-                  <MetricRow label="Gitflow tasks running" value="4" />
+                  {pipelineSteps.map((step, index) => (
+                    <PipelineRow
+                      key={step.title}
+                      step={step}
+                      index={index}
+                    />
+                  ))}
                 </Stack>
               </Box>
             </Box>
@@ -254,24 +278,38 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
 
       <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
         <SectionHeading
-          eyebrow="What it does"
-          title="Operate a worker fleet without moving the work away from its context."
-          body="Workers register with the API, advertise what they can safely access, claim eligible Jira issues, and send task progress back to the console."
+          eyebrow="How it works"
+          title="Set up a worker, point it at a Jira board, and let it take the next ticket."
+          body="FirstDraft is worker-owned intake for repository-backed Jira work. Each worker advertises what it can reach, polls its configured board, and accepts work only when the ticket matches its repositories and capacity."
         />
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, minmax(0, 1fr))",
+              md: "repeat(4, minmax(0, 1fr))",
+            },
             gap: 2.5,
           }}
         >
-          {featureCards.map((feature) => (
-            <Box key={feature.title}>
-              <Box sx={cardSx}>
+          {setupSteps.map((step, index) => (
+            <Box key={step.title}>
+              <Box sx={stepSx}>
+                <Stack
+                  direction="row"
+                  spacing={1.25}
+                  sx={{ mb: 1.5, alignItems: "center" }}
+                >
+                  <Box sx={iconBoxSx}>{step.icon}</Box>
+                  <Typography sx={{ color: "#667985", fontWeight: 800 }}>
+                    {String(index + 1).padStart(2, "0")}
+                  </Typography>
+                </Stack>
                 <Typography variant="h2" sx={{ mb: 1.25 }}>
-                  {feature.title}
+                  {step.title}
                 </Typography>
-                <Typography sx={bodyTextSx}>{feature.description}</Typography>
+                <Typography sx={bodyTextSx}>{step.description}</Typography>
               </Box>
             </Box>
           ))}
@@ -287,39 +325,26 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
       >
         <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
           <SectionHeading
-            eyebrow="Architecture"
-            title="Browser visibility, API coordination, local execution."
-            body="The API coordinates reporting and claim guarding. The worker owns execution and keeps credentials, repositories, and network access local."
+            eyebrow="Execution"
+            title="The worker turns a Jira issue into a reviewable draft PR."
+            body="Once a ticket is claimed, the worker moves the issue to processing, prepares the repository, runs AI implementation in a local worktree, commits and pushes the branch, creates a draft pull request, and comments the result back to Jira."
           />
           <Box
             sx={{
               display: "grid",
               gridTemplateColumns: {
                 xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                md: "repeat(4, minmax(0, 1fr))",
+                md: "repeat(3, minmax(0, 1fr))",
               },
-              gap: 2,
+              gap: 2.5,
             }}
           >
-            {workflowSteps.map((step, index) => (
-              <Box key={step.title}>
-                <Box sx={stepSx}>
-                  <Stack
-                    direction="row"
-                    spacing={1.25}
-                    sx={{ mb: 1.5, alignItems: "center" }}
-                  >
-                    <Box sx={iconBoxSx}>{step.icon}</Box>
-                    <Typography sx={{ color: "#667985", fontWeight: 800 }}>
-                      {String(index + 1).padStart(2, "0")}
-                    </Typography>
-                  </Stack>
-                  <Typography variant="h2" sx={{ mb: 1 }}>
-                    {step.title}
-                  </Typography>
-                  <Typography sx={bodyTextSx}>{step.description}</Typography>
-                </Box>
+            {executionFacts.map((fact) => (
+              <Box sx={cardSx} key={fact.title}>
+                <Typography variant="h2" sx={{ mb: 1.25 }}>
+                  {fact.title}
+                </Typography>
+                <Typography sx={bodyTextSx}>{fact.description}</Typography>
               </Box>
             ))}
           </Box>
@@ -339,9 +364,9 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
               icon={<TerminalIcon />}
               eyebrow="Worker setup"
               title="Install and configure a worker"
-              body="Run the worker on a trusted machine that has the target repositories, build tools, AI CLI, Jira credentials, and internal network access."
+              body="This is the path from a blank machine to an active worker that can pick up Jira work and open draft PRs."
               code={workerInstallCommands}
-              footer="During init, set the external API URL, sign in or create a user, choose Codex or Claude, and select the paths and skills this worker should advertise."
+              footer="During init, set the external API URL, sign in or create a user, choose Codex or Claude, and select the paths and skills this worker should advertise. Then add a repository and Jira board before starting the worker."
             />
           </Box>
           <Box>
@@ -360,22 +385,51 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
   );
 }
 
-function MetricRow({ label, value }: { label: string; value: string }) {
+function PipelineRow({
+  step,
+  index,
+}: {
+  step: { title: string; detail: string; icon: ReactNode };
+  index: number;
+}) {
   return (
     <Stack
       direction="row"
       sx={{
         px: 2,
-        py: 1.75,
+        py: 1.5,
         alignItems: "center",
-        justifyContent: "space-between",
-        gap: 2,
+        gap: 1.5,
       }}
     >
-      <Typography sx={{ color: "#9fb0b7" }}>{label}</Typography>
-      <Typography sx={{ fontWeight: 900, color: "#ffffff" }}>
-        {value}
-      </Typography>
+      <Box
+        sx={{
+          display: "grid",
+          placeItems: "center",
+          width: 34,
+          height: 34,
+          borderRadius: 1.5,
+          bgcolor: "#20343c",
+          color: "#8ec5ff",
+          flexShrink: 0,
+        }}
+      >
+        {step.icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          sx={{
+            color: "#ecf2f4",
+            fontWeight: 900,
+            lineHeight: 1.25,
+          }}
+        >
+          {String(index + 1).padStart(2, "0")} {step.title}
+        </Typography>
+        <Typography sx={{ color: "#9fb0b7", fontSize: 13, lineHeight: 1.45 }}>
+          {step.detail}
+        </Typography>
+      </Box>
     </Stack>
   );
 }
