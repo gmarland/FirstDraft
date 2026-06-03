@@ -31,7 +31,7 @@ namespace FirstDraft.Cli.Setup
 
             applicationData.ExternalAPI = PromptUntilValid(
                 "External API",
-                string.IsNullOrWhiteSpace(applicationData.ExternalAPI) ? "http://localhost:5080" : applicationData.ExternalAPI,
+                string.IsNullOrWhiteSpace(applicationData.ExternalAPI) ? "https://api.firstdraft.run" : applicationData.ExternalAPI,
                 ValidateExternalApi);
 
             if (PromptAuthentication(applicationData))

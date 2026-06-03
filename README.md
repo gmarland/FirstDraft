@@ -150,7 +150,7 @@ dotnet run -- init
 dotnet run -- run
 ```
 
-During `init`, set the external API to `http://localhost:5080`, log in or sign up with your FirstDraft user, choose `Codex` or `Claude`, and select the paths and skills this worker should advertise.
+During `init`, use the default external API `https://api.firstdraft.run` unless you are running a local API, log in or sign up with your FirstDraft user, choose `Codex` or `Claude`, and select the paths and skills this worker should advertise.
 
 For real use, run this worker on the remote machine that has the repository, network access, credentials, and toolchain needed for the jobs you want it to perform. Repeat the setup on additional machines to build a worker fleet.
 
