@@ -40,7 +40,8 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
     max_concurrent_tasks: 2,
     state: "started",
     state_updated_at: new Date("2026-01-03T00:01:00.000Z"),
-    stopped_at: null
+    stopped_at: null,
+    archived_at: new Date("2026-01-04T00:00:00.000Z")
   };
 
   assert.deepEqual(mapWorkerRecord(row), {
@@ -56,7 +57,8 @@ function testWorkerRecordMappingIncludesRuntimeState(): void {
     maxConcurrentTasks: 2,
     state: "started",
     stateUpdatedAt: "2026-01-03T00:01:00.000Z",
-    stoppedAt: undefined
+    stoppedAt: undefined,
+    archivedAt: "2026-01-04T00:00:00.000Z"
   });
 }
 

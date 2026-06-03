@@ -42,6 +42,27 @@ export class WorkerController {
     res.json(toWorkerStateResponse(client, gitRepositories, jiraIntegrations));
   });
 
+  public readonly archiveWorker: RequestHandler = asyncHandler(async (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const client = await requireWorkerForUser(this.store, user, req.params.workerId, res);
+    if (!client) return;
+
+    if (client.state !== "started") {
+      res.status(409).json({ error: "only idle workers can be archived" });
+      return;
+    }
+
+    const archived = await this.store.archiveIdleWorkerForUser(user.userId, client.workerId);
+    if (!archived) {
+      res.status(409).json({ error: "only idle workers can be archived" });
+      return;
+    }
+
+    res.status(204).send();
+  });
+
   public readonly listWorkerCommands: RequestHandler = asyncHandler(async (req, res) => {
     const user = requireUser(req, res);
     if (!user) return;

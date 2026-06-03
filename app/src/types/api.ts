@@ -28,6 +28,7 @@ export type WorkerRegistration = {
   lastSeenAt: string;
   stateUpdatedAt: string;
   stoppedAt?: string;
+  archivedAt?: string;
 };
 
 export type WorkerJiraIntegration = {

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { Alert, Box, Button, Stack, Tab, Tabs } from "@mui/material";
+import ArchiveIcon from "@mui/icons-material/Archive";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
@@ -10,6 +11,7 @@ import {
   WorkerPanelsGrid,
   WorkerSummaryGrid,
 } from "../components/workerDetail";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -27,6 +29,9 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
   const [commandPage, setCommandPage] = useState(0);
   const [commandPageSize, setCommandPageSize] = useState(10);
   const [tab, setTab] = useState<WorkerDetailTab>("history");
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   const loadState = useCallback(
     () => api.getWorkerState(token!, workerId),
@@ -38,6 +43,22 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
   );
   const state = useAsyncData(loadState, [loadState]);
   const commands = useAsyncData(loadCommands, [loadCommands]);
+  const canArchive = state.data?.state === "started";
+
+  const confirmArchive = async () => {
+    setArchiveError(null);
+    setArchiving(true);
+
+    try {
+      await api.archiveWorker(token!, workerId);
+      setArchiveDialogOpen(false);
+      onBackToWorkers();
+    } catch (caught) {
+      setArchiveError(caught instanceof Error ? caught.message : "Unable to archive worker");
+    } finally {
+      setArchiving(false);
+    }
+  };
 
   return (
     <Stack spacing={2.75}>
@@ -61,6 +82,19 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
             >
               Refresh
             </Button>
+            {canArchive && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<ArchiveIcon />}
+                onClick={() => {
+                  setArchiveError(null);
+                  setArchiveDialogOpen(true);
+                }}
+              >
+                Archive
+              </Button>
+            )}
           </Stack>
         }
       />
@@ -68,6 +102,7 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
       {(state.error || commands.error) && (
         <Alert severity="error">{state.error || commands.error}</Alert>
       )}
+      {archiveError && <Alert severity="error">{archiveError}</Alert>}
 
       <WorkerSummaryGrid state={state.data ?? undefined} />
 
@@ -156,6 +191,20 @@ export function WorkerDetailPage({ workerId, onBackToWorkers }: Props) {
       >
         Copy worker ID
       </Button>
+
+      <DeleteConfirmationDialog
+        open={archiveDialogOpen}
+        title="Archive worker?"
+        description="This worker will be archived until it connects again. It will be hidden from the workers list, but task history for work it has already completed will remain available."
+        confirmLabel="Archive worker"
+        submittingLabel="Archiving"
+        confirmIcon={<ArchiveIcon />}
+        submitting={archiving}
+        onClose={() => {
+          if (!archiving) setArchiveDialogOpen(false);
+        }}
+        onConfirm={() => void confirmArchive()}
+      />
     </Stack>
   );
 }

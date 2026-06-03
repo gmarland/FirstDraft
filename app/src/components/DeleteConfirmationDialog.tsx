@@ -7,12 +7,15 @@ import {
   DialogTitle,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { ReactNode } from "react";
 
 type Props = {
   open: boolean;
   title: string;
   description: string;
   confirmLabel?: string;
+  submittingLabel?: string;
+  confirmIcon?: ReactNode;
   submitting?: boolean;
   onClose(): void;
   onConfirm(): void;
@@ -23,6 +26,8 @@ export function DeleteConfirmationDialog({
   title,
   description,
   confirmLabel = "Delete",
+  submittingLabel = "Deleting",
+  confirmIcon = <DeleteIcon />,
   submitting = false,
   onClose,
   onConfirm,
@@ -40,11 +45,11 @@ export function DeleteConfirmationDialog({
         <Button
           variant="contained"
           color="error"
-          startIcon={<DeleteIcon />}
+          startIcon={confirmIcon}
           onClick={onConfirm}
           disabled={submitting}
         >
-          {submitting ? "Deleting" : confirmLabel}
+          {submitting ? submittingLabel : confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>

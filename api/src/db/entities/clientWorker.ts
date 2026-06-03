@@ -14,6 +14,7 @@ export type ClientWorkerEntity = {
   state: string;
   stateUpdatedAt?: Date | null;
   stoppedAt?: Date | null;
+  archivedAt?: Date | null;
 };
 
 export const ClientWorkerSchema = new EntitySchema<ClientWorkerEntity>({
@@ -32,6 +33,7 @@ export const ClientWorkerSchema = new EntitySchema<ClientWorkerEntity>({
     maxConcurrentTasks: { type: "integer", name: "max_concurrent_tasks", nullable: true, default: 1 },
     state: { type: "text", default: "'stopped'" },
     stateUpdatedAt: { type: "timestamptz", name: "state_updated_at", nullable: true },
-    stoppedAt: { type: "timestamptz", name: "stopped_at", nullable: true }
+    stoppedAt: { type: "timestamptz", name: "stopped_at", nullable: true },
+    archivedAt: { type: "timestamptz", name: "archived_at", nullable: true }
   }
 });

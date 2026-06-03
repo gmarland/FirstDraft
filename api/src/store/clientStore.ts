@@ -61,6 +61,7 @@ export type WorkerStore = {
   markWorkerStopped(workerId: string, connectionId: string): Promise<void>;
   refreshWorkerHeartbeat(workerId: string, userId: string): Promise<WorkerRegistration | undefined>;
   markStaleWorkersStopped(timeoutSeconds: number): Promise<void>;
+  archiveIdleWorkerForUser(userId: string, workerId: string): Promise<boolean>;
   createWorkerCommand(userId: string, workerId: string, command: string, commandMode?: CommandMode, executionCommand?: string): Promise<Command>;
   createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
   createReportedCommand(input: CreateReportedCommandInput): Promise<Command>;
@@ -134,6 +135,10 @@ export function createWorkerStore(
 
     async markStaleWorkersStopped(timeoutSeconds: number): Promise<void> {
       await workers.markStaleWorkersStopped(timeoutSeconds);
+    },
+
+    archiveIdleWorkerForUser(userId: string, workerId: string): Promise<boolean> {
+      return workers.archiveIdleWorkerForUser(userId, workerId);
     },
 
     async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "gitflow", executionCommand?: string): Promise<Command> {
@@ -296,6 +301,7 @@ export function mergeWorkerState(record: WorkerRecord, inProgressCommands: Comma
     lastRegisteredAt: record.lastRegisteredAt,
     lastSeenAt,
     stateUpdatedAt,
-    ...(state === "stopped" ? { stoppedAt: record.stoppedAt ?? stateUpdatedAt } : {})
+    ...(state === "stopped" ? { stoppedAt: record.stoppedAt ?? stateUpdatedAt } : {}),
+    ...(record.archivedAt ? { archivedAt: record.archivedAt } : {})
   };
 }

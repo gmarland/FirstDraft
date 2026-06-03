@@ -55,8 +55,12 @@ export class SchemaMigrator {
         max_concurrent_tasks integer default 1,
         state text not null default 'stopped',
         state_updated_at timestamptz,
-        stopped_at timestamptz
+        stopped_at timestamptz,
+        archived_at timestamptz
       );
+
+      alter table client_workers
+        add column if not exists archived_at timestamptz;
 
       create index if not exists client_workers_last_seen_idx
         on client_workers(last_seen_at desc);

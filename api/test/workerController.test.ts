@@ -125,11 +125,136 @@ async function testWorkerStateIncludesRegisteredResources(): Promise<void> {
   assert.equal(JSON.stringify(response.body).includes("assignee@example.com"), false);
 }
 
+async function testArchiveIdleWorker(): Promise<void> {
+  let archivedWorkerId: string | undefined;
+  const controller = new WorkerController({
+    async getWorkerForUser(userId: string, workerId: string) {
+      assert.equal(userId, "user-1");
+      assert.equal(workerId, "worker-1");
+      return workerRegistration({ state: "started" });
+    },
+    async archiveIdleWorkerForUser(userId: string, workerId: string) {
+      assert.equal(userId, "user-1");
+      archivedWorkerId = workerId;
+      return true;
+    },
+  } as never);
+  const response = createResponse();
+
+  await controller.archiveWorker(
+    requestForWorker("worker-1") as never,
+    response as never,
+    throwOnError,
+  );
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(archivedWorkerId, "worker-1");
+}
+
+async function testArchiveWorkerReturnsNotFoundForOtherUsersWorker(): Promise<void> {
+  const controller = new WorkerController({
+    async getWorkerForUser() {
+      return undefined;
+    },
+  } as never);
+  const response = createResponse();
+
+  await controller.archiveWorker(
+    requestForWorker("worker-1") as never,
+    response as never,
+    throwOnError,
+  );
+
+  assert.equal(response.statusCode, 404);
+  assert.deepEqual(response.body, { error: "worker is not registered" });
+}
+
+async function testArchiveWorkerRejectsNonIdleWorker(): Promise<void> {
+  let archiveCalled = false;
+  const controller = new WorkerController({
+    async getWorkerForUser() {
+      return workerRegistration({ state: "running_command" });
+    },
+    async archiveIdleWorkerForUser() {
+      archiveCalled = true;
+      return true;
+    },
+  } as never);
+  const response = createResponse();
+
+  await controller.archiveWorker(
+    requestForWorker("worker-1") as never,
+    response as never,
+    throwOnError,
+  );
+
+  assert.equal(response.statusCode, 409);
+  assert.deepEqual(response.body, { error: "only idle workers can be archived" });
+  assert.equal(archiveCalled, false);
+}
+
+async function testArchiveWorkerRejectsStoppedWorker(): Promise<void> {
+  const controller = new WorkerController({
+    async getWorkerForUser() {
+      return workerRegistration({ state: "stopped" });
+    },
+  } as never);
+  const response = createResponse();
+
+  await controller.archiveWorker(
+    requestForWorker("worker-1") as never,
+    response as never,
+    throwOnError,
+  );
+
+  assert.equal(response.statusCode, 409);
+  assert.deepEqual(response.body, { error: "only idle workers can be archived" });
+}
+
+function requestForWorker(workerId: string) {
+  return {
+    user: {
+      userId: "user-1",
+      email: "user@example.com",
+      role: "user",
+      createdAt: "2026-06-01T00:00:00.000Z",
+    },
+    params: {
+      workerId,
+    },
+  };
+}
+
+function workerRegistration(overrides: { state?: "started" | "running_command" | "stopped" } = {}) {
+  return {
+    workerId: "worker-1",
+    userId: "user-1",
+    connectionId: "http:worker-1",
+    paths: ["/repo"],
+    skills: ["git"],
+    enabledTaskTypes: ["gitflow"],
+    state: overrides.state ?? "started",
+    activeTransactionIds: [],
+    activeTaskCount: 0,
+    maxConcurrentTasks: 2,
+    registeredAt: "2026-06-01T00:00:00.000Z",
+    firstRegisteredAt: "2026-06-01T00:00:00.000Z",
+    lastRegisteredAt: "2026-06-01T00:00:00.000Z",
+    lastSeenAt: "2026-06-01T00:00:00.000Z",
+    stateUpdatedAt: "2026-06-01T00:00:00.000Z",
+  };
+}
+
+function throwOnError(error?: unknown): void {
+  if (error) throw error;
+}
+
 function createResponse(): {
   statusCode: number;
   body?: unknown;
   status(statusCode: number): { json(body: unknown): void };
   json(body: unknown): void;
+  send(): void;
 } {
   return {
     statusCode: 200,
@@ -140,9 +265,16 @@ function createResponse(): {
     json(body: unknown) {
       this.body = body;
     },
+    send() {
+      this.body = undefined;
+    },
   };
 }
 
 await testWorkerStateIncludesRegisteredResources();
+await testArchiveIdleWorker();
+await testArchiveWorkerReturnsNotFoundForOtherUsersWorker();
+await testArchiveWorkerRejectsNonIdleWorker();
+await testArchiveWorkerRejectsStoppedWorker();
 
 console.log("worker controller tests passed");

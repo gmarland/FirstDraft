@@ -48,7 +48,8 @@ create table if not exists client_workers (
   max_concurrent_tasks integer default 1,
   state text not null default 'stopped',
   state_updated_at timestamptz,
-  stopped_at timestamptz
+  stopped_at timestamptz,
+  archived_at timestamptz
 );
 
 create index if not exists client_workers_last_seen_idx

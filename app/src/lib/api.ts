@@ -152,6 +152,16 @@ export const api = {
     );
   },
 
+  archiveWorker(token: string, workerId: string) {
+    return request<void>(
+      `/api/workers/${encodeURIComponent(workerId)}/archive`,
+      {
+        token,
+        method: "POST",
+      },
+    );
+  },
+
   listCommands(token: string, workerId: string, pagination: { page: number; pageSize: number }) {
     const params = new URLSearchParams({
       page: String(pagination.page),

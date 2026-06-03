@@ -242,6 +242,20 @@ export const openApiDocument = {
         }
       }
     },
+    "/api/workers/{workerId}/archive": {
+      post: {
+        tags: ["Workers"],
+        summary: "Archive an idle worker until it reconnects",
+        security: bearerSecurity(),
+        parameters: [pathParam("workerId", "Worker id")],
+        responses: {
+          "204": { description: "Worker archived" },
+          "401": errorResponse(),
+          "404": errorResponse(),
+          "409": errorResponse()
+        }
+      }
+    },
     "/api/workers/{workerId}/state": workerGet("Get worker state", ref("WorkerRegistration")),
     "/api/workers/{workerId}/commands": {
       get: {
@@ -381,7 +395,8 @@ export const openApiDocument = {
         lastRegisteredAt: { type: "string", format: "date-time" },
         lastSeenAt: { type: "string", format: "date-time" },
         stateUpdatedAt: { type: "string", format: "date-time" },
-        stoppedAt: { type: "string", format: "date-time" }
+        stoppedAt: { type: "string", format: "date-time" },
+        archivedAt: { type: "string", format: "date-time" }
       }, ["workerId", "userId", "connectionId", "paths", "skills", "enabledTaskTypes", "state", "registeredAt", "firstRegisteredAt", "lastRegisteredAt", "lastSeenAt", "stateUpdatedAt"]),
       Command: object({
         transactionId: { type: "string" },

@@ -16,6 +16,7 @@ export function createWorkerRoutes(
 
   router.get("/", controller.listWorkers);
   router.get("/task-queue", controller.listTaskQueue);
+  router.post("/:workerId/archive", controller.archiveWorker);
   router.get("/:workerId/state", controller.getWorkerState);
   router.get("/:workerId/commands", controller.listWorkerCommands);
   router.get("/:workerId/commands/:transactionId", controller.getWorkerCommand);

@@ -16,6 +16,7 @@ export type WorkerRegistration = {
   lastSeenAt: string;
   stateUpdatedAt: string;
   stoppedAt?: string;
+  archivedAt?: string;
 };
 
 export type ClientState = "started" | "running_command" | "stopped";

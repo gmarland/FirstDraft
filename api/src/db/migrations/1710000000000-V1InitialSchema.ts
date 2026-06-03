@@ -55,7 +55,8 @@ export class V1InitialSchema1710000000000 implements MigrationInterface {
         max_concurrent_tasks integer default 1,
         state text not null default 'stopped',
         state_updated_at timestamptz,
-        stopped_at timestamptz
+        stopped_at timestamptz,
+        archived_at timestamptz
       );
 
       create index if not exists client_workers_last_seen_idx

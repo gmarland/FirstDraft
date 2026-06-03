@@ -44,7 +44,8 @@ export function toWorkerStateResponse(
     lastRegisteredAt: client.lastRegisteredAt,
     lastSeenAt: client.lastSeenAt,
     stateUpdatedAt: client.stateUpdatedAt,
-    stoppedAt: client.stoppedAt
+    stoppedAt: client.stoppedAt,
+    archivedAt: client.archivedAt
   };
 }
 

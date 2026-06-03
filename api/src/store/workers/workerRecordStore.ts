@@ -19,6 +19,7 @@ export type WorkerRecord = {
   state: ClientState;
   stateUpdatedAt: string;
   stoppedAt?: string;
+  archivedAt?: string;
 };
 
 export type UpsertWorkerRegistrationInput = {
@@ -39,6 +40,7 @@ export class WorkerRecordStore {
       `
         select ${workerRecordColumns}
         from client_workers
+        where archived_at is null
         order by coalesce(state_updated_at, last_seen_at, last_registered_at, first_registered_at) desc
       `
     );
@@ -52,6 +54,7 @@ export class WorkerRecordStore {
         select ${prefixedWorkerRecordColumns}
         from client_workers
         where client_workers.user_id = $1
+          and client_workers.archived_at is null
         order by coalesce(client_workers.state_updated_at, client_workers.last_seen_at, client_workers.last_registered_at, client_workers.first_registered_at) desc
       `,
       [userId]
@@ -106,7 +109,8 @@ export class WorkerRecordStore {
           max_concurrent_tasks = excluded.max_concurrent_tasks,
           state = 'started',
           state_updated_at = now(),
-          stopped_at = null
+          stopped_at = null,
+          archived_at = null
         where client_workers.state = 'stopped'
           or client_workers.last_connection_id = excluded.last_connection_id
         returning ${workerRecordColumns}
@@ -150,7 +154,8 @@ export class WorkerRecordStore {
         set last_seen_at = now(),
           state = case when state = 'stopped' then 'started' else state end,
           state_updated_at = case when state = 'stopped' then now() else state_updated_at end,
-          stopped_at = null
+          stopped_at = null,
+          archived_at = null
         where worker_id = $1
           and user_id = $2
         returning ${workerRecordColumns}
@@ -201,6 +206,22 @@ export class WorkerRecordStore {
       [workerId, state]
     );
   }
+
+  public async archiveIdleWorkerForUser(userId: string, workerId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `
+        update client_workers
+        set archived_at = now()
+        where user_id = $1
+          and worker_id = $2
+          and state = 'started'
+          and archived_at is null
+      `,
+      [userId, workerId]
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  }
 }
 
 const workerRecordColumnNames = [
@@ -216,7 +237,8 @@ const workerRecordColumnNames = [
   "max_concurrent_tasks",
   "state",
   "state_updated_at",
-  "stopped_at"
+  "stopped_at",
+  "archived_at"
 ];
 
 const workerRecordColumns = workerRecordColumnNames.join(", ");
@@ -241,7 +263,8 @@ export function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
     maxConcurrentTasks: normalizeMaxConcurrentTasks(row.max_concurrent_tasks),
     state,
     stateUpdatedAt: toIsoString(stateUpdatedAt),
-    stoppedAt: row.stopped_at ? toIsoString(row.stopped_at) : undefined
+    stoppedAt: row.stopped_at ? toIsoString(row.stopped_at) : undefined,
+    archivedAt: row.archived_at ? toIsoString(row.archived_at) : undefined
   };
 }
 
