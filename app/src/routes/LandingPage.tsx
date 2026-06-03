@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import type { ReactNode } from "react";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CommitIcon from "@mui/icons-material/Commit";
 import HubIcon from "@mui/icons-material/Hub";
@@ -44,9 +45,9 @@ const pipelineSteps = [
     icon: <LanIcon />,
   },
   {
-    title: "Gitflow run",
-    detail: "The ticket is implemented in the target repository.",
-    icon: <TerminalIcon />,
+    title: "AI worker run",
+    detail: "Codex or Claude Code implements it in the target repository.",
+    icon: <AutoAwesomeIcon />,
   },
   {
     title: "Draft PR",
@@ -59,8 +60,8 @@ const setupSteps = [
   {
     title: "Install a worker",
     description:
-      "Run FirstDraft on a trusted machine that already has your repos, build tools, AI CLI, GitHub auth, Jira credentials, and network access.",
-    icon: <TerminalIcon />,
+      "Run a FirstDraft AI worker on a trusted machine that already has Codex or Claude Code, your repos, build tools, GitHub auth, Jira credentials, and network access.",
+    icon: <AutoAwesomeIcon />,
   },
   {
     title: "Register the repo",
@@ -84,14 +85,14 @@ const setupSteps = [
 
 const executionFacts = [
   {
+    title: "Runs your AI coding agent locally",
+    description:
+      "Each ticket is handed to the configured Codex or Claude Code CLI with the local repository, attachments, tools, and credentials already available.",
+  },
+  {
     title: "Claims before execution",
     description:
       "The API records Jira claims and rejects duplicate active claims, so one ticket is handled by one worker.",
-  },
-  {
-    title: "Keeps context local",
-    description:
-      "Repository workspaces, credentials, attachments, tests, private services, and AI execution stay on the worker machine.",
   },
   {
     title: "Generates reviewer-ready output",
@@ -184,7 +185,7 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
             <Box>
               <Stack spacing={3}>
                 <Chip
-                  label="Jira tickets to draft pull requests"
+                  label="AI workers for Jira-to-PR flow"
                   sx={{
                     alignSelf: "flex-start",
                     bgcolor: "#e8f0f5",
@@ -202,8 +203,8 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
                       color: "#172026",
                     }}
                   >
-                    Point a worker at Jira. It picks up tickets and opens draft
-                    PRs.
+                    Point an AI worker at Jira. Codex or Claude Code picks up
+                    tickets and opens draft PRs.
                   </Typography>
                   <Typography
                     sx={{
@@ -213,11 +214,12 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
                       lineHeight: 1.7,
                     }}
                   >
-                    Install FirstDraft on a machine with your repositories,
-                    tools, credentials, and network access. Connect a Jira
-                    board, choose the statuses that mean ready, processing, and
-                    done, and the worker claims eligible tickets, implements
-                    them locally, and reports every step back to the console.
+                    Install FirstDraft on a machine with Codex or Claude Code,
+                    your repositories, tools, credentials, and network access.
+                    Connect a Jira board, choose the statuses that mean ready,
+                    processing, and done, and the AI worker claims eligible
+                    tickets, implements them locally, and reports every step
+                    back to the console.
                   </Typography>
                 </Stack>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -279,8 +281,8 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
       <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
         <SectionHeading
           eyebrow="How it works"
-          title="Set up a worker, point it at a Jira board, and let it take the next ticket."
-          body="FirstDraft is worker-owned intake for repository-backed Jira work. Each worker advertises what it can reach, polls its configured board, and accepts work only when the ticket matches its repositories and capacity."
+          title="Set up a Codex or Claude Code worker, point it at a Jira board, and let it take the next ticket."
+          body="FirstDraft is worker-owned intake for repository-backed Jira work. Each AI worker advertises what it can reach, polls its configured board, and accepts work only when the ticket matches its repositories and capacity."
         />
         <Box
           sx={{
@@ -326,8 +328,8 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
         <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
           <SectionHeading
             eyebrow="Execution"
-            title="The worker turns a Jira issue into a reviewable draft PR."
-            body="Once a ticket is claimed, the worker moves the issue to processing, prepares the repository, runs AI implementation in a local worktree, commits and pushes the branch, creates a draft pull request, and comments the result back to Jira."
+            title="The AI worker turns a Jira issue into a reviewable draft PR."
+            body="Once a ticket is claimed, the worker moves the issue to processing, prepares the repository, runs Codex or Claude Code in a local worktree, commits and pushes the branch, creates a draft pull request, and comments the result back to Jira."
           />
           <Box
             sx={{
@@ -364,9 +366,9 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
               icon={<TerminalIcon />}
               eyebrow="Worker setup"
               title="Install and configure a worker"
-              body="This is the path from a blank machine to an active worker that can pick up Jira work and open draft PRs."
+              body="This is the path from a blank machine to an active AI worker that can pick up Jira work and open draft PRs."
               code={workerInstallCommands}
-              footer="During init, set the external API URL, sign in or create a user, choose Codex or Claude, and select the paths and skills this worker should advertise. Then add a repository and Jira board before starting the worker."
+              footer="During init, set the external API URL, sign in or create a user, choose Codex or Claude Code, and select the paths and skills this AI worker should advertise. Then add a repository and Jira board before starting the worker."
             />
           </Box>
           <Box>
