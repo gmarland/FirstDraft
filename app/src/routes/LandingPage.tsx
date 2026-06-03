@@ -41,7 +41,7 @@ const pipelineSteps = [
   },
   {
     title: "Worker claim",
-    detail: "A local worker claims it before anyone else can.",
+    detail: "A local worker claims it.",
     icon: <LanIcon />,
   },
   {
@@ -265,11 +265,7 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
                   divider={<Divider sx={{ borderColor: "#2b4148" }} />}
                 >
                   {pipelineSteps.map((step, index) => (
-                    <PipelineRow
-                      key={step.title}
-                      step={step}
-                      index={index}
-                    />
+                    <PipelineRow key={step.title} step={step} index={index} />
                   ))}
                 </Stack>
               </Box>
