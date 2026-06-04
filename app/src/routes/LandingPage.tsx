@@ -16,6 +16,9 @@ import HubIcon from "@mui/icons-material/Hub";
 import LanIcon from "@mui/icons-material/Lan";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import GroupsIcon from "@mui/icons-material/Groups";
 
 type Props = {
   onLogin(): void;
@@ -35,24 +38,68 @@ docker compose up -d`;
 
 const pipelineSteps = [
   {
-    title: "Jira issue",
-    detail: "FD-142 is ready on the configured board.",
+    title: "Ticket becomes ready",
+    detail: "A Jira issue hits the configured ready status.",
     icon: <VisibilityIcon />,
   },
   {
-    title: "Worker claim",
-    detail: "A local worker claims it.",
+    title: "Worker claims it",
+    detail: "FirstDraft locks the ticket before any work begins.",
     icon: <LanIcon />,
   },
   {
-    title: "AI worker run",
-    detail: "Codex or Claude Code implements it in the target repository.",
+    title: "Agent implements it",
+    detail: "Codex or Claude Code works locally in the target repo.",
     icon: <AutoAwesomeIcon />,
   },
   {
-    title: "Draft PR",
-    detail: "A branch is pushed and a reviewable draft PR is opened.",
+    title: "Draft PR opens",
+    detail: "A branch is pushed and linked back to Jira for review.",
     icon: <CommitIcon />,
+  },
+];
+
+const proofPoints = [
+  {
+    title: "Backlog-first workflow",
+    description:
+      "Developers do not need to start every AI session manually. Put the work in Jira and let a worker pick it up.",
+    icon: <AssignmentTurnedInIcon />,
+  },
+  {
+    title: "Runs where your code already lives",
+    description:
+      "Workers run on your own machine or infrastructure, with your repos, tools, credentials, and network access.",
+    icon: <TerminalIcon />,
+  },
+  {
+    title: "Built for human review",
+    description:
+      "FirstDraft does not pretend the AI is done when code is generated. The output is a draft PR for a developer to inspect.",
+    icon: <GroupsIcon />,
+  },
+];
+
+const comparisonRows = [
+  {
+    firstDraft: "Starts from Jira tickets",
+    typical: "Starts from a chat prompt",
+  },
+  {
+    firstDraft: "Workers claim tasks before execution",
+    typical: "A developer manually starts each session",
+  },
+  {
+    firstDraft: "Runs continuously against a board",
+    typical: "Runs as a one-off coding assistant",
+  },
+  {
+    firstDraft: "Uses local repos, tools, and credentials",
+    typical: "Often runs in a separate sandbox",
+  },
+  {
+    firstDraft: "Produces draft PRs for review",
+    typical: "Produces code that still needs wiring into workflow",
   },
 ];
 
@@ -60,44 +107,26 @@ const setupSteps = [
   {
     title: "Install a worker",
     description:
-      "Run a FirstDraft AI worker on a trusted machine that already has Codex or Claude Code, your repos, build tools, GitHub auth, Jira credentials, and network access.",
+      "Run FirstDraft on a trusted machine that already has Codex or Claude Code, your repos, build tools, GitHub auth, Jira credentials, and network access.",
     icon: <AutoAwesomeIcon />,
   },
   {
     title: "Register the repo",
     description:
-      "Add the repository URL plus source and PR target branches. Jira tickets are only picked up when their repository matches this worker.",
+      "Add the repository URL plus source and PR target branches. Tickets are only picked up when they match a repository this worker can access.",
     icon: <CommitIcon />,
   },
   {
-    title: "Point it at Jira",
+    title: "Connect Jira",
     description:
-      "Connect a Jira board, choose ready, processing, and processed statuses, and optionally filter by assignee.",
+      "Choose the board, ready status, processing status, and done status. Optionally restrict intake by assignee.",
     icon: <VisibilityIcon />,
   },
   {
     title: "Let it run",
     description:
-      "The worker polls Jira, claims eligible tickets, runs gitflow locally, and sends status and output back to the console.",
+      "The worker polls Jira, claims eligible tickets, runs the AI coding agent locally, opens a draft PR, and reports back.",
     icon: <LanIcon />,
-  },
-];
-
-const executionFacts = [
-  {
-    title: "Runs your AI coding agent locally",
-    description:
-      "Each ticket is handed to the configured Codex or Claude Code CLI with the local repository, attachments, tools, and credentials already available.",
-  },
-  {
-    title: "Claims before execution",
-    description:
-      "The API records Jira claims and rejects duplicate active claims, so one ticket is handled by one worker.",
-  },
-  {
-    title: "Generates reviewer-ready output",
-    description:
-      "Gitflow creates a branch, commits changes, pushes to origin, opens a draft PR, and posts completion details back to Jira.",
   },
 ];
 
@@ -154,17 +183,7 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
             }}
           >
             <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
-              <Box
-                sx={{
-                  display: "grid",
-                  placeItems: "center",
-                  width: 38,
-                  height: 38,
-                  borderRadius: 2,
-                  bgcolor: "#142126",
-                  color: "#ffffff",
-                }}
-              >
+              <Box sx={logoSx}>
                 <HubIcon fontSize="small" />
               </Box>
               <Typography
@@ -199,104 +218,78 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
         }}
       >
         <Container maxWidth="lg" sx={{ py: { xs: 6, md: 9 } }}>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "minmax(0, 1.4fr) minmax(340px, 0.9fr)",
-              },
-              gap: { xs: 4, md: 7 },
-              alignItems: "center",
-            }}
-          >
-            <Box>
-              <Stack spacing={3}>
-                <Chip
-                  label="AI workers for Jira-to-PR flow"
-                  sx={{
-                    alignSelf: "flex-start",
-                    bgcolor: "#e8f0f5",
-                    color: "#2364aa",
-                    fontWeight: 800,
-                  }}
-                />
-                <Stack spacing={2}>
-                  <Typography
-                    variant="h1"
-                    sx={{
-                      maxWidth: 760,
-                      fontSize: { xs: 38, md: 56 },
-                      lineHeight: 1.05,
-                      color: "#172026",
-                    }}
-                  >
-                    Point an AI worker at Jira. Codex or Claude Code picks up
-                    tickets and opens draft PRs.
-                  </Typography>
-                  <Typography
-                    sx={{
-                      maxWidth: 700,
-                      color: "#4f6470",
-                      fontSize: 18,
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    Install FirstDraft on a machine with Codex or Claude Code,
-                    your repositories, tools, credentials, and network access.
-                    Connect a Jira board, choose the statuses that mean ready,
-                    processing, and done, and the AI worker claims eligible
-                    tickets, implements them locally, and reports every step
-                    back to the console.
-                  </Typography>
-                </Stack>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    onClick={onCreateUser}
-                    endIcon={<ArrowForwardIcon />}
-                  >
-                    Create user
-                  </Button>
-                  <Button variant="outlined" size="large" onClick={onLogin}>
-                    Login
-                  </Button>
-                </Stack>
-              </Stack>
-            </Box>
-            <Box>
-              <Box
+          <Box sx={heroGridSx}>
+            <Stack spacing={3}>
+              <Chip
+                label="Autonomous Jira-to-PR workers"
                 sx={{
-                  border: "1px solid #cfdde3",
-                  borderRadius: 2,
-                  bgcolor: "#142126",
-                  color: "#ecf2f4",
-                  overflow: "hidden",
-                  boxShadow: "0 24px 64px rgba(20, 33, 38, 0.18)",
+                  alignSelf: "flex-start",
+                  bgcolor: "#e8f0f5",
+                  color: "#2364aa",
+                  fontWeight: 800,
                 }}
-              >
-                <Box
+              />
+              <Stack spacing={2}>
+                <Typography
+                  variant="h1"
                   sx={{
-                    px: 2,
-                    py: 1.25,
-                    borderBottom: "1px solid #2b4148",
-                    color: "#9fb0b7",
-                    fontWeight: 800,
-                    fontSize: 13,
+                    maxWidth: 760,
+                    fontSize: { xs: 38, md: 58 },
+                    lineHeight: 1.03,
+                    color: "#172026",
                   }}
                 >
-                  Live ticket path
-                </Box>
-                <Stack
-                  spacing={0}
-                  divider={<Divider sx={{ borderColor: "#2b4148" }} />}
+                  Put work into Jira. Let an AI worker pick it up.
+                </Typography>
+                <Typography
+                  sx={{
+                    maxWidth: 700,
+                    color: "#4f6470",
+                    fontSize: 19,
+                    lineHeight: 1.7,
+                  }}
                 >
-                  {pipelineSteps.map((step, index) => (
-                    <PipelineRow key={step.title} step={step} index={index} />
-                  ))}
-                </Stack>
-              </Box>
+                  FirstDraft runs Codex or Claude Code where your code already
+                  lives. Workers claim Jira tickets, implement them locally,
+                  open draft pull requests, and report progress back for human
+                  review.
+                </Typography>
+              </Stack>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={onCreateUser}
+                  endIcon={<ArrowForwardIcon />}
+                >
+                  Create user
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="large"
+                  href="https://github.com/gmarland/FirstDraft"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View on GitHub
+                </Button>
+              </Stack>
+              <Typography sx={{ color: "#667985", fontSize: 14 }}>
+                Built for teams experimenting with AI coding agents but still
+                managing real work through Jira and pull requests.
+              </Typography>
+            </Stack>
+
+            <Box sx={terminalSx}>
+              <Box sx={terminalHeaderSx}>Live ticket path</Box>
+              <Stack
+                spacing={0}
+                divider={<Divider sx={{ borderColor: "#2b4148" }} />}
+              >
+                {pipelineSteps.map((step, index) => (
+                  <PipelineRow key={step.title} step={step} index={index} />
+                ))}
+              </Stack>
             </Box>
           </Box>
         </Container>
@@ -304,9 +297,61 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
 
       <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
         <SectionHeading
+          eyebrow="Why FirstDraft exists"
+          title="AI coding tools still need someone to drive the work. FirstDraft gives them a backlog."
+          body="Most AI coding sessions begin with a developer copying context into a chat or terminal. FirstDraft flips that flow: the ticket is the source of work, the worker claims it, and the developer reviews the result."
+        />
+        <Box sx={threeColumnGridSx}>
+          {proofPoints.map((point) => (
+            <Box sx={cardSx} key={point.title}>
+              <Stack
+                direction="row"
+                spacing={1.25}
+                sx={{ mb: 1.5, alignItems: "center" }}
+              >
+                <Box sx={iconBoxSx}>{point.icon}</Box>
+              </Stack>
+              <Typography variant="h2" sx={{ mb: 1.25 }}>
+                {point.title}
+              </Typography>
+              <Typography sx={bodyTextSx}>{point.description}</Typography>
+            </Box>
+          ))}
+        </Box>
+      </Container>
+
+      <Box
+        sx={{
+          bgcolor: "#ffffff",
+          borderTop: "1px solid #dde5e8",
+          borderBottom: "1px solid #dde5e8",
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
+          <SectionHeading
+            eyebrow="How it is different"
+            title="Not another chat-based coding assistant."
+            body="FirstDraft is designed for repository-backed Jira work where AI workers run continuously, claim tasks safely, and produce reviewable pull requests."
+          />
+
+          <Box sx={comparisonSx}>
+            <ComparisonHeader />
+            {comparisonRows.map((row) => (
+              <ComparisonRow
+                key={row.firstDraft}
+                firstDraft={row.firstDraft}
+                typical={row.typical}
+              />
+            ))}
+          </Box>
+        </Container>
+      </Box>
+
+      <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
+        <SectionHeading
           eyebrow="How it works"
-          title="Set up a Codex or Claude Code worker, point it at a Jira board, and let it take the next ticket."
-          body="FirstDraft is worker-owned intake for repository-backed Jira work. Each AI worker advertises what it can reach, polls its configured board, and accepts work only when the ticket matches its repositories and capacity."
+          title="Set up a worker, point it at Jira, and let it take the next ticket."
+          body="Each worker advertises what it can reach, polls its configured board, and accepts work only when the ticket matches its repositories and capacity."
         />
         <Box
           sx={{
@@ -320,23 +365,21 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
           }}
         >
           {setupSteps.map((step, index) => (
-            <Box key={step.title}>
-              <Box sx={stepSx}>
-                <Stack
-                  direction="row"
-                  spacing={1.25}
-                  sx={{ mb: 1.5, alignItems: "center" }}
-                >
-                  <Box sx={iconBoxSx}>{step.icon}</Box>
-                  <Typography sx={{ color: "#667985", fontWeight: 800 }}>
-                    {String(index + 1).padStart(2, "0")}
-                  </Typography>
-                </Stack>
-                <Typography variant="h2" sx={{ mb: 1.25 }}>
-                  {step.title}
+            <Box key={step.title} sx={stepSx}>
+              <Stack
+                direction="row"
+                spacing={1.25}
+                sx={{ mb: 1.5, alignItems: "center" }}
+              >
+                <Box sx={iconBoxSx}>{step.icon}</Box>
+                <Typography sx={{ color: "#667985", fontWeight: 800 }}>
+                  {String(index + 1).padStart(2, "0")}
                 </Typography>
-                <Typography sx={bodyTextSx}>{step.description}</Typography>
-              </Box>
+              </Stack>
+              <Typography variant="h2" sx={{ mb: 1.25 }}>
+                {step.title}
+              </Typography>
+              <Typography sx={bodyTextSx}>{step.description}</Typography>
             </Box>
           ))}
         </Box>
@@ -352,28 +395,9 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
         <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
           <SectionHeading
             eyebrow="Execution"
-            title="The AI worker turns a Jira issue into a reviewable draft PR."
-            body="Once a ticket is claimed, the worker moves the issue to processing, prepares the repository, runs Codex or Claude Code in a local worktree, commits and pushes the branch, creates a draft pull request, and comments the result back to Jira."
+            title="From Jira issue to draft PR, without turning your workflow into a chat session."
+            body="Once a ticket is claimed, the worker moves it to processing, prepares the repository, runs Codex or Claude Code in a local worktree, commits and pushes a branch, opens a draft pull request, and comments the result back to Jira."
           />
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "repeat(3, minmax(0, 1fr))",
-              },
-              gap: 2.5,
-            }}
-          >
-            {executionFacts.map((fact) => (
-              <Box sx={cardSx} key={fact.title}>
-                <Typography variant="h2" sx={{ mb: 1.25 }}>
-                  {fact.title}
-                </Typography>
-                <Typography sx={bodyTextSx}>{fact.description}</Typography>
-              </Box>
-            ))}
-          </Box>
         </Container>
       </Box>
 
@@ -385,26 +409,23 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
             gap: 3,
           }}
         >
-          <Box>
-            <SetupPanel
-              icon={<TerminalIcon />}
-              eyebrow="Worker setup"
-              title="Install and configure a worker"
-              body="This is the path from a blank machine to an active AI worker that can pick up Jira work and open draft PRs."
-              code={workerInstallCommands}
-              footer="During init, set the external API URL, sign in or create a user, choose Codex or Claude Code, and select the paths and skills this AI worker should advertise. Then add a repository and Jira board before starting the worker."
-            />
-          </Box>
-          <Box>
-            <SetupPanel
-              icon={<CloudUploadIcon />}
-              eyebrow="Self-host"
-              title="Run the GitHub Docker Compose stack"
-              body="Clone the FirstDraft repository and start the checked-in Compose file. It pulls the published app and API images, plus Postgres and MinIO."
-              code={selfHostCommands}
-              footer="Override JWT_SECRET, WORKER_JWT_SECRET, TENANT_ADMIN_KEY, VITE_API_BASE_URL, API_HOST_PORT, or APP_HOST_PORT from a root .env file or shell environment."
-            />
-          </Box>
+          <SetupPanel
+            icon={<TerminalIcon />}
+            eyebrow="Worker setup"
+            title="Install and configure a worker"
+            body="The quickest path from a blank machine to an active AI worker that can pick up Jira work and open draft PRs."
+            code={workerInstallCommands}
+            footer="During init, set the external API URL, sign in or create a user, choose Codex or Claude Code, and select the paths and skills this worker should advertise. Then add a repository and Jira board before starting the worker."
+          />
+
+          <SetupPanel
+            icon={<CloudUploadIcon />}
+            eyebrow="Self-host"
+            title="Run the Docker Compose stack"
+            body="Clone the FirstDraft repository and start the checked-in Compose file. It pulls the published app and API images, plus Postgres and MinIO."
+            code={selfHostCommands}
+            footer="Override JWT_SECRET, WORKER_JWT_SECRET, TENANT_ADMIN_KEY, VITE_API_BASE_URL, API_HOST_PORT, or APP_HOST_PORT from a root .env file or shell environment."
+          />
         </Box>
       </Container>
     </Box>
@@ -470,7 +491,7 @@ function SectionHeading({
   body: string;
 }) {
   return (
-    <Stack spacing={1.25} sx={{ maxWidth: 760, mb: 3 }}>
+    <Stack spacing={1.25} sx={{ maxWidth: 780, mb: 3 }}>
       <Typography
         sx={{
           color: "#2364aa",
@@ -483,12 +504,43 @@ function SectionHeading({
       </Typography>
       <Typography
         variant="h1"
-        sx={{ fontSize: { xs: 28, md: 34 }, lineHeight: 1.18 }}
+        sx={{ fontSize: { xs: 28, md: 36 }, lineHeight: 1.16 }}
       >
         {title}
       </Typography>
       <Typography sx={{ ...bodyTextSx, fontSize: 16 }}>{body}</Typography>
     </Stack>
+  );
+}
+
+function ComparisonHeader() {
+  return (
+    <Box sx={comparisonRowSx}>
+      <Typography sx={comparisonHeaderTextSx}>FirstDraft</Typography>
+      <Typography sx={comparisonHeaderTextSx}>
+        Typical AI coding tools
+      </Typography>
+    </Box>
+  );
+}
+
+function ComparisonRow({
+  firstDraft,
+  typical,
+}: {
+  firstDraft: string;
+  typical: string;
+}) {
+  return (
+    <Box sx={comparisonRowSx}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+        <CompareArrowsIcon sx={{ color: "#2364aa", fontSize: 18 }} />
+        <Typography sx={{ color: "#172026", fontWeight: 800 }}>
+          {firstDraft}
+        </Typography>
+      </Stack>
+      <Typography sx={bodyTextSx}>{typical}</Typography>
+    </Box>
   );
 }
 
@@ -543,6 +595,53 @@ const bodyTextSx = {
   lineHeight: 1.65,
 };
 
+const logoSx = {
+  display: "grid",
+  placeItems: "center",
+  width: 38,
+  height: 38,
+  borderRadius: 2,
+  bgcolor: "#142126",
+  color: "#ffffff",
+};
+
+const heroGridSx = {
+  display: "grid",
+  gridTemplateColumns: {
+    xs: "1fr",
+    md: "minmax(0, 1.35fr) minmax(340px, 0.9fr)",
+  },
+  gap: { xs: 4, md: 7 },
+  alignItems: "center",
+};
+
+const terminalSx = {
+  border: "1px solid #cfdde3",
+  borderRadius: 2,
+  bgcolor: "#142126",
+  color: "#ecf2f4",
+  overflow: "hidden",
+  boxShadow: "0 24px 64px rgba(20, 33, 38, 0.18)",
+};
+
+const terminalHeaderSx = {
+  px: 2,
+  py: 1.25,
+  borderBottom: "1px solid #2b4148",
+  color: "#9fb0b7",
+  fontWeight: 800,
+  fontSize: 13,
+};
+
+const threeColumnGridSx = {
+  display: "grid",
+  gridTemplateColumns: {
+    xs: "1fr",
+    md: "repeat(3, minmax(0, 1fr))",
+  },
+  gap: 2.5,
+};
+
 const cardSx = {
   height: "100%",
   border: "1px solid #dde5e8",
@@ -565,4 +664,28 @@ const iconBoxSx = {
   bgcolor: "#e8f0f5",
   color: "#2364aa",
   flexShrink: 0,
+};
+
+const comparisonSx = {
+  border: "1px solid #dde5e8",
+  borderRadius: 2,
+  overflow: "hidden",
+};
+
+const comparisonRowSx = {
+  display: "grid",
+  gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+  gap: 2,
+  p: 2,
+  bgcolor: "#ffffff",
+  borderBottom: "1px solid #dde5e8",
+  "&:last-child": {
+    borderBottom: 0,
+  },
+};
+
+const comparisonHeaderTextSx = {
+  color: "#172026",
+  fontWeight: 900,
+  fontSize: 14,
 };
