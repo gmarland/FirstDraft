@@ -105,6 +105,34 @@ export function LandingPage({ onLogin, onCreateUser }: Props) {
   return (
     <Box component="main" sx={{ minHeight: "100vh", bgcolor: "#f5f7f8" }}>
       <Box
+        component="a"
+        href="https://github.com/gmarland/FirstDraft"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Fork FirstDraft on GitHub"
+        sx={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          zIndex: 20,
+          display: { xs: "none", sm: "block" },
+          width: 149,
+          height: 149,
+        }}
+      >
+        <Box
+          component="img"
+          loading="lazy"
+          decoding="async"
+          width={149}
+          height={149}
+          src="https://github.blog/wp-content/uploads/2008/12/forkme_right_darkblue_121621.png"
+          alt="Fork me on GitHub"
+          sx={{ display: "block", width: "100%", height: "auto" }}
+        />
+      </Box>
+
+      <Box
         component="header"
         sx={{
           position: "sticky",
