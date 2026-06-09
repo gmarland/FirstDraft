@@ -119,13 +119,7 @@ namespace FirstDraft.Cli.Git
                 return 1;
             }
 
-            GitRepositoryConfig saved = new GitRepositoryConfig
-            {
-                RepositoryUrl = repositoryUrl,
-                NormalizedRepositoryUrl = normalizedRepositoryUrl,
-                SourceBranch = CleanBranch(sourceBranch),
-                TargetBranch = CleanBranch(targetBranch)
-            };
+            GitRepositoryConfig saved = BuildRepositoryConfig(repositoryUrl, sourceBranch, targetBranch);
 
             if (existingIndex >= 0) repositories[existingIndex] = saved;
             else repositories.Add(saved);
@@ -206,6 +200,26 @@ namespace FirstDraft.Cli.Git
             }
 
             return StripGitSuffix(trimmed).ToLowerInvariant();
+        }
+
+        public static GitRepositoryConfig BuildRepositoryConfig(string repositoryUrl, string sourceBranch, string targetBranch)
+        {
+            string? repositoryError = ValidateRepositoryUrl(repositoryUrl);
+            if (repositoryError != null) throw new InvalidOperationException(repositoryError);
+
+            string? sourceError = ValidateBranchName(sourceBranch, "source");
+            if (sourceError != null) throw new InvalidOperationException(sourceError);
+
+            string? targetError = ValidateBranchName(targetBranch, "target");
+            if (targetError != null) throw new InvalidOperationException(targetError);
+
+            return new GitRepositoryConfig
+            {
+                RepositoryUrl = repositoryUrl.Trim(),
+                NormalizedRepositoryUrl = NormalizeRepositoryUrl(repositoryUrl),
+                SourceBranch = CleanBranch(sourceBranch),
+                TargetBranch = CleanBranch(targetBranch)
+            };
         }
 
         private static string NormalizeGitHubPath(string owner, string repo)

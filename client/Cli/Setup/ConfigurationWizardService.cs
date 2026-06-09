@@ -24,6 +24,19 @@ namespace FirstDraft.Cli.Setup
             if (envConfig != null)
             {
                 Console.WriteLine($"Loaded worker .env: {envConfig.Path}");
+                if (envConfig.HasGitRepositories)
+                {
+                    Console.WriteLine($"Loaded Git repositories from .env: {envConfig.GitRepositoryUrls.Count}");
+                }
+
+                if (envConfig.HasJiraIntegrations)
+                {
+                    Console.WriteLine($"Loaded Jira integrations from .env: {string.Join(",", envConfig.JiraIntegrationIds)}");
+                    if (envConfig.HasPendingJiraApiTokens)
+                    {
+                        Console.WriteLine("Jira API tokens from .env will be encrypted after worker authentication.");
+                    }
+                }
             }
             Console.WriteLine();
 
@@ -76,6 +89,11 @@ namespace FirstDraft.Cli.Setup
                     Console.Error.WriteLine($"Authentication failed: {ex.Message}");
                     return 1;
                 }
+            }
+
+            if (_applicationDataService.ApplyPendingEnvironmentSecrets(applicationData))
+            {
+                Console.WriteLine("Encrypted Jira API tokens from .env.");
             }
 
             if (HasEnvField(envConfig, nameof(ApplicationData.AIProvider)))

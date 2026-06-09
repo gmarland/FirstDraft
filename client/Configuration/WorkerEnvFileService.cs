@@ -1,26 +1,57 @@
+using FirstDraft.Cli.Git;
+using FirstDraft.Cli.Jira;
+
 namespace FirstDraft.Configuration
 {
     public sealed class WorkerEnvConfiguration
     {
-        public WorkerEnvConfiguration(string path, IReadOnlySet<string> appliedFields)
+        public WorkerEnvConfiguration(
+            string path,
+            IReadOnlySet<string> appliedFields,
+            IReadOnlyList<string> gitRepositoryUrls,
+            IReadOnlyList<string> jiraIntegrationIds,
+            IReadOnlyDictionary<string, string> pendingJiraApiTokens,
+            IReadOnlyList<string> encryptedJiraApiTokenIds)
         {
             Path = path;
             AppliedFields = appliedFields;
+            GitRepositoryUrls = gitRepositoryUrls;
+            JiraIntegrationIds = jiraIntegrationIds;
+            PendingJiraApiTokens = pendingJiraApiTokens;
+            EncryptedJiraApiTokenIds = encryptedJiraApiTokenIds;
         }
 
         public string Path { get; }
 
         public IReadOnlySet<string> AppliedFields { get; }
 
+        public IReadOnlyList<string> GitRepositoryUrls { get; }
+
+        public IReadOnlyList<string> JiraIntegrationIds { get; }
+
+        public IReadOnlyDictionary<string, string> PendingJiraApiTokens { get; }
+
+        public IReadOnlyList<string> EncryptedJiraApiTokenIds { get; }
+
         public bool HasField(string fieldName)
         {
             return AppliedFields.Contains(fieldName);
         }
+
+        public bool HasGitRepositories => GitRepositoryUrls.Count > 0;
+
+        public bool HasJiraIntegrations => JiraIntegrationIds.Count > 0;
+
+        public bool HasPendingJiraApiTokens => PendingJiraApiTokens.Count > 0;
+
+        public bool HasEncryptedJiraApiTokens => EncryptedJiraApiTokenIds.Count > 0;
     }
 
     public sealed class WorkerEnvFileService
     {
         public const string FileName = ".env";
+        private const string GitPrefix = "FIRSTDRAFT_GIT_";
+        private const string JiraPrefix = "FIRSTDRAFT_JIRA_";
 
         private static readonly Dictionary<string, string> FieldNamesByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -55,7 +86,53 @@ namespace FirstDraft.Configuration
                 appliedFields.Add(fieldName);
             }
 
-            return new WorkerEnvConfiguration(envPath, appliedFields);
+            IReadOnlyList<string> gitRepositoryUrls = ApplyGitValues(applicationData, values);
+            if (gitRepositoryUrls.Count > 0)
+            {
+                appliedFields.Add(nameof(ApplicationData.GitRepositories));
+            }
+
+            JiraEnvApplyResult jiraResult = ApplyJiraValues(applicationData, values);
+            if (jiraResult.IntegrationIds.Count > 0)
+            {
+                appliedFields.Add(nameof(ApplicationData.JiraIntegrations));
+            }
+
+            return new WorkerEnvConfiguration(
+                envPath,
+                appliedFields,
+                gitRepositoryUrls,
+                jiraResult.IntegrationIds,
+                jiraResult.PendingApiTokens,
+                jiraResult.EncryptedApiTokenIds);
+        }
+
+        public bool ApplyPendingJiraApiTokens(ApplicationData applicationData, WorkerEnvConfiguration? envConfiguration)
+        {
+            if (envConfiguration == null || !envConfiguration.HasPendingJiraApiTokens) return false;
+            if (string.IsNullOrEmpty(applicationData.ConfigEncryptionKey)) return false;
+
+            List<JiraIntegrationConfig> integrations = JiraIntegrationConfigService.NormalizeIntegrations(applicationData.JiraIntegrations).ToList();
+            bool changed = false;
+
+            foreach (KeyValuePair<string, string> entry in envConfiguration.PendingJiraApiTokens)
+            {
+                JiraIntegrationConfig? integration = integrations.FirstOrDefault(integration =>
+                    string.Equals(integration.IntegrationId, entry.Key, StringComparison.OrdinalIgnoreCase));
+                if (integration == null) continue;
+
+                integration.StoreApiToken(applicationData, entry.Value);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                applicationData.JiraIntegrations = integrations
+                    .OrderBy(integration => integration.IntegrationId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+
+            return changed;
         }
 
         private static Dictionary<string, string> Parse(string envPath)
@@ -169,6 +246,316 @@ namespace FirstDraft.Configuration
             }
         }
 
+        private static IReadOnlyList<string> ApplyGitValues(ApplicationData applicationData, Dictionary<string, string> values)
+        {
+            Dictionary<int, Dictionary<string, string>> groups = GetGitGroups(values);
+            if (groups.Count == 0) return Array.Empty<string>();
+
+            List<GitRepositoryConfig> repositories = GitRepositoryConfigurationService.NormalizeRepositories(applicationData.GitRepositories).ToList();
+            List<string> repositoryUrls = new List<string>();
+
+            foreach (KeyValuePair<int, Dictionary<string, string>> group in groups.OrderBy(group => group.Key))
+            {
+                GitRepositoryConfig envRepository = BuildGitRepository(group.Key, group.Value);
+                int existingIndex = repositories.FindIndex(repository =>
+                    string.Equals(repository.NormalizedRepositoryUrl, envRepository.NormalizedRepositoryUrl, StringComparison.OrdinalIgnoreCase));
+
+                if (existingIndex >= 0) repositories[existingIndex] = envRepository;
+                else repositories.Add(envRepository);
+
+                repositoryUrls.Add(envRepository.RepositoryUrl);
+            }
+
+            applicationData.GitRepositories = repositories
+                .OrderBy(repository => repository.NormalizedRepositoryUrl, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return repositoryUrls;
+        }
+
+        private static Dictionary<int, Dictionary<string, string>> GetGitGroups(Dictionary<string, string> values)
+        {
+            Dictionary<int, Dictionary<string, string>> groups = new Dictionary<int, Dictionary<string, string>>();
+            HashSet<string> supportedFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "REPOSITORY_URL",
+                "SOURCE_BRANCH",
+                "TARGET_BRANCH"
+            };
+
+            foreach (KeyValuePair<string, string> entry in values)
+            {
+                if (!entry.Key.StartsWith(GitPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+                if (FieldNamesByKey.ContainsKey(entry.Key)) continue;
+
+                string suffix = entry.Key.Substring(GitPrefix.Length);
+                int separator = suffix.IndexOf('_');
+                if (separator <= 0)
+                {
+                    throw new InvalidOperationException($"{entry.Key} must use FIRSTDRAFT_GIT_<number>_<field> syntax.");
+                }
+
+                string indexText = suffix.Substring(0, separator);
+                string field = suffix.Substring(separator + 1);
+                if (!int.TryParse(indexText, out int repositoryIndex) || repositoryIndex <= 0)
+                {
+                    throw new InvalidOperationException($"{entry.Key} must use a positive Git repository number.");
+                }
+
+                if (!supportedFields.Contains(field))
+                {
+                    throw new InvalidOperationException($"{entry.Key} is not a supported Git repository .env field.");
+                }
+
+                if (!groups.TryGetValue(repositoryIndex, out Dictionary<string, string>? group))
+                {
+                    group = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    groups[repositoryIndex] = group;
+                }
+
+                group[field] = entry.Value;
+            }
+
+            return groups;
+        }
+
+        private static GitRepositoryConfig BuildGitRepository(int index, Dictionary<string, string> values)
+        {
+            string prefix = $"{GitPrefix}{index}_";
+            string repositoryUrl = GetRequired(values, "REPOSITORY_URL", prefix);
+            string sourceBranch = values.TryGetValue("SOURCE_BRANCH", out string? source) && !string.IsNullOrWhiteSpace(source)
+                ? source
+                : "main";
+            string targetBranch = values.TryGetValue("TARGET_BRANCH", out string? target) && !string.IsNullOrWhiteSpace(target)
+                ? target
+                : sourceBranch;
+
+            try
+            {
+                return GitRepositoryConfigurationService.BuildRepositoryConfig(repositoryUrl, sourceBranch, targetBranch);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new InvalidOperationException($"{prefix}{ex.Message}", ex);
+            }
+        }
+
+        private static JiraEnvApplyResult ApplyJiraValues(ApplicationData applicationData, Dictionary<string, string> values)
+        {
+            Dictionary<int, Dictionary<string, string>> groups = GetJiraGroups(values);
+            if (groups.Count == 0) return JiraEnvApplyResult.Empty;
+
+            List<JiraIntegrationConfig> integrations = JiraIntegrationConfigService.NormalizeIntegrations(applicationData.JiraIntegrations).ToList();
+            List<string> integrationIds = new List<string>();
+            Dictionary<string, string> pendingApiTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            List<string> encryptedApiTokenIds = new List<string>();
+
+            foreach (KeyValuePair<int, Dictionary<string, string>> group in groups.OrderBy(group => group.Key))
+            {
+                JiraIntegrationConfig envIntegration = BuildJiraIntegration(group.Key, group.Value);
+                int existingIndex = integrations.FindIndex(integration =>
+                    string.Equals(integration.IntegrationId, envIntegration.IntegrationId, StringComparison.OrdinalIgnoreCase));
+
+                if (existingIndex >= 0)
+                {
+                    envIntegration.EncryptedApiToken = integrations[existingIndex].EncryptedApiToken;
+                    integrations[existingIndex] = envIntegration;
+                }
+                else
+                {
+                    integrations.Add(envIntegration);
+                }
+
+                integrationIds.Add(envIntegration.IntegrationId);
+
+                if (group.Value.TryGetValue("API_TOKEN", out string? apiToken) && !string.IsNullOrWhiteSpace(apiToken))
+                {
+                    string trimmedApiToken = apiToken.Trim();
+                    if (!string.IsNullOrEmpty(applicationData.ConfigEncryptionKey))
+                    {
+                        if (!string.Equals(envIntegration.GetApiToken(applicationData), trimmedApiToken, StringComparison.Ordinal))
+                        {
+                            envIntegration.StoreApiToken(applicationData, trimmedApiToken);
+                            encryptedApiTokenIds.Add(envIntegration.IntegrationId);
+                        }
+                    }
+                    else
+                    {
+                        pendingApiTokens[envIntegration.IntegrationId] = trimmedApiToken;
+                    }
+                }
+            }
+
+            applicationData.JiraIntegrations = integrations
+                .OrderBy(integration => integration.IntegrationId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return new JiraEnvApplyResult(integrationIds, pendingApiTokens, encryptedApiTokenIds);
+        }
+
+        private static Dictionary<int, Dictionary<string, string>> GetJiraGroups(Dictionary<string, string> values)
+        {
+            Dictionary<int, Dictionary<string, string>> groups = new Dictionary<int, Dictionary<string, string>>();
+            HashSet<string> supportedFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "ID",
+                "ENABLED",
+                "SITE_URL",
+                "EMAIL",
+                "API_TOKEN",
+                "BOARD_ID",
+                "BOARD_NAME",
+                "BOARD_TYPE",
+                "BOARD_FILTER_ID",
+                "READY_STATUS_ID",
+                "READY_STATUS_NAME",
+                "PROCESSING_STATUS_ID",
+                "PROCESSING_STATUS_NAME",
+                "PROCESSED_STATUS_ID",
+                "PROCESSED_STATUS_NAME",
+                "ASSIGNEES"
+            };
+
+            foreach (KeyValuePair<string, string> entry in values)
+            {
+                if (!entry.Key.StartsWith(JiraPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+
+                string suffix = entry.Key.Substring(JiraPrefix.Length);
+                int separator = suffix.IndexOf('_');
+                if (separator <= 0)
+                {
+                    throw new InvalidOperationException($"{entry.Key} must use FIRSTDRAFT_JIRA_<number>_<field> syntax.");
+                }
+
+                string indexText = suffix.Substring(0, separator);
+                string field = suffix.Substring(separator + 1);
+                if (!int.TryParse(indexText, out int integrationIndex) || integrationIndex <= 0)
+                {
+                    throw new InvalidOperationException($"{entry.Key} must use a positive Jira integration number.");
+                }
+
+                if (!supportedFields.Contains(field))
+                {
+                    throw new InvalidOperationException($"{entry.Key} is not a supported Jira .env field.");
+                }
+
+                if (!groups.TryGetValue(integrationIndex, out Dictionary<string, string>? group))
+                {
+                    group = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    groups[integrationIndex] = group;
+                }
+
+                group[field] = entry.Value;
+            }
+
+            return groups;
+        }
+
+        private static JiraIntegrationConfig BuildJiraIntegration(int index, Dictionary<string, string> values)
+        {
+            string prefix = $"{JiraPrefix}{index}_";
+            string integrationId = GetRequired(values, "ID", prefix);
+            string? normalizedIntegrationId = JiraIntegrationConfigService.NormalizeIntegrationId(integrationId);
+            if (normalizedIntegrationId == null)
+            {
+                throw new InvalidOperationException($"{prefix}ID must be 5 lowercase alphanumeric characters.");
+            }
+
+            JiraIntegrationConfig integration = new JiraIntegrationConfig
+            {
+                IntegrationId = normalizedIntegrationId,
+                Enabled = values.TryGetValue("ENABLED", out string? enabled) ? ParseBool($"{prefix}ENABLED", enabled) : true,
+                SiteUrl = JiraIntegrationConfigService.CleanSiteUrl(GetRequired(values, "SITE_URL", prefix)),
+                Email = GetRequired(values, "EMAIL", prefix).Trim(),
+                BoardId = GetOptionalInt(values, "BOARD_ID", prefix, minimum: 1),
+                BoardName = GetOptionalString(values, "BOARD_NAME"),
+                BoardType = GetOptionalString(values, "BOARD_TYPE"),
+                BoardFilterId = GetOptionalInt(values, "BOARD_FILTER_ID", prefix, minimum: 1),
+                ReadyStatusId = GetOptionalString(values, "READY_STATUS_ID"),
+                ReadyStatusName = GetOptionalString(values, "READY_STATUS_NAME"),
+                ProcessingStatusId = GetOptionalString(values, "PROCESSING_STATUS_ID"),
+                ProcessingStatusName = GetOptionalString(values, "PROCESSING_STATUS_NAME"),
+                ProcessedStatusId = GetOptionalString(values, "PROCESSED_STATUS_ID"),
+                ProcessedStatusName = GetOptionalString(values, "PROCESSED_STATUS_NAME"),
+                Assignees = values.TryGetValue("ASSIGNEES", out string? assignees)
+                    ? ParseAssignees($"{prefix}ASSIGNEES", assignees)
+                    : Array.Empty<JiraAssigneeConfig>()
+            };
+
+            string? siteError = JiraIntegrationConfigService.ValidateSiteUrl(integration.SiteUrl);
+            if (siteError != null) throw new InvalidOperationException($"{prefix}SITE_URL: {siteError}");
+
+            string? emailError = JiraIntegrationConfigService.ValidateEmail(integration.Email, $"{prefix}EMAIL");
+            if (emailError != null) throw new InvalidOperationException(emailError);
+
+            return integration;
+        }
+
+        private static string GetRequired(Dictionary<string, string> values, string field, string prefix)
+        {
+            if (!values.TryGetValue(field, out string? value) || string.IsNullOrWhiteSpace(value))
+            {
+                throw new InvalidOperationException($"{prefix}{field} is required.");
+            }
+
+            return value;
+        }
+
+        private static string GetOptionalString(Dictionary<string, string> values, string field)
+        {
+            return values.TryGetValue(field, out string? value) ? value.Trim() : string.Empty;
+        }
+
+        private static int? GetOptionalInt(Dictionary<string, string> values, string field, string prefix, int minimum)
+        {
+            if (!values.TryGetValue(field, out string? value) || string.IsNullOrWhiteSpace(value)) return null;
+
+            if (!int.TryParse(value, out int parsed) || parsed < minimum)
+            {
+                throw new InvalidOperationException($"{prefix}{field} must be a number greater than or equal to {minimum}.");
+            }
+
+            return parsed;
+        }
+
+        private static JiraAssigneeConfig[] ParseAssignees(string key, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                string.Equals(value, "none", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "any", StringComparison.OrdinalIgnoreCase))
+            {
+                return Array.Empty<JiraAssigneeConfig>();
+            }
+
+            return value
+                .Split(';')
+                .Select(entry => ParseAssignee(key, entry))
+                .Where(assignee => !string.IsNullOrWhiteSpace(assignee.AccountId))
+                .ToArray();
+        }
+
+        private static JiraAssigneeConfig ParseAssignee(string key, string value)
+        {
+            string[] parts = value.Split('|');
+            if (parts.Length > 3)
+            {
+                throw new InvalidOperationException($"{key} assignees must use accountId|displayName|emailAddress entries separated by semicolons.");
+            }
+
+            string accountId = parts.Length > 0 ? parts[0].Trim() : string.Empty;
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                throw new InvalidOperationException($"{key} assignee accountId cannot be empty.");
+            }
+
+            return new JiraAssigneeConfig
+            {
+                AccountId = accountId,
+                DisplayName = parts.Length > 1 ? parts[1].Trim() : string.Empty,
+                EmailAddress = parts.Length > 2 ? parts[2].Trim() : string.Empty
+            };
+        }
+
         private static string RequireValue(string key, string value)
         {
             if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException($"{key} cannot be empty.");
@@ -278,6 +665,30 @@ namespace FirstDraft.Configuration
         private static string? NullIfEmpty(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        private sealed class JiraEnvApplyResult
+        {
+            public static readonly JiraEnvApplyResult Empty = new JiraEnvApplyResult(
+                Array.Empty<string>(),
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                Array.Empty<string>());
+
+            public JiraEnvApplyResult(
+                IReadOnlyList<string> integrationIds,
+                IReadOnlyDictionary<string, string> pendingApiTokens,
+                IReadOnlyList<string> encryptedApiTokenIds)
+            {
+                IntegrationIds = integrationIds;
+                PendingApiTokens = pendingApiTokens;
+                EncryptedApiTokenIds = encryptedApiTokenIds;
+            }
+
+            public IReadOnlyList<string> IntegrationIds { get; }
+
+            public IReadOnlyDictionary<string, string> PendingApiTokens { get; }
+
+            public IReadOnlyList<string> EncryptedApiTokenIds { get; }
         }
     }
 }

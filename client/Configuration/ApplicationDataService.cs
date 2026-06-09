@@ -44,8 +44,17 @@ namespace FirstDraft.Configuration
             LastEnvironmentConfiguration = _envFileService.ApplyIfExists(
                 applicationData,
                 Path.GetDirectoryName(_configLocation) ?? Directory.GetCurrentDirectory());
+            if (LastEnvironmentConfiguration?.HasEncryptedJiraApiTokens == true)
+            {
+                await Save(applicationData);
+            }
 
             return applicationData;
+        }
+
+        public bool ApplyPendingEnvironmentSecrets(ApplicationData applicationData)
+        {
+            return _envFileService.ApplyPendingJiraApiTokens(applicationData, LastEnvironmentConfiguration);
         }
 
         public async Task Save(ApplicationData applicationData)

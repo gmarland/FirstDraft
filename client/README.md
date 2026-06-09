@@ -141,6 +141,45 @@ FIRSTDRAFT_TAGS=
 
 Use `FIRSTDRAFT_MAX_CONCURRENT_TASKS=unlimited`, `null`, or an empty value for unlimited capacity. Use `FIRSTDRAFT_APPLICATION_PATHS=*` or `none`, `FIRSTDRAFT_SKILLS=none`, and `FIRSTDRAFT_TAGS=none` for empty lists.
 
+Git repositories can be bootstrapped from `.env` with indexed keys. Repeat the same shape with `FIRSTDRAFT_GIT_2_*`, `FIRSTDRAFT_GIT_3_*`, and so on for additional repositories.
+
+```env
+FIRSTDRAFT_GIT_1_REPOSITORY_URL=https://github.com/example/repo.git
+FIRSTDRAFT_GIT_1_SOURCE_BRANCH=main
+FIRSTDRAFT_GIT_1_TARGET_BRANCH=main
+
+FIRSTDRAFT_GIT_2_REPOSITORY_URL=git@github.com:example/another-repo.git
+FIRSTDRAFT_GIT_2_SOURCE_BRANCH=develop
+FIRSTDRAFT_GIT_2_TARGET_BRANCH=main
+```
+
+Git `.env` entries override existing repositories with the same normalized repository URL. `FIRSTDRAFT_GIT_<n>_SOURCE_BRANCH` defaults to `main`; `FIRSTDRAFT_GIT_<n>_TARGET_BRANCH` defaults to the source branch.
+
+Jira integrations can also be bootstrapped from `.env` with indexed keys. Repeat the same shape with `FIRSTDRAFT_JIRA_2_*`, `FIRSTDRAFT_JIRA_3_*`, and so on for additional connections.
+
+```env
+FIRSTDRAFT_JIRA_1_ID=abc12
+FIRSTDRAFT_JIRA_1_ENABLED=true
+FIRSTDRAFT_JIRA_1_SITE_URL=https://example.atlassian.net
+FIRSTDRAFT_JIRA_1_EMAIL=user@example.com
+FIRSTDRAFT_JIRA_1_API_TOKEN=
+FIRSTDRAFT_JIRA_1_BOARD_ID=123
+FIRSTDRAFT_JIRA_1_BOARD_NAME=Engineering
+FIRSTDRAFT_JIRA_1_BOARD_TYPE=scrum
+FIRSTDRAFT_JIRA_1_BOARD_FILTER_ID=456
+FIRSTDRAFT_JIRA_1_READY_STATUS_ID=10001
+FIRSTDRAFT_JIRA_1_READY_STATUS_NAME=Ready for AI
+FIRSTDRAFT_JIRA_1_PROCESSING_STATUS_ID=10002
+FIRSTDRAFT_JIRA_1_PROCESSING_STATUS_NAME=AI Processing
+FIRSTDRAFT_JIRA_1_PROCESSED_STATUS_ID=10003
+FIRSTDRAFT_JIRA_1_PROCESSED_STATUS_NAME=Processed by AI
+FIRSTDRAFT_JIRA_1_ASSIGNEES=any
+```
+
+Jira `.env` entries override existing integrations with the same integration ID and preserve the existing encrypted API token when `FIRSTDRAFT_JIRA_<n>_API_TOKEN` is empty or omitted. If an API token is provided and the worker already has `ConfigEncryptionKey`, it is encrypted into `config.json` during configuration load. If the worker is not authenticated yet, `firstdraft init` encrypts the token after authentication. Remove plaintext Jira API tokens from `.env` after they have been encrypted.
+
+Use `FIRSTDRAFT_JIRA_<n>_ASSIGNEES=any`, `none`, or an empty value to pick up work for any assignee. To restrict assignees, use semicolon-separated entries in `accountId|displayName|emailAddress` form.
+
 Credentials can be encrypted in the config. Keep the worker configuration private and run workers only on machines trusted to access the configured repositories, credentials, tools, and networks.
 
 Authentication is not loaded from `.env`. Run `firstdraft init` to log in or re-authenticate the worker, and keep refresh tokens in the existing local config storage.
