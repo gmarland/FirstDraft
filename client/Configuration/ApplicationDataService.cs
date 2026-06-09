@@ -5,13 +5,17 @@ namespace FirstDraft.Configuration
     public class ApplicationDataService
     {
         private readonly string _configLocation;
+        private readonly WorkerEnvFileService _envFileService;
 
         public ApplicationDataService()
         {
             _configLocation = Path.Join(Directory.GetCurrentDirectory(), "config.json");
+            _envFileService = new WorkerEnvFileService();
         }
 
         public string ConfigLocation => _configLocation;
+
+        public WorkerEnvConfiguration? LastEnvironmentConfiguration { get; private set; }
 
         public async Task<ApplicationData> GetApplicationData()
         {
@@ -36,6 +40,10 @@ namespace FirstDraft.Configuration
 
                 await Save(applicationData);
             }
+
+            LastEnvironmentConfiguration = _envFileService.ApplyIfExists(
+                applicationData,
+                Path.GetDirectoryName(_configLocation) ?? Directory.GetCurrentDirectory());
 
             return applicationData;
         }

@@ -115,7 +115,35 @@ The worker stores local configuration through `ApplicationData`. Important field
 - `GitRepositories`: worker-local Git repositories with enforced source and PR target branches.
 - `JiraIntegrations`: worker-local Jira connections and workflow settings with encrypted API tokens.
 
+The worker also reads an optional `.env` file from the current directory, next to `config.json`. Supported `.env` values are applied over `config.json` when the worker loads configuration. During `firstdraft init`, any supported value present in `.env` is displayed and not prompted for.
+
+```bash
+cp .env.example .env
+```
+
+Supported `.env` keys:
+
+```env
+FIRSTDRAFT_WORKER_ID=my-worker
+FIRSTDRAFT_EXTERNAL_API=https://api.firstdraft.run
+FIRSTDRAFT_AI_PROVIDER=Codex
+FIRSTDRAFT_PLANNING_ENABLED=true
+FIRSTDRAFT_AI_WORKING_DIRECTORY=.
+FIRSTDRAFT_APPLICATION_FOLDER=App
+FIRSTDRAFT_LOGS_FOLDER=Logs
+FIRSTDRAFT_APPLICATION_PATHS=*
+FIRSTDRAFT_SKILLS=git
+FIRSTDRAFT_MAX_CONCURRENT_TASKS=1
+FIRSTDRAFT_GIT_WORKSPACE_DIRECTORY=
+FIRSTDRAFT_NAME=
+FIRSTDRAFT_TAGS=
+```
+
+Use `FIRSTDRAFT_MAX_CONCURRENT_TASKS=unlimited`, `null`, or an empty value for unlimited capacity. Use `FIRSTDRAFT_APPLICATION_PATHS=*` or `none`, `FIRSTDRAFT_SKILLS=none`, and `FIRSTDRAFT_TAGS=none` for empty lists.
+
 Credentials can be encrypted in the config. Keep the worker configuration private and run workers only on machines trusted to access the configured repositories, credentials, tools, and networks.
+
+Authentication is not loaded from `.env`. Run `firstdraft init` to log in or re-authenticate the worker, and keep refresh tokens in the existing local config storage.
 
 ## Local Setup
 
