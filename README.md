@@ -101,12 +101,14 @@ Repositories and Jira integrations are configured on each worker with the worker
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 26.3.0+
 - npm
 - Docker and Docker Compose
 - .NET SDK 10
 - Codex CLI or Claude CLI for `gitflow` execution
 - `git` on `PATH` for workers that execute `gitflow`
+
+The root, API, and web console directories include `.nvmrc` files pinned to Node.js 26.3.0.
 
 ### 1. Start the local Docker stack
 
