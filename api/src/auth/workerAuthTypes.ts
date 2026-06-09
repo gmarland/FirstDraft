@@ -4,7 +4,7 @@ export type WorkerAccessPayload = JwtPayload & {
   sub: string;
   typ: "worker_access";
   workerId: string;
-  userId: string;
+  userId: string | null;
 };
 
 export type ApiToWorkerPayload = JwtPayload & {

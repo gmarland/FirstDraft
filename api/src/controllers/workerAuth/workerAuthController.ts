@@ -1,5 +1,6 @@
 import { RequestHandler } from "express";
-import { ApiToWorkerTokenIssuer, WorkerTokenService } from "../../auth/workerTokens.js";
+import { timingSafeEqual } from "crypto";
+import { ApiToWorkerTokenIssuer, WorkerApiKeyConfig, WorkerTokenService } from "../../auth/workerTokens.js";
 import { normalizeEnabledTaskTypes } from "../../commandModes.js";
 import { IntegrationLifecycleService } from "../../integrations/integrationLifecycleService.js";
 import { CommandOutputStorage } from "../../storage/commandOutputStorage.js";
@@ -29,7 +30,8 @@ export class WorkerAuthController {
     private readonly gitRepositories?: GitRepositoryStore,
     private readonly jiraIntegrations?: JiraIntegrationStore,
     private readonly jiraTicketClaims?: JiraTicketClaimStore,
-    private readonly lifecycle?: IntegrationLifecycleService
+    private readonly lifecycle?: IntegrationLifecycleService,
+    private readonly workerApiKeyConfig?: WorkerApiKeyConfig
   ) {}
 
   public readonly issueToken: RequestHandler = asyncHandler(async (req, res) => {
@@ -37,6 +39,23 @@ export class WorkerAuthController {
     const validationError = validateWorkerTokenRequest(input);
     if (validationError) {
       res.status(400).json({ error: validationError });
+      return;
+    }
+
+    if (this.workerApiKeyConfig) {
+      if (req.headers.authorization) {
+        res.status(403).json({ error: "worker user authentication is disabled for this API" });
+        return;
+      }
+      if (!this.isValidWorkerApiCredential(input.apiKey, input.apiSecret)) {
+        res.status(401).json({ error: "invalid worker API credentials" });
+        return;
+      }
+
+      res.json({
+        ...(await this.tokens.issueForApiKey(input.workerId!.trim())),
+        configEncryptionKey: this.workerConfigEncryptionKey
+      });
       return;
     }
 
@@ -127,7 +146,12 @@ export class WorkerAuthController {
       return;
     }
 
-    const registration = await this.workers.getWorkerForUser(worker.userId, worker.workerId);
+    const sharedRegistration = worker.userId === null
+      ? await this.workers.getWorker(worker.workerId)
+      : undefined;
+    const registration = sharedRegistration ?? (
+      worker.userId === null ? undefined : await this.workers.getWorkerForUser(worker.userId, worker.workerId)
+    );
     if (!registration) {
       res.status(404).json({ error: "worker is not registered" });
       return;
@@ -361,6 +385,17 @@ export class WorkerAuthController {
 
     return command;
   }
+
+  private isValidWorkerApiCredential(apiKey: string | undefined, apiSecret: string | undefined): boolean {
+    if (!apiKey || !apiSecret || !this.workerApiKeyConfig) return false;
+    return safeEqual(apiKey, this.workerApiKeyConfig.apiKey) && safeEqual(apiSecret, this.workerApiKeyConfig.apiSecret);
+  }
+}
+
+function safeEqual(actual: string, expected: string): boolean {
+  const actualBuffer = Buffer.from(actual);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 export function createWorkerAuthController(
@@ -373,7 +408,8 @@ export function createWorkerAuthController(
   gitRepositories?: GitRepositoryStore,
   jiraIntegrations?: JiraIntegrationStore,
   jiraTicketClaims?: JiraTicketClaimStore,
-  lifecycle?: IntegrationLifecycleService
+  lifecycle?: IntegrationLifecycleService,
+  workerApiKeyConfig?: WorkerApiKeyConfig
 ): WorkerAuthController {
   return new WorkerAuthController(
     tenants,
@@ -385,7 +421,8 @@ export function createWorkerAuthController(
     gitRepositories,
     jiraIntegrations,
     jiraTicketClaims,
-    lifecycle
+    lifecycle,
+    workerApiKeyConfig
   );
 }
 

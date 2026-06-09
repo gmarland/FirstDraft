@@ -137,9 +137,15 @@ FIRSTDRAFT_MAX_CONCURRENT_TASKS=1
 FIRSTDRAFT_GIT_WORKSPACE_DIRECTORY=
 FIRSTDRAFT_NAME=
 FIRSTDRAFT_TAGS=
+
+# Optional on-site worker authentication. Use the same values configured on the API.
+# WORKER_API_KEY=change-this-worker-api-key
+# WORKER_API_SECRET=change-this-worker-api-secret
 ```
 
 Use `FIRSTDRAFT_MAX_CONCURRENT_TASKS=unlimited`, `null`, or an empty value for unlimited capacity. Use `FIRSTDRAFT_APPLICATION_PATHS=*` or `none`, `FIRSTDRAFT_SKILLS=none`, and `FIRSTDRAFT_TAGS=none` for empty lists.
+
+For a single-customer on-site API, set `WORKER_API_KEY` and `WORKER_API_SECRET` in the API environment and in the worker `.env`. When both worker values are present, `firstdraft init` skips user login/signup and exchanges those credentials for worker JWTs. Set both values or neither; partial configuration is invalid.
 
 Git repositories can be bootstrapped from `.env` with indexed keys. Repeat the same shape with `FIRSTDRAFT_GIT_2_*`, `FIRSTDRAFT_GIT_3_*`, and so on for additional repositories.
 
@@ -192,7 +198,7 @@ Create or update configuration:
 dotnet run -- init
 ```
 
-During setup, set the external API URL, log in or sign up with your FirstDraft user, choose the AI provider, and select the paths and skills this worker should advertise.
+During setup, set the external API URL, log in or sign up with your FirstDraft user unless `WORKER_API_KEY` and `WORKER_API_SECRET` are configured, choose the AI provider, and select the paths and skills this worker should advertise.
 
 Configure at least one repository before expecting Jira tickets to be claimable:
 

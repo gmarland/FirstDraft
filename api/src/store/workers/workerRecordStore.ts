@@ -7,7 +7,7 @@ type QueryResultRow = Record<string, unknown>;
 
 export type WorkerRecord = {
   workerId: string;
-  userId: string;
+  userId: string | null;
   firstRegisteredAt: string;
   lastRegisteredAt: string;
   lastSeenAt?: string;
@@ -23,7 +23,7 @@ export type WorkerRecord = {
 
 export type UpsertWorkerRegistrationInput = {
   workerId: string;
-  userId: string;
+  userId: string | null;
   connectionId: string;
   paths: string[];
   skills: string[];
@@ -143,7 +143,7 @@ export class WorkerRecordStore {
     );
   }
 
-  public async refreshWorkerHeartbeat(workerId: string, userId: string): Promise<WorkerRecord | undefined> {
+  public async refreshWorkerHeartbeat(workerId: string, userId: string | null): Promise<WorkerRecord | undefined> {
     const result = await this.pool.query(
       `
         update client_workers
@@ -152,7 +152,7 @@ export class WorkerRecordStore {
           state_updated_at = case when state = 'stopped' then now() else state_updated_at end,
           stopped_at = null
         where worker_id = $1
-          and user_id = $2
+          and user_id is not distinct from $2::uuid
         returning ${workerRecordColumns}
       `,
       [workerId, userId]
@@ -230,7 +230,7 @@ export function mapWorkerRecord(row: QueryResultRow): WorkerRecord {
 
   return {
     workerId: String(row.worker_id),
-    userId: String(row.user_id),
+    userId: row.user_id ? String(row.user_id) : null,
     firstRegisteredAt: toIsoString(row.first_registered_at),
     lastRegisteredAt: toIsoString(row.last_registered_at),
     lastSeenAt: row.last_seen_at ? toIsoString(row.last_seen_at) : undefined,

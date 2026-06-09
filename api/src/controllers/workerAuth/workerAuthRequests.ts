@@ -1,5 +1,7 @@
 export type WorkerTokenRequest = {
   workerId?: string;
+  apiKey?: string;
+  apiSecret?: string;
 };
 
 export function parseWorkerTokenRequest(body: unknown): WorkerTokenRequest {

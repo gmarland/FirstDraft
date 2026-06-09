@@ -242,7 +242,8 @@ class DispatchableQueueDbClient implements DbClient {
 
     assert.match(sql, /inner join client_workers claiming_worker/);
     assert.match(sql, /claiming_worker\.worker_id = \$1/);
-    assert.match(sql, /inner join client_command_users command_users/);
+    assert.match(sql, /claiming_worker\.user_id is null and commands\.user_id is null/);
+    assert.match(sql, /exists \(\s*select 1\s*from client_command_users command_users/);
     assert.match(sql, /command_users\.user_id = claiming_worker\.user_id/);
     assert.match(sql, /left join worker_git_repositories worker_repos/);
     assert.match(sql, /commands\.worker_id = \$1 or commands\.worker_id is null/);
@@ -280,7 +281,8 @@ class ClaimCommandDbClient implements DbClient {
 
     assert.match(sql, /update client_commands/);
     assert.match(sql, /from client_workers claiming_worker/);
-    assert.match(sql, /inner join client_command_users command_users/);
+    assert.match(sql, /claiming_worker\.user_id is null and client_commands\.user_id is null/);
+    assert.match(sql, /exists \(\s*select 1\s*from client_command_users command_users/);
     assert.match(sql, /command_users\.transaction_id = client_commands\.transaction_id/);
     assert.match(sql, /command_users\.user_id = claiming_worker\.user_id/);
     assert.match(sql, /where client_commands\.transaction_id = \$1/);
@@ -328,7 +330,7 @@ function commandRow(
   overrides: {
     status?: string;
     workerId?: string | null;
-    userId?: string;
+    userId?: string | null;
     taskSummary?: string;
     workerOwnerUserId?: string;
     workerOwnerName?: string;

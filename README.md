@@ -55,7 +55,7 @@ Browser console / Jira
 local repositories and toolchains
 ```
 
-Workers authenticate with a FirstDraft user account, maintain their own worker JWT, register over HTTP, send heartbeats, and report task start/output/completion from the machines where they are installed. The API records worker runtime state and command metadata in Postgres, stores synced worker repository and Jira settings for visibility and claim checks, and writes command output as NDJSON for later review.
+Workers authenticate with a FirstDraft user account by default, maintain their own worker JWT, register over HTTP, send heartbeats, and report task start/output/completion from the machines where they are installed. For a single-customer on-site API, set `WORKER_API_KEY` and `WORKER_API_SECRET` on the API and in each worker `.env`; workers then exchange those credentials for worker JWTs without authenticating as users, and all signed-in website users can see the full worker fleet and command history. The API records worker runtime state and command metadata in Postgres, stores synced worker repository and Jira settings for visibility and claim checks, and writes command output as NDJSON for later review.
 
 ## Remote Worker Fleet
 
@@ -235,6 +235,8 @@ Important API environment variables:
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `JWT_SECRET` | Yes | Secret used to sign user JWTs |
+| `WORKER_API_KEY` | No | Enables on-site worker API-key auth when set with `WORKER_API_SECRET`; workers are not tied to users |
+| `WORKER_API_SECRET` | No | Secret paired with `WORKER_API_KEY`; API startup fails if only one value is set |
 | `PORT` | No | API port, defaults to `5080` |
 | `COMMAND_OUTPUT_BUCKET` | No | Bucket or Azure Blob container for command output |
 | `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws`, `gcs`/`google`, or `azure`/`az`; defaults to `s3` |

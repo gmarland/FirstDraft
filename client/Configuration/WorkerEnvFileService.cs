@@ -67,7 +67,9 @@ namespace FirstDraft.Configuration
             ["FIRSTDRAFT_MAX_CONCURRENT_TASKS"] = nameof(ApplicationData.MaxConcurrentTasks),
             ["FIRSTDRAFT_GIT_WORKSPACE_DIRECTORY"] = nameof(ApplicationData.GitWorkspaceDirectory),
             ["FIRSTDRAFT_NAME"] = nameof(ApplicationData.Name),
-            ["FIRSTDRAFT_TAGS"] = nameof(ApplicationData.Tags)
+            ["FIRSTDRAFT_TAGS"] = nameof(ApplicationData.Tags),
+            ["WORKER_API_KEY"] = nameof(ApplicationData.WorkerApiKey),
+            ["WORKER_API_SECRET"] = nameof(ApplicationData.WorkerApiSecret)
         };
 
         public WorkerEnvConfiguration? ApplyIfExists(ApplicationData applicationData, string configDirectory)
@@ -242,6 +244,14 @@ namespace FirstDraft.Configuration
 
                 case "FIRSTDRAFT_TAGS":
                     applicationData.Tags = ParseCommaSeparated(value);
+                    break;
+
+                case "WORKER_API_KEY":
+                    applicationData.WorkerApiKey = RequireValue(key, value);
+                    break;
+
+                case "WORKER_API_SECRET":
+                    applicationData.WorkerApiSecret = RequireValue(key, value);
                     break;
             }
         }

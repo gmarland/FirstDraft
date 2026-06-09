@@ -12,6 +12,11 @@ export type WorkerJwtConfig = {
   refreshExpiresInSeconds: number;
 };
 
+export type WorkerApiKeyConfig = {
+  apiKey: string;
+  apiSecret: string;
+};
+
 export type WorkerTokenPair = {
   accessToken: string;
   accessTokenExpiresIn: number;
@@ -30,6 +35,10 @@ export class WorkerTokenService {
     return this.issueForUser(workerId, user.userId);
   }
 
+  public async issueForApiKey(workerId: string): Promise<WorkerTokenPair> {
+    return this.issueForUser(workerId, null);
+  }
+
   public async refresh(refreshToken: string): Promise<WorkerTokenPair | undefined> {
     const consumed = await this.refreshTokens.consume(refreshToken);
     if (!consumed) return undefined;
@@ -46,7 +55,7 @@ export class WorkerTokenService {
         audience: this.config.audience
       }) as WorkerAccessPayload;
 
-      if (payload.typ !== "worker_access" || !payload.workerId || payload.sub !== payload.workerId || !payload.userId) {
+      if (payload.typ !== "worker_access" || !payload.workerId || payload.sub !== payload.workerId || payload.userId === undefined) {
         return undefined;
       }
 
@@ -57,12 +66,12 @@ export class WorkerTokenService {
     }
   }
 
-  private async issueForUser(workerId: string, userId: string): Promise<WorkerTokenPair> {
+  private async issueForUser(workerId: string, userId: string | null): Promise<WorkerTokenPair> {
     const refresh = await this.refreshTokens.issue(workerId, userId, this.config.refreshExpiresInSeconds);
     return this.createTokenPair(workerId, userId, refresh.refreshToken);
   }
 
-  private createTokenPair(workerId: string, userId: string, refreshToken: string): WorkerTokenPair {
+  private createTokenPair(workerId: string, userId: string | null, refreshToken: string): WorkerTokenPair {
     const accessToken = jwt.sign(
       {
         typ: "worker_access",
@@ -143,4 +152,15 @@ export function createWorkerJwtConfigFromEnv(): WorkerJwtConfig {
     accessExpiresIn: "1h",
     refreshExpiresInSeconds: 7 * 24 * 60 * 60
   };
+}
+
+export function createWorkerApiKeyConfigFromEnv(): WorkerApiKeyConfig | undefined {
+  const apiKey = process.env.WORKER_API_KEY?.trim();
+  const apiSecret = process.env.WORKER_API_SECRET?.trim();
+  if (!apiKey && !apiSecret) return undefined;
+  if (!apiKey || !apiSecret) {
+    throw new Error("WORKER_API_KEY and WORKER_API_SECRET must both be set or both be omitted");
+  }
+
+  return { apiKey, apiSecret };
 }

@@ -35,7 +35,7 @@ export function prefixedCommandColumns(prefix: string, aliasPrefix = ""): string
 export function mapCommand(row: QueryResultRow): Command {
   return {
     transactionId: String(row.transaction_id),
-    userId: String(row.user_id),
+    userId: row.user_id ? String(row.user_id) : null,
     workerId: row.worker_id ? String(row.worker_id) : undefined,
     workerOwnerUserId: row.worker_owner_user_id ? String(row.worker_owner_user_id) : undefined,
     workerOwnerName: row.worker_owner_name ? String(row.worker_owner_name) : undefined,

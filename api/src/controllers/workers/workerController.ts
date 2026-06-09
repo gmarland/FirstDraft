@@ -17,26 +17,33 @@ export class WorkerController {
     private readonly store: WorkerStore,
     private readonly outputStorage?: CommandOutputStorage,
     private readonly gitRepositories?: GitRepositoryStore,
-    private readonly jiraIntegrations?: JiraIntegrationStore
+    private readonly jiraIntegrations?: JiraIntegrationStore,
+    private readonly sharedWorkerVisibility = false
   ) {}
 
   public readonly listWorkers: RequestHandler = asyncHandler(async (req, res) => {
     const user = requireUser(req, res);
     if (!user) return;
 
-    res.json(await this.store.listWorkersForUser(user.userId));
+    res.json(this.sharedWorkerVisibility
+      ? await this.store.listWorkers()
+      : await this.store.listWorkersForUser(user.userId));
   });
 
   public readonly getWorkerState: RequestHandler = asyncHandler(async (req, res) => {
     const user = requireUser(req, res);
     if (!user) return;
 
-    const client = await requireWorkerForUser(this.store, user, req.params.workerId, res);
+    const client = this.sharedWorkerVisibility
+      ? await this.requireWorker(req.params.workerId, res)
+      : await requireWorkerForUser(this.store, user, req.params.workerId, res);
     if (!client) return;
 
     const [gitRepositories, jiraIntegrations] = await Promise.all([
       this.gitRepositories?.listGitflowSuggestions(client.workerId) ?? Promise.resolve([]),
-      this.jiraIntegrations?.listWorkerSettings(user.userId, client.workerId) ?? Promise.resolve([])
+      this.sharedWorkerVisibility
+        ? this.jiraIntegrations?.listWorkerSettingsForWorker(client.workerId) ?? Promise.resolve([])
+        : this.jiraIntegrations?.listWorkerSettings(user.userId, client.workerId) ?? Promise.resolve([])
     ]);
 
     res.json(toWorkerStateResponse(client, gitRepositories, jiraIntegrations));
@@ -46,7 +53,9 @@ export class WorkerController {
     const user = requireUser(req, res);
     if (!user) return;
 
-    const client = await requireWorkerForUser(this.store, user, req.params.workerId, res);
+    const client = this.sharedWorkerVisibility
+      ? await this.requireWorker(req.params.workerId, res)
+      : await requireWorkerForUser(this.store, user, req.params.workerId, res);
     if (!client) return;
 
     res.json(await this.store.listWorkerCommands(client.workerId, readCommandPagination(req.query)));
@@ -56,11 +65,14 @@ export class WorkerController {
     const user = requireUser(req, res);
     if (!user) return;
 
-    res.json(await this.store.listTaskQueueForUser(user.userId, {
+    const query = {
       ...readCommandPagination(req.query),
       statuses: readTaskQueueStatuses(req.query),
       ...readTaskQueueSort(req.query)
-    }));
+    };
+    res.json(this.sharedWorkerVisibility
+      ? await this.store.listTaskQueue(query)
+      : await this.store.listTaskQueueForUser(user.userId, query));
   });
 
   public readonly getWorkerCommand: RequestHandler = asyncHandler(async (req, res) => {
@@ -103,11 +115,23 @@ export class WorkerController {
   });
 
   private async getVisibleCommand(user: User, workerId: string, transactionId: string): Promise<Command | undefined> {
-    const client = await this.store.getWorkerForUser(user.userId, workerId);
+    const client = this.sharedWorkerVisibility
+      ? await this.store.getWorker(workerId)
+      : await this.store.getWorkerForUser(user.userId, workerId);
     if (!client) return undefined;
 
     const command = await this.store.getWorkerCommand(transactionId);
     return command?.workerId === client.workerId ? command : undefined;
+  }
+
+  private async requireWorker(workerId: string, res: Parameters<RequestHandler>[1]) {
+    const worker = await this.store.getWorker(workerId);
+    if (!worker) {
+      res.status(404).json({ error: "worker is not registered" });
+      return undefined;
+    }
+
+    return worker;
   }
 }
 
@@ -132,7 +156,8 @@ export function createWorkerController(
   store: WorkerStore,
   outputStorage?: CommandOutputStorage,
   gitRepositories?: GitRepositoryStore,
-  jiraIntegrations?: JiraIntegrationStore
+  jiraIntegrations?: JiraIntegrationStore,
+  sharedWorkerVisibility = false
 ): WorkerController {
-  return new WorkerController(store, outputStorage, gitRepositories, jiraIntegrations);
+  return new WorkerController(store, outputStorage, gitRepositories, jiraIntegrations, sharedWorkerVisibility);
 }

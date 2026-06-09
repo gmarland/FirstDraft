@@ -6,7 +6,7 @@ import { normalizeEnabledTaskTypes } from "../commandModes.js";
 
 export type RegisterWorkerInput = {
   workerId: string;
-  userId: string;
+  userId: string | null;
   connectionId: string;
   paths: string[];
   skills: string[];
@@ -59,14 +59,15 @@ export type WorkerStore = {
   getWorkerForUser(userId: string, workerId: string): Promise<WorkerRegistration | undefined>;
   registerWorker(input: RegisterWorkerInput): Promise<WorkerRegistration>;
   markWorkerStopped(workerId: string, connectionId: string): Promise<void>;
-  refreshWorkerHeartbeat(workerId: string, userId: string): Promise<WorkerRegistration | undefined>;
+  refreshWorkerHeartbeat(workerId: string, userId: string | null): Promise<WorkerRegistration | undefined>;
   markStaleWorkersStopped(timeoutSeconds: number): Promise<void>;
-  createWorkerCommand(userId: string, workerId: string, command: string, commandMode?: CommandMode, executionCommand?: string): Promise<Command>;
+  createWorkerCommand(userId: string | null, workerId: string, command: string, commandMode?: CommandMode, executionCommand?: string): Promise<Command>;
   createQueuedCommand(input: CreateQueuedCommandInput): Promise<Command>;
   createReportedCommand(input: CreateReportedCommandInput): Promise<Command>;
   getWorkerCommand(transactionId: string): Promise<Command | undefined>;
   listWorkerCommands(workerId: string, pagination: CommandPagination): Promise<PaginatedCommands>;
   listTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<PaginatedCommands>;
+  listTaskQueue(query: TaskQueueQuery): Promise<PaginatedCommands>;
   getQueuedWorkerCommands(workerId: string): Promise<Command[]>;
   getDispatchableQueuedCommands(workerId: string, workerSkills: string[]): Promise<Command[]>;
   prepareGitflowCommandForWorker(command: Command, workerId: string): Promise<Command | undefined>;
@@ -136,7 +137,7 @@ export function createWorkerStore(
       await workers.markStaleWorkersStopped(timeoutSeconds);
     },
 
-    async createWorkerCommand(userId: string, workerId: string, command: string, commandMode: CommandMode = "gitflow", executionCommand?: string): Promise<Command> {
+    async createWorkerCommand(userId: string | null, workerId: string, command: string, commandMode: CommandMode = "gitflow", executionCommand?: string): Promise<Command> {
       return commands.createWorkerCommand(userId, workerId, command, commandMode, executionCommand);
     },
 
@@ -160,6 +161,10 @@ export function createWorkerStore(
 
     listTaskQueueForUser(userId: string, query: TaskQueueQuery): Promise<PaginatedCommands> {
       return commands.listTaskQueueForUser(userId, query);
+    },
+
+    listTaskQueue(query: TaskQueueQuery): Promise<PaginatedCommands> {
+      return commands.listTaskQueue(query);
     },
 
     async getQueuedWorkerCommands(workerId: string): Promise<Command[]> {

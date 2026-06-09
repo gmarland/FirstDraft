@@ -8,14 +8,14 @@ export type IssuedRefreshToken = {
   id: string;
   refreshToken: string;
   workerId: string;
-  userId: string;
+  userId: string | null;
   expiresAt: Date;
 };
 
 export type ConsumedRefreshToken = {
   id: string;
   workerId: string;
-  userId: string;
+  userId: string | null;
 };
 
 export class WorkerRefreshTokenStore {
@@ -27,7 +27,7 @@ export class WorkerRefreshTokenStore {
     this.refreshTokens = db.repository(WorkerRefreshTokenSchema);
   }
 
-  public async issue(workerId: string, userId: string, ttlSeconds: number): Promise<IssuedRefreshToken> {
+  public async issue(workerId: string, userId: string | null, ttlSeconds: number): Promise<IssuedRefreshToken> {
     const id = randomUUID();
     const refreshToken = `swr_${randomBytes(48).toString("base64url")}`;
     const refreshTokenHash = hashRefreshToken(refreshToken);
@@ -47,7 +47,8 @@ export class WorkerRefreshTokenStore {
       .andWhere("revoked_at is null")
       .andWhere("expires_at > now()")
       .andWhere(`
-        exists (
+        user_id is null
+        or exists (
           select 1
           from users
           where users.id = user_id
@@ -60,8 +61,10 @@ export class WorkerRefreshTokenStore {
     const consumed = readConsumedRefreshToken(result.raw?.[0], result.generatedMaps?.[0]);
     if (!consumed) return undefined;
 
-    const user = await this.users.findOneBy({ id: consumed.userId, disabledAt: IsNull() });
-    if (!user) return undefined;
+    if (consumed.userId !== null) {
+      const user = await this.users.findOneBy({ id: consumed.userId, disabledAt: IsNull() });
+      if (!user) return undefined;
+    }
 
     return consumed;
   }
@@ -70,7 +73,8 @@ export class WorkerRefreshTokenStore {
     await this.refreshTokens.update({ id }, { replacedBy: replacementId });
   }
 
-  public async isActiveUser(userId: string): Promise<boolean> {
+  public async isActiveUser(userId: string | null): Promise<boolean> {
+    if (userId === null) return true;
     return await this.users.existsBy({ id: userId, disabledAt: IsNull() });
   }
 }
@@ -92,13 +96,24 @@ function readConsumedRefreshToken(rawRow: unknown, generatedMap: unknown): Consu
   const mapped = generatedMap as RefreshTokenUpdateRow | undefined;
   const id = readRequiredString(raw?.id, mapped?.id);
   const workerId = readRequiredString(raw?.worker_id, raw?.workerId, mapped?.worker_id, mapped?.workerId);
-  const userId = readRequiredString(raw?.user_id, raw?.userId, mapped?.user_id, mapped?.userId);
+  const userId = readNullableString(raw?.user_id, raw?.userId, mapped?.user_id, mapped?.userId);
 
-  return id && workerId && userId ? { id, workerId, userId } : undefined;
+  return id && workerId && userId !== undefined ? { id, workerId, userId } : undefined;
 }
 
 function readRequiredString(...values: unknown[]): string | undefined {
   for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+
+  return undefined;
+}
+
+function readNullableString(...values: unknown[]): string | null | undefined {
+  for (const value of values) {
+    if (value === null) return null;
     if (typeof value !== "string") continue;
     const trimmed = value.trim();
     if (trimmed) return trimmed;

@@ -30,7 +30,20 @@ namespace FirstDraft.Api.Auth
 
             if (!string.IsNullOrEmpty(_refreshToken))
             {
-                await RefreshAsync();
+                try
+                {
+                    await RefreshAsync();
+                    return _accessToken!;
+                }
+                catch (WorkerAuthenticationException) when (_applicationData.HasWorkerApiCredentials())
+                {
+                    _refreshToken = null;
+                }
+            }
+
+            if (_applicationData.HasWorkerApiCredentials())
+            {
+                await IssueWithApiKeyAsync();
                 return _accessToken!;
             }
 
@@ -63,6 +76,26 @@ namespace FirstDraft.Api.Auth
                     workerId = _applicationData.WorkerId
                 },
                 userAccessToken);
+            Apply(response);
+            await StoreRefreshToken(response);
+        }
+
+        public async Task AuthenticateWithApiKeyAsync()
+        {
+            await IssueWithApiKeyAsync();
+            await _applicationDataService.Save(_applicationData);
+        }
+
+        private async Task IssueWithApiKeyAsync()
+        {
+            TokenResponse response = await PostTokenAsync(
+                "/api/worker-auth/token",
+                new
+                {
+                    workerId = _applicationData.WorkerId,
+                    apiKey = _applicationData.WorkerApiKey,
+                    apiSecret = _applicationData.WorkerApiSecret
+                });
             Apply(response);
             await StoreRefreshToken(response);
         }

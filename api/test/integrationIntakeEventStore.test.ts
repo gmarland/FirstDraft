@@ -20,7 +20,8 @@ class MarkProcessingDbClient implements DbClient {
     assert.match(sql, /assigned_worker\.worker_id = \$4/);
     assert.match(sql, /assigned_worker\.worker_id = commands\.worker_id/);
     assert.match(sql, /commands\.transaction_id = coalesce\(\$5, integration_intake_events\.transaction_id\)/);
-    assert.match(sql, /inner join client_command_users command_users/);
+    assert.match(sql, /assigned_worker\.user_id is null and commands\.user_id is null/);
+    assert.match(sql, /exists \(\s*select 1\s*from client_command_users command_users/);
     assert.match(sql, /command_users\.transaction_id = commands\.transaction_id/);
     assert.match(sql, /command_users\.user_id = assigned_worker\.user_id/);
     assert.deepEqual(parameters, ["event-1", "processing", null, "worker-1", null]);
