@@ -5,13 +5,17 @@ namespace FirstDraft.Configuration
     public class ApplicationDataService
     {
         private readonly string _configLocation;
+        private readonly WorkerEnvFileService _envFileService;
 
         public ApplicationDataService()
         {
             _configLocation = Path.Join(Directory.GetCurrentDirectory(), "config.json");
+            _envFileService = new WorkerEnvFileService();
         }
 
         public string ConfigLocation => _configLocation;
+
+        public WorkerEnvConfiguration? LastEnvironmentConfiguration { get; private set; }
 
         public async Task<ApplicationData> GetApplicationData()
         {
@@ -37,7 +41,20 @@ namespace FirstDraft.Configuration
                 await Save(applicationData);
             }
 
+            LastEnvironmentConfiguration = _envFileService.ApplyIfExists(
+                applicationData,
+                Path.GetDirectoryName(_configLocation) ?? Directory.GetCurrentDirectory());
+            if (LastEnvironmentConfiguration?.HasEncryptedJiraApiTokens == true)
+            {
+                await Save(applicationData);
+            }
+
             return applicationData;
+        }
+
+        public bool ApplyPendingEnvironmentSecrets(ApplicationData applicationData)
+        {
+            return _envFileService.ApplyPendingJiraApiTokens(applicationData, LastEnvironmentConfiguration);
         }
 
         public async Task Save(ApplicationData applicationData)

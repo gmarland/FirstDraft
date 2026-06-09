@@ -17,9 +17,27 @@ namespace FirstDraft.Cli.Setup
         public async Task<int> Init()
         {
             ApplicationData applicationData = await _applicationDataService.GetApplicationData();
+            WorkerEnvConfiguration? envConfig = _applicationDataService.LastEnvironmentConfiguration;
 
             Console.WriteLine("firstdraft init");
             Console.WriteLine("Configure this client. Press enter to accept the value in brackets.");
+            if (envConfig != null)
+            {
+                Console.WriteLine($"Loaded worker .env: {envConfig.Path}");
+                if (envConfig.HasGitRepositories)
+                {
+                    Console.WriteLine($"Loaded Git repositories from .env: {envConfig.GitRepositoryUrls.Count}");
+                }
+
+                if (envConfig.HasJiraIntegrations)
+                {
+                    Console.WriteLine($"Loaded Jira integrations from .env: {string.Join(",", envConfig.JiraIntegrationIds)}");
+                    if (envConfig.HasPendingJiraApiTokens)
+                    {
+                        Console.WriteLine("Jira API tokens from .env will be encrypted after worker authentication.");
+                    }
+                }
+            }
             Console.WriteLine();
 
             if (string.IsNullOrWhiteSpace(applicationData.WorkerId))
@@ -27,12 +45,26 @@ namespace FirstDraft.Cli.Setup
                 applicationData.WorkerId = Guid.NewGuid().ToString();
             }
 
-            Console.WriteLine($"Worker ID: {applicationData.WorkerId}");
+            if (HasEnvField(envConfig, nameof(ApplicationData.WorkerId)))
+            {
+                PrintEnvValue("Worker ID", applicationData.WorkerId);
+            }
+            else
+            {
+                Console.WriteLine($"Worker ID: {applicationData.WorkerId}");
+            }
 
-            applicationData.ExternalAPI = PromptUntilValid(
-                "External API",
-                string.IsNullOrWhiteSpace(applicationData.ExternalAPI) ? "https://api.firstdraft.run" : applicationData.ExternalAPI,
-                ValidateExternalApi);
+            if (HasEnvField(envConfig, nameof(ApplicationData.ExternalAPI)))
+            {
+                PrintEnvValue("External API", applicationData.ExternalAPI ?? string.Empty);
+            }
+            else
+            {
+                applicationData.ExternalAPI = PromptUntilValid(
+                    "External API",
+                    string.IsNullOrWhiteSpace(applicationData.ExternalAPI) ? "https://api.firstdraft.run" : applicationData.ExternalAPI,
+                    ValidateExternalApi);
+            }
 
             if (PromptAuthentication(applicationData))
             {
@@ -59,19 +91,85 @@ namespace FirstDraft.Cli.Setup
                 }
             }
 
-            applicationData.AIProvider = PromptAIProvider(applicationData.AIProvider);
-            applicationData.PlanningEnabled = PromptBool("AI planning enabled", applicationData.PlanningEnabled);
+            if (_applicationDataService.ApplyPendingEnvironmentSecrets(applicationData))
+            {
+                Console.WriteLine("Encrypted Jira API tokens from .env.");
+            }
 
-            applicationData.AIWorkingDirectory = PromptUntilValid(
-                "AI working directory",
-                string.IsNullOrWhiteSpace(applicationData.AIWorkingDirectory) ? Directory.GetCurrentDirectory() : applicationData.AIWorkingDirectory,
-                ValidateExistingDirectory);
+            if (HasEnvField(envConfig, nameof(ApplicationData.AIProvider)))
+            {
+                PrintEnvValue("AI provider", applicationData.AIProvider.ToString());
+            }
+            else
+            {
+                applicationData.AIProvider = PromptAIProvider(applicationData.AIProvider);
+            }
 
-            applicationData.ApplicationFolder = PromptRequired("Application folder", applicationData.ApplicationFolder);
-            applicationData.LogsFolder = PromptRequired("Logs folder", applicationData.LogsFolder);
-            applicationData.ApplicationPaths = PromptApplicationPaths(applicationData.ApplicationPaths);
-            applicationData.Skills = PromptSkills(applicationData.Skills);
-            applicationData.MaxConcurrentTasks = PromptOptionalInt("Max concurrent gitflow tasks", ClampOptionalCapacity(applicationData.MaxConcurrentTasks), 1, 8, "unlimited");
+            if (HasEnvField(envConfig, nameof(ApplicationData.PlanningEnabled)))
+            {
+                PrintEnvValue("AI planning enabled", applicationData.PlanningEnabled.ToString());
+            }
+            else
+            {
+                applicationData.PlanningEnabled = PromptBool("AI planning enabled", applicationData.PlanningEnabled);
+            }
+
+            if (HasEnvField(envConfig, nameof(ApplicationData.AIWorkingDirectory)))
+            {
+                PrintEnvValue("AI working directory", applicationData.AIWorkingDirectory ?? string.Empty);
+            }
+            else
+            {
+                applicationData.AIWorkingDirectory = PromptUntilValid(
+                    "AI working directory",
+                    string.IsNullOrWhiteSpace(applicationData.AIWorkingDirectory) ? Directory.GetCurrentDirectory() : applicationData.AIWorkingDirectory,
+                    ValidateExistingDirectory);
+            }
+
+            if (HasEnvField(envConfig, nameof(ApplicationData.ApplicationFolder)))
+            {
+                PrintEnvValue("Application folder", applicationData.ApplicationFolder);
+            }
+            else
+            {
+                applicationData.ApplicationFolder = PromptRequired("Application folder", applicationData.ApplicationFolder);
+            }
+
+            if (HasEnvField(envConfig, nameof(ApplicationData.LogsFolder)))
+            {
+                PrintEnvValue("Logs folder", applicationData.LogsFolder);
+            }
+            else
+            {
+                applicationData.LogsFolder = PromptRequired("Logs folder", applicationData.LogsFolder);
+            }
+
+            if (HasEnvField(envConfig, nameof(ApplicationData.ApplicationPaths)))
+            {
+                PrintEnvValue("Application paths", FormatList(applicationData.ApplicationPaths, "*"));
+            }
+            else
+            {
+                applicationData.ApplicationPaths = PromptApplicationPaths(applicationData.ApplicationPaths);
+            }
+
+            if (HasEnvField(envConfig, nameof(ApplicationData.Skills)))
+            {
+                PrintEnvValue("Skills", FormatList(applicationData.Skills, "none"));
+            }
+            else
+            {
+                applicationData.Skills = PromptSkills(applicationData.Skills);
+            }
+
+            if (HasEnvField(envConfig, nameof(ApplicationData.MaxConcurrentTasks)))
+            {
+                PrintEnvValue("Max concurrent gitflow tasks", applicationData.MaxConcurrentTasks?.ToString() ?? "unlimited");
+            }
+            else
+            {
+                applicationData.MaxConcurrentTasks = PromptOptionalInt("Max concurrent gitflow tasks", ClampOptionalCapacity(applicationData.MaxConcurrentTasks), 1, 8, "unlimited");
+            }
 
             if (!string.IsNullOrEmpty(applicationData.ConfigEncryptionKey))
             {
@@ -153,6 +251,21 @@ namespace FirstDraft.Cli.Setup
 
             Console.WriteLine($"Authenticated user: {applicationData.AuthEmail ?? "unknown"}");
             return PromptBool("Re-authenticate worker", false);
+        }
+
+        private static bool HasEnvField(WorkerEnvConfiguration? envConfig, string fieldName)
+        {
+            return envConfig != null && envConfig.HasField(fieldName);
+        }
+
+        private static void PrintEnvValue(string label, string value)
+        {
+            Console.WriteLine($"{label}: {value} (.env)");
+        }
+
+        private static string FormatList(string[]? values, string emptyValue)
+        {
+            return values != null && values.Length > 0 ? string.Join(",", values) : emptyValue;
         }
 
         private static string PromptAuthMode(ApplicationData applicationData)
