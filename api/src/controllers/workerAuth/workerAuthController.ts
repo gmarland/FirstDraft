@@ -1,6 +1,6 @@
 import { RequestHandler } from "express";
 import { timingSafeEqual } from "crypto";
-import { ApiToWorkerTokenIssuer, WorkerApiKeyConfig, WorkerTokenService } from "../../auth/workerTokens.js";
+import { WorkerApiKeyConfig, WorkerTokenService } from "../../auth/workerTokens.js";
 import { normalizeEnabledTaskTypes } from "../../commandModes.js";
 import { IntegrationLifecycleService } from "../../integrations/integrationLifecycleService.js";
 import { CommandOutputStorage } from "../../storage/commandOutputStorage.js";
@@ -24,7 +24,6 @@ export class WorkerAuthController {
     private readonly tenants: AppStore,
     private readonly workers: WorkerStore,
     private readonly tokens: WorkerTokenService,
-    private readonly apiToWorkerTokens: ApiToWorkerTokenIssuer,
     private readonly workerConfigEncryptionKey: string,
     private readonly outputStorage?: CommandOutputStorage,
     private readonly gitRepositories?: GitRepositoryStore,
@@ -83,13 +82,6 @@ export class WorkerAuthController {
 
     res.json(tokenPair);
   });
-
-  public readonly publicKey: RequestHandler = (_req, res) => {
-    res.json({
-      alg: "RS256",
-      publicKey: this.apiToWorkerTokens.publicKey
-    });
-  };
 
   public readonly registerWorker: RequestHandler = asyncHandler(async (req, res) => {
     const worker = await requireWorkerBearerToken(this.tokens, req.headers.authorization, res);
@@ -402,7 +394,6 @@ export function createWorkerAuthController(
   tenants: AppStore,
   workers: WorkerStore,
   tokens: WorkerTokenService,
-  apiToWorkerTokens: ApiToWorkerTokenIssuer,
   workerConfigEncryptionKey: string,
   outputStorage?: CommandOutputStorage,
   gitRepositories?: GitRepositoryStore,
@@ -415,7 +406,6 @@ export function createWorkerAuthController(
     tenants,
     workers,
     tokens,
-    apiToWorkerTokens,
     workerConfigEncryptionKey,
     outputStorage,
     gitRepositories,

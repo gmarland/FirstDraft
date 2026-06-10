@@ -16,7 +16,6 @@ import { CommandStore } from "./store/commands/commandStore.js";
 import { WorkerRecordStore } from "./store/workers/workerRecordStore.js";
 import { GitRepositoryStore } from "./store/gitRepositories/gitRepositoryStore.js";
 import {
-  ApiToWorkerTokenIssuer,
   createWorkerApiKeyConfigFromEnv,
   createWorkerJwtConfigFromEnv,
   WorkerTokenService,
@@ -61,7 +60,6 @@ const workerTokenService = new WorkerTokenService(
   workerRefreshTokens,
 );
 const workerApiKeyConfig = createWorkerApiKeyConfigFromEnv();
-const apiToWorkerTokens = new ApiToWorkerTokenIssuer();
 const outputStorage = createCommandOutputStorageFromEnv();
 const outputStorageProvider = outputStorage
   ? getCommandOutputStorageProviderFromEnv()
@@ -76,7 +74,6 @@ const app = createApp({
     tenants,
     store,
     workerTokenService,
-    apiToWorkerTokens,
     workerConfigEncryptionKey,
     workerApiKeyConfig,
     outputStorage,

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireJwt } from "../auth/requireJwt.js";
-import { ApiToWorkerTokenIssuer, WorkerApiKeyConfig, WorkerTokenService } from "../auth/workerTokens.js";
+import { WorkerApiKeyConfig, WorkerTokenService } from "../auth/workerTokens.js";
 import { createWorkerAuthController } from "../controllers/workerAuth/workerAuthController.js";
 import { IntegrationLifecycleService } from "../integrations/integrationLifecycleService.js";
 import { CommandOutputStorage } from "../storage/commandOutputStorage.js";
@@ -14,7 +14,6 @@ export function createWorkerAuthRoutes(
   tenants: AppStore,
   workers: WorkerStore,
   tokens: WorkerTokenService,
-  apiToWorkerTokens: ApiToWorkerTokenIssuer,
   workerConfigEncryptionKey: string,
   workerApiKeyConfig?: WorkerApiKeyConfig,
   outputStorage?: CommandOutputStorage,
@@ -28,7 +27,6 @@ export function createWorkerAuthRoutes(
     tenants,
     workers,
     tokens,
-    apiToWorkerTokens,
     workerConfigEncryptionKey,
     outputStorage,
     gitRepositories,
@@ -40,7 +38,6 @@ export function createWorkerAuthRoutes(
 
   router.post("/token", workerApiKeyConfig ? controller.issueToken : [requireJwt, controller.issueToken]);
   router.post("/refresh", controller.refreshToken);
-  router.get("/public-key", controller.publicKey);
   router.post("/register", controller.registerWorker);
   router.post("/heartbeat", controller.heartbeat);
   router.post("/tasks/start", controller.startTask);

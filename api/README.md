@@ -29,7 +29,6 @@ Worker authentication and reporting:
 
 - `POST /api/worker-auth/token` with a user bearer token
 - `POST /api/worker-auth/refresh`
-- `GET /api/worker-auth/public-key`
 - `POST /api/worker-auth/register`
 - `POST /api/worker-auth/heartbeat`
 - `POST /api/worker-auth/tasks/start`
@@ -111,8 +110,6 @@ AWS_REGION=eu-west-2
 | `WORKER_JWT_ISSUER` | No | Worker JWT issuer, defaults to `firstdraft-api` |
 | `WORKER_JWT_AUDIENCE` | No | Worker JWT audience, defaults to `firstdraft-worker-api` |
 | `TENANT_ADMIN_KEY` | No | Admin key used by tenant administration flows |
-| `API_TO_WORKER_PRIVATE_KEY` | No | Optional PEM private key for API-to-worker command tokens, with escaped newlines |
-| `API_TO_WORKER_PUBLIC_KEY` | No | Optional PEM public key paired with `API_TO_WORKER_PRIVATE_KEY` |
 | `COMMAND_OUTPUT_BUCKET` | No | Bucket or Azure Blob container for command output |
 | `COMMAND_OUTPUT_STORAGE_PROVIDER` | No | Command output storage provider: `s3`/`aws`, `gcs`/`google`, or `azure`/`az`; defaults to `s3` |
 | `COMMAND_OUTPUT_PREFIX` | No | Prefix for stored NDJSON command output |

@@ -28,22 +28,15 @@ namespace FirstDraft.Api.Auth
                 return _accessToken;
             }
 
-            if (!string.IsNullOrEmpty(_refreshToken))
-            {
-                try
-                {
-                    await RefreshAsync();
-                    return _accessToken!;
-                }
-                catch (WorkerAuthenticationException) when (_applicationData.HasWorkerApiCredentials())
-                {
-                    _refreshToken = null;
-                }
-            }
-
             if (_applicationData.HasWorkerApiCredentials())
             {
                 await IssueWithApiKeyAsync();
+                return _accessToken!;
+            }
+
+            if (!string.IsNullOrEmpty(_refreshToken))
+            {
+                await RefreshAsync();
                 return _accessToken!;
             }
 

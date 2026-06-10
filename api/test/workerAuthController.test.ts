@@ -10,7 +10,6 @@ async function testIssueTokenRequiresAuthenticatedUser(): Promise<void> {
         throw new Error("issue should not be called");
       },
     } as never,
-    {} as never,
     "config-key",
   );
   const response = createResponse();
@@ -48,7 +47,6 @@ async function testIssueTokenUsesAuthenticatedUser(): Promise<void> {
         };
       },
     } as never,
-    {} as never,
     "config-key",
   );
   const response = createResponse();
@@ -100,7 +98,6 @@ async function testIssueTokenUsesApiKeyCredentialsWhenConfigured(): Promise<void
         };
       },
     } as never,
-    {} as never,
     "config-key",
     undefined,
     undefined,
@@ -147,7 +144,6 @@ async function testIssueTokenRejectsUserBearerTokenInApiKeyMode(): Promise<void>
         throw new Error("issueForApiKey should not be called");
       },
     } as never,
-    {} as never,
     "config-key",
     undefined,
     undefined,
@@ -210,7 +206,6 @@ async function testRegisterWorkerAcceptsUnlimitedCapacity(): Promise<void> {
         return { workerId: "worker-1", userId: "user-1" };
       },
     } as never,
-    {} as never,
     "config-key",
   );
   const response = createResponse();
@@ -263,7 +258,6 @@ async function testClaimJiraTicketCreatesClaimAndStartsLifecycle(): Promise<void
         };
       },
     } as never,
-    {} as never,
     "config-key",
     undefined,
     undefined,
@@ -357,7 +351,6 @@ async function testClaimJiraTicketReturnsConflictForDuplicateClaim(): Promise<vo
         };
       },
     } as never,
-    {} as never,
     "config-key",
     undefined,
     undefined,
@@ -432,7 +425,6 @@ async function testClaimJiraTicketRejectsUnownedIntegration(): Promise<void> {
         };
       },
     } as never,
-    {} as never,
     "config-key",
     undefined,
     undefined,

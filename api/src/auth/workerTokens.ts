@@ -1,4 +1,3 @@
-import { generateKeyPairSync } from "crypto";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { WorkerRefreshTokenStore } from "../store/workerAuth/workerRefreshTokenStore.js";
 import { User } from "../types.js";
@@ -94,48 +93,6 @@ export class WorkerTokenService {
       refreshTokenExpiresIn: this.config.refreshExpiresInSeconds,
       tokenType: "Bearer"
     };
-  }
-}
-
-export class ApiToWorkerTokenIssuer {
-  private readonly privateKey: string;
-  public readonly publicKey: string;
-
-  public constructor(private readonly issuer = "firstdraft-api") {
-    const configuredPrivateKey = process.env.API_TO_WORKER_PRIVATE_KEY?.replace(/\\n/g, "\n");
-    const configuredPublicKey = process.env.API_TO_WORKER_PUBLIC_KEY?.replace(/\\n/g, "\n");
-
-    if (configuredPrivateKey && configuredPublicKey) {
-      this.privateKey = configuredPrivateKey;
-      this.publicKey = configuredPublicKey;
-      return;
-    }
-
-    const pair = generateKeyPairSync("rsa", {
-      modulusLength: 2048,
-      privateKeyEncoding: { type: "pkcs8", format: "pem" },
-      publicKeyEncoding: { type: "spki", format: "pem" }
-    });
-    this.privateKey = pair.privateKey;
-    this.publicKey = pair.publicKey;
-  }
-
-  public signCommand(workerId: string, transactionId: string): string {
-    return jwt.sign(
-      {
-        typ: "api_to_worker",
-        workerId,
-        transactionId
-      },
-      this.privateKey,
-      {
-        algorithm: "RS256",
-        subject: this.issuer,
-        issuer: this.issuer,
-        audience: `firstdraft-worker:${workerId}`,
-        expiresIn: "5m"
-      }
-    );
   }
 }
 
