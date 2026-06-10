@@ -44,7 +44,8 @@ namespace FirstDraft.Configuration
             LastEnvironmentConfiguration = _envFileService.ApplyIfExists(
                 applicationData,
                 Path.GetDirectoryName(_configLocation) ?? Directory.GetCurrentDirectory());
-            if (LastEnvironmentConfiguration?.HasEncryptedJiraApiTokens == true)
+            if (LastEnvironmentConfiguration?.HasEncryptedJiraApiTokens == true ||
+                LastEnvironmentConfiguration?.HasResolvedJiraIntegrations == true)
             {
                 await Save(applicationData);
             }

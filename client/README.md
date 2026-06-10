@@ -164,25 +164,20 @@ Git `.env` entries override existing repositories with the same normalized repos
 Jira integrations can also be bootstrapped from `.env` with indexed keys. Repeat the same shape with `FIRSTDRAFT_JIRA_2_*`, `FIRSTDRAFT_JIRA_3_*`, and so on for additional connections.
 
 ```env
-FIRSTDRAFT_JIRA_1_ID=abc12
 FIRSTDRAFT_JIRA_1_ENABLED=true
 FIRSTDRAFT_JIRA_1_SITE_URL=https://example.atlassian.net
 FIRSTDRAFT_JIRA_1_EMAIL=user@example.com
-FIRSTDRAFT_JIRA_1_API_TOKEN=
-FIRSTDRAFT_JIRA_1_BOARD_ID=123
+FIRSTDRAFT_JIRA_1_API_KEY=
 FIRSTDRAFT_JIRA_1_BOARD_NAME=Engineering
-FIRSTDRAFT_JIRA_1_BOARD_TYPE=scrum
-FIRSTDRAFT_JIRA_1_BOARD_FILTER_ID=456
-FIRSTDRAFT_JIRA_1_READY_STATUS_ID=10001
-FIRSTDRAFT_JIRA_1_READY_STATUS_NAME=Ready for AI
-FIRSTDRAFT_JIRA_1_PROCESSING_STATUS_ID=10002
-FIRSTDRAFT_JIRA_1_PROCESSING_STATUS_NAME=AI Processing
-FIRSTDRAFT_JIRA_1_PROCESSED_STATUS_ID=10003
-FIRSTDRAFT_JIRA_1_PROCESSED_STATUS_NAME=Processed by AI
+FIRSTDRAFT_JIRA_1_READY_STATUS=Ready for AI
+FIRSTDRAFT_JIRA_1_PROCESSING_STATUS=AI Processing
+FIRSTDRAFT_JIRA_1_PROCESSED_STATUS=Processed by AI
 FIRSTDRAFT_JIRA_1_ASSIGNEES=any
 ```
 
-Jira `.env` entries override existing integrations with the same integration ID and preserve the existing encrypted API token when `FIRSTDRAFT_JIRA_<n>_API_TOKEN` is empty or omitted. If an API token is provided and the worker already has `ConfigEncryptionKey`, it is encrypted into `config.json` during configuration load. If the worker is not authenticated yet, `firstdraft init` encrypts the token after authentication. Remove plaintext Jira API tokens from `.env` after they have been encrypted.
+Jira `.env` entries override existing integrations with the same integration ID and preserve the existing encrypted API token when `FIRSTDRAFT_JIRA_<n>_API_KEY` is empty or omitted. `FIRSTDRAFT_JIRA_<n>_API_TOKEN` is still accepted for existing files. If `FIRSTDRAFT_JIRA_<n>_ID` is omitted, the worker uses a stable ID from the entry number, such as `jir01` for `FIRSTDRAFT_JIRA_1_*`. The worker resolves the board ID, board type, board filter ID, and status IDs from Jira using the configured board and status names. `FIRSTDRAFT_JIRA_<n>_SITE_URL` is required for new integrations and can be omitted only when that integration already exists in `config.json`.
+
+If an API token is provided and the worker already has `ConfigEncryptionKey`, it is encrypted into `config.json` during configuration load. If the worker is not authenticated yet, `firstdraft init` encrypts the token after authentication. Remove plaintext Jira API tokens from `.env` after they have been encrypted.
 
 Use `FIRSTDRAFT_JIRA_<n>_ASSIGNEES=any`, `none`, or an empty value to pick up work for any assignee. To restrict assignees, use semicolon-separated entries in `accountId|displayName|emailAddress` form.
 
