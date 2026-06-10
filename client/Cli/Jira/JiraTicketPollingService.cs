@@ -302,6 +302,7 @@ namespace FirstDraft.Cli.Jira
             }
 
             using JiraCliClient jira = new JiraCliClient(integration.SiteUrl, integration.Email, integration.GetApiToken(_applicationData));
+            _logger.Info($"Processing Jira completion side effects for {issue.Key}; command {transactionId}; status: {(string.IsNullOrWhiteSpace(result.ErrorMessage) ? "completed" : "failed")}");
             if (string.IsNullOrWhiteSpace(result.ErrorMessage))
             {
                 await AddJiraCompletionComment(jira, issue, result.Result ?? string.Empty, CancellationToken.None);
@@ -314,10 +315,12 @@ namespace FirstDraft.Cli.Jira
                 {
                     _logger.Error($"Unable to transition Jira issue {issue.Key} to {integration.ProcessedStatusName}", ex);
                 }
+                _logger.Info($"Finished Jira completion side effects for {issue.Key}; command {transactionId}");
                 return;
             }
 
             await AddJiraFailureComment(jira, issue, result.ErrorMessage, CancellationToken.None);
+            _logger.Info($"Finished Jira failure side effects for {issue.Key}; command {transactionId}");
         }
 
         private async Task AddJiraFailureComment(
