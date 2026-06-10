@@ -78,8 +78,11 @@ namespace FirstDraft.Api.Execution
                     await outputPump;
                 }
 
+                _logger.Info($"Queueing command result for {transactionId}; status: {(string.IsNullOrWhiteSpace(errorMessage) ? "completed" : "failed")}");
                 await _commandEvents.EnqueueCommandResult(transactionId, result, errorMessage);
+                _logger.Debug($"Flushing command result for {transactionId}");
                 await _commandEventFlusher.FlushPendingCommandEvents(waitForLock: true);
+                _logger.Debug($"Finished command result flush for {transactionId}");
                 return new CommandExecutionResult(result, errorMessage);
             }
             finally

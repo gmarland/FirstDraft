@@ -3,7 +3,7 @@ import { EntitySchema } from "typeorm";
 export type WorkerJiraIntegrationEntity = {
   workerId: string;
   integrationId: string;
-  userId: string;
+  userId: string | null;
   siteUrl: string;
   email: string;
   boardId: number;
@@ -30,7 +30,7 @@ export const WorkerJiraIntegrationSchema = new EntitySchema<WorkerJiraIntegratio
   columns: {
     workerId: { type: "text", name: "worker_id", primary: true },
     integrationId: { type: "text", name: "integration_id", primary: true },
-    userId: { type: "uuid", name: "user_id" },
+    userId: { type: "uuid", name: "user_id", nullable: true },
     siteUrl: { type: "text", name: "site_url" },
     email: { type: "text" },
     boardId: { type: "integer", name: "board_id" },

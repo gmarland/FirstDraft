@@ -10,7 +10,6 @@ async function testIssueTokenRequiresAuthenticatedUser(): Promise<void> {
         throw new Error("issue should not be called");
       },
     } as never,
-    {} as never,
     "config-key",
   );
   const response = createResponse();
@@ -48,7 +47,6 @@ async function testIssueTokenUsesAuthenticatedUser(): Promise<void> {
         };
       },
     } as never,
-    {} as never,
     "config-key",
   );
   const response = createResponse();
@@ -83,6 +81,100 @@ async function testIssueTokenUsesAuthenticatedUser(): Promise<void> {
   });
 }
 
+async function testIssueTokenUsesApiKeyCredentialsWhenConfigured(): Promise<void> {
+  const issuedWorkerIds: string[] = [];
+  const controller = new WorkerAuthController(
+    {} as never,
+    {} as never,
+    {
+      async issueForApiKey(workerId: string) {
+        issuedWorkerIds.push(workerId);
+        return {
+          accessToken: "worker-access",
+          accessTokenExpiresIn: 3600,
+          refreshToken: "worker-refresh",
+          refreshTokenExpiresIn: 604800,
+          tokenType: "Bearer",
+        };
+      },
+    } as never,
+    "config-key",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { apiKey: "key-1", apiSecret: "secret-1" },
+  );
+  const response = createResponse();
+
+  await controller.issueToken(
+    {
+      body: {
+        workerId: " worker-1 ",
+        apiKey: "key-1",
+        apiSecret: "secret-1",
+      },
+      headers: {},
+    } as never,
+    response as never,
+    (error?: unknown) => {
+      if (error) throw error;
+    },
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(issuedWorkerIds, ["worker-1"]);
+  assert.deepEqual(response.body, {
+    accessToken: "worker-access",
+    accessTokenExpiresIn: 3600,
+    refreshToken: "worker-refresh",
+    refreshTokenExpiresIn: 604800,
+    tokenType: "Bearer",
+    configEncryptionKey: "config-key",
+  });
+}
+
+async function testIssueTokenRejectsUserBearerTokenInApiKeyMode(): Promise<void> {
+  const controller = new WorkerAuthController(
+    {} as never,
+    {} as never,
+    {
+      async issueForApiKey() {
+        throw new Error("issueForApiKey should not be called");
+      },
+    } as never,
+    "config-key",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { apiKey: "key-1", apiSecret: "secret-1" },
+  );
+  const response = createResponse();
+
+  await controller.issueToken(
+    {
+      body: {
+        workerId: "worker-1",
+        apiKey: "key-1",
+        apiSecret: "secret-1",
+      },
+      headers: {
+        authorization: "Bearer user-token",
+      },
+    } as never,
+    response as never,
+    (error?: unknown) => {
+      if (error) throw error;
+    },
+  );
+
+  assert.equal(response.statusCode, 403);
+  assert.deepEqual(response.body, { error: "worker user authentication is disabled for this API" });
+}
+
 async function testRegisterWorkerAcceptsUnlimitedCapacity(): Promise<void> {
   const registrations: unknown[] = [];
   const controller = new WorkerAuthController(
@@ -114,7 +206,6 @@ async function testRegisterWorkerAcceptsUnlimitedCapacity(): Promise<void> {
         return { workerId: "worker-1", userId: "user-1" };
       },
     } as never,
-    {} as never,
     "config-key",
   );
   const response = createResponse();
@@ -167,7 +258,6 @@ async function testClaimJiraTicketCreatesClaimAndStartsLifecycle(): Promise<void
         };
       },
     } as never,
-    {} as never,
     "config-key",
     undefined,
     undefined,
@@ -261,7 +351,6 @@ async function testClaimJiraTicketReturnsConflictForDuplicateClaim(): Promise<vo
         };
       },
     } as never,
-    {} as never,
     "config-key",
     undefined,
     undefined,
@@ -336,7 +425,6 @@ async function testClaimJiraTicketRejectsUnownedIntegration(): Promise<void> {
         };
       },
     } as never,
-    {} as never,
     "config-key",
     undefined,
     undefined,
@@ -408,6 +496,8 @@ function createResponse(): {
 
 await testIssueTokenRequiresAuthenticatedUser();
 await testIssueTokenUsesAuthenticatedUser();
+await testIssueTokenUsesApiKeyCredentialsWhenConfigured();
+await testIssueTokenRejectsUserBearerTokenInApiKeyMode();
 await testRegisterWorkerAcceptsUnlimitedCapacity();
 await testClaimJiraTicketCreatesClaimAndStartsLifecycle();
 await testClaimJiraTicketReturnsConflictForDuplicateClaim();

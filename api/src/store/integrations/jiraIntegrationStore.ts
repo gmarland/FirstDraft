@@ -47,7 +47,7 @@ export type WorkerJiraIntegrationInput = {
 type JiraIntegrationRow = {
   worker_id: string;
   integration_id: string;
-  user_id: string;
+  user_id: string | null;
   site_url: string;
   email: string;
   board_id: number;
@@ -72,7 +72,7 @@ export class JiraIntegrationStore {
 
   public async syncWorkerIntegrations(
     workerId: string,
-    userId: string,
+    userId: string | null,
     integrations: WorkerJiraIntegrationInput[],
   ): Promise<void> {
     const normalized = normalizeWorkerJiraIntegrationInputs(integrations);
@@ -191,6 +191,20 @@ export class JiraIntegrationStore {
     return result.rows.map((row) => this.mapSettings(row));
   }
 
+  public async listWorkerSettingsForWorker(workerId: string): Promise<JiraIntegrationSettings[]> {
+    const result = await this.pool.query<JiraIntegrationRow>(
+      `
+        select ${returningColumns}
+        from worker_jira_integrations
+        where worker_id = $1
+        order by created_at asc
+      `,
+      [workerId],
+    );
+
+    return result.rows.map((row) => this.mapSettings(row));
+  }
+
   public async listEnabledSettings(
     userId: string,
     integrationId?: string,
@@ -228,7 +242,7 @@ export class JiraIntegrationStore {
   }
 
   public async getSettings(
-    userId: string,
+    userId: string | null,
     integrationId: string,
     workerId?: string,
   ): Promise<JiraIntegrationSettings | undefined> {
@@ -236,7 +250,7 @@ export class JiraIntegrationStore {
       `
         select ${returningColumns}
         from worker_jira_integrations
-        where user_id = $1
+        where user_id is not distinct from $1::uuid
           and integration_id = $2::text
           and ($3::text is null or worker_id = $3)
         order by updated_at desc

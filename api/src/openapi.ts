@@ -109,15 +109,6 @@ export const openApiDocument = {
         }
       }
     },
-    "/api/worker-auth/public-key": {
-      get: {
-        tags: ["Worker Auth"],
-        summary: "Get the API-to-worker public key",
-        responses: {
-          "200": jsonResponse("Public key", ref("WorkerPublicKeyResponse"))
-        }
-      }
-    },
     "/api/worker-auth/register": {
       post: {
         tags: ["Worker Auth"],
@@ -325,7 +316,6 @@ export const openApiDocument = {
         expiresIn: { type: "string" },
         configEncryptionKey: { type: "string" }
       }, ["accessToken", "refreshToken", "configEncryptionKey"]),
-      WorkerPublicKeyResponse: object({ alg: { type: "string", example: "RS256" }, publicKey: { type: "string" } }, ["alg", "publicKey"]),
       WorkerRegistrationReport: object({
         workerId: { type: "string" },
         paths: array({ type: "string" }),

@@ -11,7 +11,8 @@ namespace FirstDraft.Configuration
             IReadOnlyList<string> gitRepositoryUrls,
             IReadOnlyList<string> jiraIntegrationIds,
             IReadOnlyDictionary<string, string> pendingJiraApiTokens,
-            IReadOnlyList<string> encryptedJiraApiTokenIds)
+            IReadOnlyList<string> encryptedJiraApiTokenIds,
+            IReadOnlyList<string> resolvedJiraIntegrationIds)
         {
             Path = path;
             AppliedFields = appliedFields;
@@ -19,6 +20,7 @@ namespace FirstDraft.Configuration
             JiraIntegrationIds = jiraIntegrationIds;
             PendingJiraApiTokens = pendingJiraApiTokens;
             EncryptedJiraApiTokenIds = encryptedJiraApiTokenIds;
+            ResolvedJiraIntegrationIds = resolvedJiraIntegrationIds;
         }
 
         public string Path { get; }
@@ -33,6 +35,8 @@ namespace FirstDraft.Configuration
 
         public IReadOnlyList<string> EncryptedJiraApiTokenIds { get; }
 
+        public IReadOnlyList<string> ResolvedJiraIntegrationIds { get; }
+
         public bool HasField(string fieldName)
         {
             return AppliedFields.Contains(fieldName);
@@ -45,6 +49,8 @@ namespace FirstDraft.Configuration
         public bool HasPendingJiraApiTokens => PendingJiraApiTokens.Count > 0;
 
         public bool HasEncryptedJiraApiTokens => EncryptedJiraApiTokenIds.Count > 0;
+
+        public bool HasResolvedJiraIntegrations => ResolvedJiraIntegrationIds.Count > 0;
     }
 
     public sealed class WorkerEnvFileService
@@ -67,7 +73,9 @@ namespace FirstDraft.Configuration
             ["FIRSTDRAFT_MAX_CONCURRENT_TASKS"] = nameof(ApplicationData.MaxConcurrentTasks),
             ["FIRSTDRAFT_GIT_WORKSPACE_DIRECTORY"] = nameof(ApplicationData.GitWorkspaceDirectory),
             ["FIRSTDRAFT_NAME"] = nameof(ApplicationData.Name),
-            ["FIRSTDRAFT_TAGS"] = nameof(ApplicationData.Tags)
+            ["FIRSTDRAFT_TAGS"] = nameof(ApplicationData.Tags),
+            ["WORKER_API_KEY"] = nameof(ApplicationData.WorkerApiKey),
+            ["WORKER_API_SECRET"] = nameof(ApplicationData.WorkerApiSecret)
         };
 
         public WorkerEnvConfiguration? ApplyIfExists(ApplicationData applicationData, string configDirectory)
@@ -104,7 +112,8 @@ namespace FirstDraft.Configuration
                 gitRepositoryUrls,
                 jiraResult.IntegrationIds,
                 jiraResult.PendingApiTokens,
-                jiraResult.EncryptedApiTokenIds);
+                jiraResult.EncryptedApiTokenIds,
+                jiraResult.ResolvedIntegrationIds);
         }
 
         public bool ApplyPendingJiraApiTokens(ApplicationData applicationData, WorkerEnvConfiguration? envConfiguration)
@@ -122,6 +131,7 @@ namespace FirstDraft.Configuration
                 if (integration == null) continue;
 
                 integration.StoreApiToken(applicationData, entry.Value);
+                TryResolveJiraMetadata(integration, entry.Value);
                 changed = true;
             }
 
@@ -243,6 +253,14 @@ namespace FirstDraft.Configuration
                 case "FIRSTDRAFT_TAGS":
                     applicationData.Tags = ParseCommaSeparated(value);
                     break;
+
+                case "WORKER_API_KEY":
+                    applicationData.WorkerApiKey = RequireValue(key, value);
+                    break;
+
+                case "WORKER_API_SECRET":
+                    applicationData.WorkerApiSecret = RequireValue(key, value);
+                    break;
             }
         }
 
@@ -349,16 +367,19 @@ namespace FirstDraft.Configuration
             List<string> integrationIds = new List<string>();
             Dictionary<string, string> pendingApiTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             List<string> encryptedApiTokenIds = new List<string>();
+            List<string> resolvedIntegrationIds = new List<string>();
 
             foreach (KeyValuePair<int, Dictionary<string, string>> group in groups.OrderBy(group => group.Key))
             {
-                JiraIntegrationConfig envIntegration = BuildJiraIntegration(group.Key, group.Value);
+                string integrationId = ResolveJiraIntegrationId(group.Key, group.Value);
                 int existingIndex = integrations.FindIndex(integration =>
-                    string.Equals(integration.IntegrationId, envIntegration.IntegrationId, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(integration.IntegrationId, integrationId, StringComparison.OrdinalIgnoreCase));
+                JiraIntegrationConfig? existingIntegration = existingIndex >= 0 ? integrations[existingIndex] : null;
+                JiraIntegrationConfig envIntegration = BuildJiraIntegration(group.Key, group.Value, integrationId, existingIntegration);
 
                 if (existingIndex >= 0)
                 {
-                    envIntegration.EncryptedApiToken = integrations[existingIndex].EncryptedApiToken;
+                    envIntegration.EncryptedApiToken = existingIntegration!.EncryptedApiToken;
                     integrations[existingIndex] = envIntegration;
                 }
                 else
@@ -368,7 +389,8 @@ namespace FirstDraft.Configuration
 
                 integrationIds.Add(envIntegration.IntegrationId);
 
-                if (group.Value.TryGetValue("API_TOKEN", out string? apiToken) && !string.IsNullOrWhiteSpace(apiToken))
+                string? apiToken = GetOptionalString(group.Value, "API_KEY", "API_TOKEN");
+                if (!string.IsNullOrWhiteSpace(apiToken))
                 {
                     string trimmedApiToken = apiToken.Trim();
                     if (!string.IsNullOrEmpty(applicationData.ConfigEncryptionKey))
@@ -384,13 +406,19 @@ namespace FirstDraft.Configuration
                         pendingApiTokens[envIntegration.IntegrationId] = trimmedApiToken;
                     }
                 }
+
+                string readableApiToken = envIntegration.GetApiToken(applicationData);
+                if (!string.IsNullOrWhiteSpace(readableApiToken) && TryResolveJiraMetadata(envIntegration, readableApiToken))
+                {
+                    resolvedIntegrationIds.Add(envIntegration.IntegrationId);
+                }
             }
 
             applicationData.JiraIntegrations = integrations
                 .OrderBy(integration => integration.IntegrationId, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            return new JiraEnvApplyResult(integrationIds, pendingApiTokens, encryptedApiTokenIds);
+            return new JiraEnvApplyResult(integrationIds, pendingApiTokens, encryptedApiTokenIds, resolvedIntegrationIds);
         }
 
         private static Dictionary<int, Dictionary<string, string>> GetJiraGroups(Dictionary<string, string> values)
@@ -402,16 +430,20 @@ namespace FirstDraft.Configuration
                 "ENABLED",
                 "SITE_URL",
                 "EMAIL",
+                "API_KEY",
                 "API_TOKEN",
                 "BOARD_ID",
                 "BOARD_NAME",
                 "BOARD_TYPE",
                 "BOARD_FILTER_ID",
                 "READY_STATUS_ID",
+                "READY_STATUS",
                 "READY_STATUS_NAME",
                 "PROCESSING_STATUS_ID",
+                "PROCESSING_STATUS",
                 "PROCESSING_STATUS_NAME",
                 "PROCESSED_STATUS_ID",
+                "PROCESSED_STATUS",
                 "PROCESSED_STATUS_NAME",
                 "ASSIGNEES"
             };
@@ -451,32 +483,48 @@ namespace FirstDraft.Configuration
             return groups;
         }
 
-        private static JiraIntegrationConfig BuildJiraIntegration(int index, Dictionary<string, string> values)
+        private static string ResolveJiraIntegrationId(int index, Dictionary<string, string> values)
         {
             string prefix = $"{JiraPrefix}{index}_";
-            string integrationId = GetRequired(values, "ID", prefix);
+            string integrationId = values.TryGetValue("ID", out string? configuredId) && !string.IsNullOrWhiteSpace(configuredId)
+                ? configuredId
+                : DefaultJiraIntegrationId(index);
             string? normalizedIntegrationId = JiraIntegrationConfigService.NormalizeIntegrationId(integrationId);
             if (normalizedIntegrationId == null)
             {
                 throw new InvalidOperationException($"{prefix}ID must be 5 lowercase alphanumeric characters.");
             }
 
+            return normalizedIntegrationId;
+        }
+
+        private static JiraIntegrationConfig BuildJiraIntegration(
+            int index,
+            Dictionary<string, string> values,
+            string integrationId,
+            JiraIntegrationConfig? existingIntegration)
+        {
+            string prefix = $"{JiraPrefix}{index}_";
+            string siteUrl = values.TryGetValue("SITE_URL", out string? configuredSiteUrl) && !string.IsNullOrWhiteSpace(configuredSiteUrl)
+                ? configuredSiteUrl
+                : existingIntegration?.SiteUrl ?? string.Empty;
+
             JiraIntegrationConfig integration = new JiraIntegrationConfig
             {
-                IntegrationId = normalizedIntegrationId,
+                IntegrationId = integrationId,
                 Enabled = values.TryGetValue("ENABLED", out string? enabled) ? ParseBool($"{prefix}ENABLED", enabled) : true,
-                SiteUrl = JiraIntegrationConfigService.CleanSiteUrl(GetRequired(values, "SITE_URL", prefix)),
+                SiteUrl = JiraIntegrationConfigService.CleanSiteUrl(siteUrl),
                 Email = GetRequired(values, "EMAIL", prefix).Trim(),
                 BoardId = GetOptionalInt(values, "BOARD_ID", prefix, minimum: 1),
-                BoardName = GetOptionalString(values, "BOARD_NAME"),
+                BoardName = GetRequired(values, "BOARD_NAME", prefix).Trim(),
                 BoardType = GetOptionalString(values, "BOARD_TYPE"),
                 BoardFilterId = GetOptionalInt(values, "BOARD_FILTER_ID", prefix, minimum: 1),
                 ReadyStatusId = GetOptionalString(values, "READY_STATUS_ID"),
-                ReadyStatusName = GetOptionalString(values, "READY_STATUS_NAME"),
+                ReadyStatusName = GetOptionalString(values, "READY_STATUS_NAME", "READY_STATUS"),
                 ProcessingStatusId = GetOptionalString(values, "PROCESSING_STATUS_ID"),
-                ProcessingStatusName = GetOptionalString(values, "PROCESSING_STATUS_NAME"),
+                ProcessingStatusName = GetOptionalString(values, "PROCESSING_STATUS_NAME", "PROCESSING_STATUS"),
                 ProcessedStatusId = GetOptionalString(values, "PROCESSED_STATUS_ID"),
-                ProcessedStatusName = GetOptionalString(values, "PROCESSED_STATUS_NAME"),
+                ProcessedStatusName = GetOptionalString(values, "PROCESSED_STATUS_NAME", "PROCESSED_STATUS"),
                 Assignees = values.TryGetValue("ASSIGNEES", out string? assignees)
                     ? ParseAssignees($"{prefix}ASSIGNEES", assignees)
                     : Array.Empty<JiraAssigneeConfig>()
@@ -488,7 +536,84 @@ namespace FirstDraft.Configuration
             string? emailError = JiraIntegrationConfigService.ValidateEmail(integration.Email, $"{prefix}EMAIL");
             if (emailError != null) throw new InvalidOperationException(emailError);
 
+            RequireNamedStatus(integration.ReadyStatusName, $"{prefix}READY_STATUS");
+            RequireNamedStatus(integration.ProcessingStatusName, $"{prefix}PROCESSING_STATUS");
+            RequireNamedStatus(integration.ProcessedStatusName, $"{prefix}PROCESSED_STATUS");
+
             return integration;
+        }
+
+        private static bool TryResolveJiraMetadata(JiraIntegrationConfig integration, string apiToken)
+        {
+            if (!NeedsJiraMetadataResolution(integration)) return false;
+
+            using JiraCliClient jira = new JiraCliClient(integration.SiteUrl, integration.Email, apiToken);
+            ResolveJiraMetadata(jira, integration).GetAwaiter().GetResult();
+            return true;
+        }
+
+        private static async Task ResolveJiraMetadata(JiraCliClient jira, JiraIntegrationConfig integration)
+        {
+            await jira.TestConnection();
+
+            JiraBoardOption[] boards = await jira.ListBoards();
+            JiraBoardOption board = ResolveSingle(
+                boards.Where(board => string.Equals(board.Name.Trim(), integration.BoardName.Trim(), StringComparison.OrdinalIgnoreCase)),
+                $"Jira board '{integration.BoardName}'");
+
+            JiraBoardConfiguration boardConfiguration = await jira.GetBoardConfiguration(board.Id);
+            JiraStatusOption[] statuses = await jira.GetBoardStatuses(boardConfiguration);
+
+            JiraStatusOption ready = ResolveStatus(statuses, integration.ReadyStatusName, "ready");
+            JiraStatusOption processing = ResolveStatus(statuses, integration.ProcessingStatusName, "processing");
+            JiraStatusOption processed = ResolveStatus(statuses, integration.ProcessedStatusName, "processed");
+
+            integration.BoardId = board.Id;
+            integration.BoardName = board.Name;
+            integration.BoardType = board.Type;
+            integration.BoardFilterId = boardConfiguration.FilterId;
+            integration.ReadyStatusId = ready.Id;
+            integration.ReadyStatusName = ready.Name;
+            integration.ProcessingStatusId = processing.Id;
+            integration.ProcessingStatusName = processing.Name;
+            integration.ProcessedStatusId = processed.Id;
+            integration.ProcessedStatusName = processed.Name;
+        }
+
+        private static JiraStatusOption ResolveStatus(IEnumerable<JiraStatusOption> statuses, string statusName, string label)
+        {
+            return ResolveSingle(
+                statuses.Where(status => string.Equals(status.Name.Trim(), statusName.Trim(), StringComparison.OrdinalIgnoreCase)),
+                $"Jira {label} status '{statusName}'");
+        }
+
+        private static T ResolveSingle<T>(IEnumerable<T> matches, string label)
+        {
+            T[] resolved = matches.ToArray();
+            if (resolved.Length == 0) throw new InvalidOperationException($"{label} was not found.");
+            if (resolved.Length > 1) throw new InvalidOperationException($"{label} matched multiple Jira records.");
+            return resolved[0];
+        }
+
+        private static bool NeedsJiraMetadataResolution(JiraIntegrationConfig integration)
+        {
+            return !integration.BoardId.HasValue ||
+                   integration.BoardId.Value <= 0 ||
+                   string.IsNullOrWhiteSpace(integration.BoardType) ||
+                   string.IsNullOrWhiteSpace(integration.ReadyStatusId) ||
+                   string.IsNullOrWhiteSpace(integration.ProcessingStatusId) ||
+                   string.IsNullOrWhiteSpace(integration.ProcessedStatusId);
+        }
+
+        private static void RequireNamedStatus(string value, string key)
+        {
+            if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException($"{key} is required.");
+        }
+
+        private static string DefaultJiraIntegrationId(int index)
+        {
+            if (index <= 99) return $"jir{index:00}";
+            return JiraIntegrationConfigService.GenerateIntegrationIdFromSeed($"jira:{index}");
         }
 
         private static string GetRequired(Dictionary<string, string> values, string field, string prefix)
@@ -504,6 +629,12 @@ namespace FirstDraft.Configuration
         private static string GetOptionalString(Dictionary<string, string> values, string field)
         {
             return values.TryGetValue(field, out string? value) ? value.Trim() : string.Empty;
+        }
+
+        private static string GetOptionalString(Dictionary<string, string> values, string preferredField, string fallbackField)
+        {
+            string value = GetOptionalString(values, preferredField);
+            return string.IsNullOrWhiteSpace(value) ? GetOptionalString(values, fallbackField) : value;
         }
 
         private static int? GetOptionalInt(Dictionary<string, string> values, string field, string prefix, int minimum)
@@ -672,16 +803,19 @@ namespace FirstDraft.Configuration
             public static readonly JiraEnvApplyResult Empty = new JiraEnvApplyResult(
                 Array.Empty<string>(),
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                Array.Empty<string>(),
                 Array.Empty<string>());
 
             public JiraEnvApplyResult(
                 IReadOnlyList<string> integrationIds,
                 IReadOnlyDictionary<string, string> pendingApiTokens,
-                IReadOnlyList<string> encryptedApiTokenIds)
+                IReadOnlyList<string> encryptedApiTokenIds,
+                IReadOnlyList<string> resolvedIntegrationIds)
             {
                 IntegrationIds = integrationIds;
                 PendingApiTokens = pendingApiTokens;
                 EncryptedApiTokenIds = encryptedApiTokenIds;
+                ResolvedIntegrationIds = resolvedIntegrationIds;
             }
 
             public IReadOnlyList<string> IntegrationIds { get; }
@@ -689,6 +823,8 @@ namespace FirstDraft.Configuration
             public IReadOnlyDictionary<string, string> PendingApiTokens { get; }
 
             public IReadOnlyList<string> EncryptedApiTokenIds { get; }
+
+            public IReadOnlyList<string> ResolvedIntegrationIds { get; }
         }
     }
 }

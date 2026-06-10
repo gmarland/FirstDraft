@@ -66,7 +66,21 @@ namespace FirstDraft.Cli.Setup
                     ValidateExternalApi);
             }
 
-            if (PromptAuthentication(applicationData))
+            if (applicationData.HasWorkerApiCredentials())
+            {
+                PrintEnvValue("Worker API key", applicationData.WorkerApiKey ?? string.Empty);
+                WorkerTokenManager tokens = new WorkerTokenManager(applicationData, _applicationDataService);
+                try
+                {
+                    await tokens.AuthenticateWithApiKeyAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Worker API key authentication failed: {ex.Message}");
+                    return 1;
+                }
+            }
+            else if (PromptAuthentication(applicationData))
             {
                 WorkerTokenManager tokens = new WorkerTokenManager(applicationData, _applicationDataService);
                 string authMode = PromptAuthMode(applicationData);

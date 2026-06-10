@@ -9,10 +9,11 @@ export function createWorkerRoutes(
   store: WorkerStore,
   outputStorage?: CommandOutputStorage,
   gitRepositories?: GitRepositoryStore,
-  jiraIntegrations?: JiraIntegrationStore
+  jiraIntegrations?: JiraIntegrationStore,
+  sharedWorkerVisibility = false
 ): Router {
   const router = Router();
-  const controller = createWorkerController(store, outputStorage, gitRepositories, jiraIntegrations);
+  const controller = createWorkerController(store, outputStorage, gitRepositories, jiraIntegrations, sharedWorkerVisibility);
 
   router.get("/", controller.listWorkers);
   router.get("/task-queue", controller.listTaskQueue);

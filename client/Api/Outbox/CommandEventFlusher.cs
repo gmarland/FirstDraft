@@ -1,4 +1,5 @@
 using FirstDraft.Api.Auth;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FirstDraft.Configuration;
@@ -46,7 +47,7 @@ namespace FirstDraft.Api.Outbox
                     if (events.Count == 0) return;
 
                     List<string> deliveredEventIds = new List<string>();
-                    foreach (PendingCommandEvent pendingEvent in events)
+                    foreach (PendingCommandEvent pendingEvent in OrderEventsForFlush(events))
                     {
                         try
                         {
@@ -55,6 +56,13 @@ namespace FirstDraft.Api.Outbox
                         }
                         catch (Exception ex)
                         {
+                            if (CanDiscardFailedEvent(pendingEvent, ex))
+                            {
+                                _logger.Debug($"Discarding stale command event {pendingEvent.Type} for {pendingEvent.TransactionId}: {ex.Message}");
+                                deliveredEventIds.Add(pendingEvent.Id);
+                                continue;
+                            }
+
                             _logger.Debug($"Unable to flush command event {pendingEvent.Type} for {pendingEvent.TransactionId}: {ex.Message}");
                             break;
                         }
@@ -72,6 +80,38 @@ namespace FirstDraft.Api.Outbox
             {
                 _flushLock.Release();
             }
+        }
+
+        private static IEnumerable<PendingCommandEvent> OrderEventsForFlush(IReadOnlyList<PendingCommandEvent> events)
+        {
+            HashSet<string> terminalTransactionIds = events
+                .Where(IsTerminalEvent)
+                .Select(pendingEvent => pendingEvent.TransactionId)
+                .ToHashSet(StringComparer.Ordinal);
+
+            return events
+                .Select((pendingEvent, index) => new { PendingEvent = pendingEvent, Index = index })
+                .OrderBy(item => EventPriority(item.PendingEvent, terminalTransactionIds))
+                .ThenBy(item => item.Index)
+                .Select(item => item.PendingEvent);
+        }
+
+        private static int EventPriority(PendingCommandEvent pendingEvent, ISet<string> terminalTransactionIds)
+        {
+            return terminalTransactionIds.Contains(pendingEvent.TransactionId) ? 0 : 1;
+        }
+
+        private static bool IsTerminalEvent(PendingCommandEvent pendingEvent)
+        {
+            return pendingEvent.Type == CommandEventType.CommandResult ||
+                   pendingEvent.Type == CommandEventType.CommandRejected;
+        }
+
+        private static bool CanDiscardFailedEvent(PendingCommandEvent pendingEvent, Exception exception)
+        {
+            if (pendingEvent.Type != CommandEventType.OutputChunk) return false;
+
+            return exception is HttpRequestException { StatusCode: HttpStatusCode.NotFound };
         }
 
         private async Task SendPendingCommandEvent(PendingCommandEvent pendingEvent)

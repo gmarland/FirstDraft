@@ -2,13 +2,14 @@ import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { entities } from "./entities/index.js";
 import { V1InitialSchema1710000000000 } from "./migrations/1710000000000-V1InitialSchema.js";
+import { NullableWorkerOwnership1710000000001 } from "./migrations/1710000000001-NullableWorkerOwnership.js";
 
 export function createDataSource(databaseUrl: string): DataSource {
   return new DataSource({
     type: "postgres",
     url: databaseUrl,
     entities,
-    migrations: [V1InitialSchema1710000000000],
+    migrations: [V1InitialSchema1710000000000, NullableWorkerOwnership1710000000001],
     synchronize: false,
     migrationsRun: false,
   });

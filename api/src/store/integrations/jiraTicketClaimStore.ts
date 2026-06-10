@@ -12,7 +12,7 @@ import { IntegrationIntakeEvent } from "./integrationIntakeEventTypes.js";
 
 export type ClaimJiraTicketInput = {
   workerId: string;
-  userId: string;
+  userId: string | null;
   integrationId: string;
   sourceItemId: string;
   sourceItemKey: string;
@@ -53,9 +53,9 @@ export class JiraTicketClaimStore {
           from worker_jira_integrations integrations
           inner join client_workers workers
             on workers.worker_id = integrations.worker_id
-            and workers.user_id = integrations.user_id
+            and workers.user_id is not distinct from integrations.user_id
           where integrations.worker_id = $1
-            and integrations.user_id = $2
+            and integrations.user_id is not distinct from $2::uuid
             and integrations.integration_id = $3
             and integrations.enabled = true
             and (
@@ -192,12 +192,14 @@ export class JiraTicketClaimStore {
           insert into integration_intake_event_users (event_id, user_id, integration_id)
           select claim_event.id, $2, $3
           from claim_event
+          where $2::uuid is not null
           on conflict do nothing
         ),
         command_participant as (
           insert into client_command_users (transaction_id, user_id)
           select created_command.transaction_id, $2
           from created_command
+          where $2::uuid is not null
           on conflict do nothing
         )
         select
@@ -292,10 +294,10 @@ export class JiraTicketClaimStore {
         from (select 1) seed
         left join client_workers workers
           on workers.worker_id = $1
-          and workers.user_id = $2
+          and workers.user_id is not distinct from $2::uuid
         left join worker_jira_integrations integrations
           on integrations.worker_id = $1
-          and integrations.user_id = $2
+          and integrations.user_id is not distinct from $2::uuid
           and integrations.integration_id = $3
         limit 1
       `,

@@ -8,7 +8,10 @@ namespace FirstDraft.Configuration
 
             ValidateWorkerId(applicationData.WorkerId);
 
-            if (string.IsNullOrEmpty(applicationData.GetWorkerRefreshToken())) throw new Exception("You must authenticate this worker with firstdraft init");
+            bool hasApiKey = !string.IsNullOrWhiteSpace(applicationData.WorkerApiKey);
+            bool hasApiSecret = !string.IsNullOrWhiteSpace(applicationData.WorkerApiSecret);
+            if (hasApiKey != hasApiSecret) throw new Exception("WORKER_API_KEY and WORKER_API_SECRET must both be set or both be omitted");
+            if (string.IsNullOrEmpty(applicationData.GetWorkerRefreshToken()) && !applicationData.HasWorkerApiCredentials()) throw new Exception("You must authenticate this worker with firstdraft init or configure WORKER_API_KEY and WORKER_API_SECRET");
 
             if (string.IsNullOrEmpty(applicationData.ApplicationFolder)) throw new Exception("You must provide a valid ApplicationFolder");
 

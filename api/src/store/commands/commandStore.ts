@@ -6,7 +6,7 @@ import { commandColumns, mapCommand, prefixedCommandColumns } from "./commandRow
 import { buildTaskSummary } from "./commandSummary.js";
 
 export type CreateQueuedCommandInput = {
-  userId: string;
+  userId: string | null;
   workerId?: string;
   command: string;
   commandMode?: CommandMode;
@@ -23,7 +23,7 @@ export class CommandStore {
   public constructor(private readonly pool: DbClient) {}
 
   public async createWorkerCommand(
-    userId: string,
+    userId: string | null,
     workerId: string,
     command: string,
     commandMode: CommandMode = "gitflow",
@@ -70,14 +70,7 @@ export class CommandStore {
       ]
     );
 
-    await this.pool.query(
-      `
-        insert into client_command_users (transaction_id, user_id)
-        values ($1, $2)
-        on conflict do nothing
-      `,
-      [transactionId, input.userId]
-    );
+    await this.insertCommandParticipant(transactionId, input.userId);
 
     return mapCommand(result.rows[0]);
   }
@@ -115,14 +108,7 @@ export class CommandStore {
       ]
     );
 
-    await this.pool.query(
-      `
-        insert into client_command_users (transaction_id, user_id)
-        values ($1, $2)
-        on conflict do nothing
-      `,
-      [transactionId, input.userId]
-    );
+    await this.insertCommandParticipant(transactionId, input.userId);
 
     return mapCommand(result.rows[0]);
   }
@@ -161,15 +147,21 @@ export class CommandStore {
         select ${prefixedCommandColumns("commands")},
           worker_repos.normalized_repository_url is not null as worker_repository_match
         from client_commands commands
-        inner join client_command_users command_users
-          on command_users.transaction_id = commands.transaction_id
         inner join client_workers claiming_worker
           on claiming_worker.worker_id = $1
         left join worker_git_repositories worker_repos
           on worker_repos.worker_id = $1
           and worker_repos.normalized_repository_url = commands.normalized_repository_url
         where commands.status = 'queued'
-          and command_users.user_id = claiming_worker.user_id
+          and (
+            (claiming_worker.user_id is null and commands.user_id is null)
+            or exists (
+              select 1
+              from client_command_users command_users
+              where command_users.transaction_id = commands.transaction_id
+                and command_users.user_id = claiming_worker.user_id
+            )
+          )
           and (commands.worker_id = $1 or commands.worker_id is null)
           and $2::boolean
           and commands.command_mode = 'gitflow'
@@ -307,7 +299,7 @@ export class CommandStore {
         ) intake on true
         where command_users.user_id = $1
           and commands.status = any($4::text[])
-        order by ${taskQueueOrderBy(query)}
+        order by ${taskQueueOrderBy(query, false)}
         limit $2 offset $3
       `,
       [userId, query.pageSize, offset, query.statuses]
@@ -316,6 +308,57 @@ export class CommandStore {
     const total = commandsResult.rows[0]
       ? Number(commandsResult.rows[0].task_queue_total ?? 0)
       : await this.countTaskQueueForUser(userId, query);
+
+    return {
+      commands: commandsResult.rows.map(mapCommand),
+      total,
+      page: query.page,
+      pageSize: query.pageSize
+    };
+  }
+
+  public async listTaskQueue(query: TaskQueueQuery): Promise<PaginatedCommands> {
+    const offset = query.page * query.pageSize;
+    const commandsResult = await this.pool.query(
+      `
+        select ${prefixedCommandColumns("commands")},
+          worker_owner.id as worker_owner_user_id,
+          worker_owner.name as worker_owner_name,
+          worker_owner.email as worker_owner_email,
+          intake.provider as source_provider,
+          intake.source_item_id,
+          intake.source_item_key,
+          intake.source_item_url,
+          count(*) over() as task_queue_total
+        from client_commands commands
+        left join client_workers assigned_worker
+          on assigned_worker.worker_id = commands.worker_id
+        left join users worker_owner
+          on worker_owner.id = assigned_worker.user_id
+        left join lateral (
+          select
+            intake_events.provider,
+            intake_events.source_item_id,
+            intake_events.source_item_key,
+            intake_events.source_item_url
+          from integration_intake_events intake_events
+          where intake_events.transaction_id = commands.transaction_id
+          order by
+            case when intake_events.status in ('queueing', 'queued', 'processing') then 0 else 1 end,
+            intake_events.created_at asc,
+            intake_events.id asc
+          limit 1
+        ) intake on true
+        where commands.status = any($3::text[])
+        order by ${taskQueueOrderBy(query, true)}
+        limit $1 offset $2
+      `,
+      [query.pageSize, offset, query.statuses]
+    );
+
+    const total = commandsResult.rows[0]
+      ? Number(commandsResult.rows[0].task_queue_total ?? 0)
+      : await this.countTaskQueue(query);
 
     return {
       commands: commandsResult.rows.map(mapCommand),
@@ -341,6 +384,19 @@ export class CommandStore {
     return Number(countResult.rows[0]?.total ?? 0);
   }
 
+  private async countTaskQueue(query: TaskQueueQuery): Promise<number> {
+    const countResult = await this.pool.query(
+      `
+        select count(*) as total
+        from client_commands
+        where client_commands.status = any($1::text[])
+      `,
+      [query.statuses]
+    );
+
+    return Number(countResult.rows[0]?.total ?? 0);
+  }
+
   public async markWorkerCommandInProgress(command: Command, workerId?: string): Promise<Command | undefined> {
     const assignedWorkerId = workerId ?? command.workerId;
     if (!assignedWorkerId) return undefined;
@@ -352,11 +408,17 @@ export class CommandStore {
           status = 'in_progress',
           claimed_at = now()
         from client_workers claiming_worker
-        inner join client_command_users command_users
-          on command_users.user_id = claiming_worker.user_id
         where client_commands.transaction_id = $1
           and claiming_worker.worker_id = $2
-          and command_users.transaction_id = client_commands.transaction_id
+          and (
+            (claiming_worker.user_id is null and client_commands.user_id is null)
+            or exists (
+              select 1
+              from client_command_users command_users
+              where command_users.transaction_id = client_commands.transaction_id
+                and command_users.user_id = claiming_worker.user_id
+            )
+          )
           and client_commands.status = 'queued'
           and (client_commands.worker_id is null or client_commands.worker_id = $2)
         returning ${prefixedCommandColumns("client_commands")}
@@ -487,9 +549,22 @@ export class CommandStore {
 
     return result.rows.map(mapCommand);
   }
+
+  private async insertCommandParticipant(transactionId: string, userId: string | null): Promise<void> {
+    if (userId === null) return;
+
+    await this.pool.query(
+      `
+        insert into client_command_users (transaction_id, user_id)
+        values ($1, $2)
+        on conflict do nothing
+      `,
+      [transactionId, userId]
+    );
+  }
 }
 
-function taskQueueOrderBy(query: TaskQueueQuery): string {
+function taskQueueOrderBy(query: TaskQueueQuery, sharedVisibility: boolean): string {
   if (!query.sortBy) return defaultTaskQueueOrderBy();
 
   const direction = query.sortDirection === "desc" ? "desc" : "asc";
@@ -511,7 +586,7 @@ function taskQueueOrderBy(query: TaskQueueQuery): string {
   if (query.sortBy === "worker") {
     return `lower(coalesce(
       case
-        when worker_owner.id is not null and worker_owner.id <> command_users.user_id
+        when ${sharedVisibility ? "true" : "worker_owner.id is not null and worker_owner.id <> command_users.user_id"}
           then coalesce(worker_owner.name, worker_owner.email, commands.worker_id)
         else commands.worker_id
       end,

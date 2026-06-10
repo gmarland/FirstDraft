@@ -1,3 +1,5 @@
+using Newtonsoft.Json;
+
 namespace FirstDraft.Configuration
 {
     public class EncryptedConfigValue
@@ -46,6 +48,12 @@ namespace FirstDraft.Configuration
         public string? AuthEmail { get; set; }
 
         public string? AuthName { get; set; }
+
+        [JsonIgnore]
+        public string? WorkerApiKey { get; set; }
+
+        [JsonIgnore]
+        public string? WorkerApiSecret { get; set; }
 
         public string? Name { get; set; }
 
@@ -97,6 +105,11 @@ namespace FirstDraft.Configuration
         public bool HasPlaintextCredentials()
         {
             return !string.IsNullOrEmpty(WorkerRefreshToken);
+        }
+
+        public bool HasWorkerApiCredentials()
+        {
+            return !string.IsNullOrWhiteSpace(WorkerApiKey) && !string.IsNullOrWhiteSpace(WorkerApiSecret);
         }
 
         public void EncryptCredentials(string configEncryptionKey)

@@ -16,7 +16,7 @@ import { CommandStore } from "./store/commands/commandStore.js";
 import { WorkerRecordStore } from "./store/workers/workerRecordStore.js";
 import { GitRepositoryStore } from "./store/gitRepositories/gitRepositoryStore.js";
 import {
-  ApiToWorkerTokenIssuer,
+  createWorkerApiKeyConfigFromEnv,
   createWorkerJwtConfigFromEnv,
   WorkerTokenService,
 } from "./auth/workerTokens.js";
@@ -59,7 +59,7 @@ const workerTokenService = new WorkerTokenService(
   createWorkerJwtConfigFromEnv(),
   workerRefreshTokens,
 );
-const apiToWorkerTokens = new ApiToWorkerTokenIssuer();
+const workerApiKeyConfig = createWorkerApiKeyConfigFromEnv();
 const outputStorage = createCommandOutputStorageFromEnv();
 const outputStorageProvider = outputStorage
   ? getCommandOutputStorageProviderFromEnv()
@@ -74,15 +74,15 @@ const app = createApp({
     tenants,
     store,
     workerTokenService,
-    apiToWorkerTokens,
     workerConfigEncryptionKey,
+    workerApiKeyConfig,
     outputStorage,
     gitRepositories,
     jiraIntegrations,
     jiraTicketClaims,
     integrationLifecycle,
   ),
-  workerRoutes: createWorkerRoutes(store, outputStorage, gitRepositories, jiraIntegrations),
+  workerRoutes: createWorkerRoutes(store, outputStorage, gitRepositories, jiraIntegrations, Boolean(workerApiKeyConfig)),
 });
 const server = createServer(app);
 

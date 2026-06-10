@@ -2,7 +2,7 @@ import { EntitySchema } from "typeorm";
 
 export type ClientCommandEntity = {
   transactionId: string;
-  userId: string;
+  userId: string | null;
   workerId?: string | null;
   command: string;
   taskSummary?: string | null;
@@ -28,7 +28,7 @@ export const ClientCommandSchema = new EntitySchema<ClientCommandEntity>({
   tableName: "client_commands",
   columns: {
     transactionId: { type: "text", name: "transaction_id", primary: true },
-    userId: { type: "uuid", name: "user_id" },
+    userId: { type: "uuid", name: "user_id", nullable: true },
     workerId: { type: "text", name: "worker_id", nullable: true },
     command: { type: "text" },
     taskSummary: { type: "text", name: "task_summary", nullable: true },

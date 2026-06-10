@@ -1,6 +1,6 @@
 export type WorkerRegistration = {
   workerId: string;
-  userId: string;
+  userId: string | null;
   connectionId: string;
   paths: string[];
   skills: string[];
@@ -26,7 +26,7 @@ export type CommandMode = "gitflow";
 
 export type Command = {
   transactionId: string;
-  userId: string;
+  userId: string | null;
   workerId?: string;
   workerOwnerUserId?: string;
   workerOwnerName?: string;

@@ -305,10 +305,16 @@ export class IntegrationIntakeEventStore {
               inner join client_workers assigned_worker
                 on assigned_worker.worker_id = $4
                 and assigned_worker.worker_id = commands.worker_id
-              inner join client_command_users command_users
-                on command_users.transaction_id = commands.transaction_id
               where commands.transaction_id = coalesce($5, integration_intake_events.transaction_id)
-                and command_users.user_id = assigned_worker.user_id
+                and (
+                  (assigned_worker.user_id is null and commands.user_id is null)
+                  or exists (
+                    select 1
+                    from client_command_users command_users
+                    where command_users.transaction_id = commands.transaction_id
+                      and command_users.user_id = assigned_worker.user_id
+                  )
+                )
             )
           )
         returning ${integrationIntakeEventColumns}

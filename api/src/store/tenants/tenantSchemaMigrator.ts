@@ -28,7 +28,7 @@ export class SchemaMigrator {
       create table if not exists worker_refresh_tokens (
         id uuid primary key,
         worker_id text not null,
-        user_id uuid not null references users(id) on delete cascade,
+        user_id uuid references users(id) on delete cascade,
         refresh_token_hash text not null unique,
         issued_at timestamptz not null default now(),
         expires_at timestamptz not null,
@@ -44,7 +44,7 @@ export class SchemaMigrator {
 
       create table if not exists client_workers (
         worker_id text primary key,
-        user_id uuid not null references users(id) on delete cascade,
+        user_id uuid references users(id) on delete cascade,
         first_registered_at timestamptz not null default now(),
         last_registered_at timestamptz not null default now(),
         last_seen_at timestamptz,
@@ -83,7 +83,7 @@ export class SchemaMigrator {
       create table if not exists worker_jira_integrations (
         worker_id text not null references client_workers(worker_id) on delete cascade,
         integration_id text not null,
-        user_id uuid not null references users(id) on delete cascade,
+        user_id uuid references users(id) on delete cascade,
         site_url text not null,
         email text not null,
         board_id integer not null,
@@ -113,7 +113,7 @@ export class SchemaMigrator {
 
       create table if not exists client_commands (
         transaction_id text primary key,
-        user_id uuid not null references users(id),
+        user_id uuid references users(id),
         worker_id text,
         command text not null,
         task_summary text,

@@ -3,7 +3,7 @@ import { EntitySchema } from "typeorm";
 export type WorkerRefreshTokenEntity = {
   id: string;
   workerId: string;
-  userId: string;
+  userId: string | null;
   refreshTokenHash: string;
   issuedAt: Date;
   expiresAt: Date;
@@ -17,7 +17,7 @@ export const WorkerRefreshTokenSchema = new EntitySchema<WorkerRefreshTokenEntit
   columns: {
     id: { type: "uuid", primary: true },
     workerId: { type: "text", name: "worker_id" },
-    userId: { type: "uuid", name: "user_id" },
+    userId: { type: "uuid", name: "user_id", nullable: true },
     refreshTokenHash: { type: "text", name: "refresh_token_hash", unique: true },
     issuedAt: { type: "timestamptz", name: "issued_at", createDate: true },
     expiresAt: { type: "timestamptz", name: "expires_at" },

@@ -173,6 +173,18 @@ namespace FirstDraft.Cli.Jira
             return null;
         }
 
+        public static string GenerateIntegrationIdFromSeed(string seed)
+        {
+            byte[] hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(seed));
+            char[] value = new char[IntegrationIdLength];
+            for (int index = 0; index < value.Length; index++)
+            {
+                value[index] = IntegrationIdCharacters[hash[index] % IntegrationIdCharacters.Length];
+            }
+
+            return new string(value);
+        }
+
         public static string? NormalizeIntegrationId(string? integrationId)
         {
             string normalized = (integrationId ?? string.Empty).Trim();
